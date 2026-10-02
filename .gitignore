@@ -11,8 +11,8 @@ backend/src/main/resources/application-secret.properties
 
 # --- Java/Node ---
 backend/target/
-frontend/node_modules/
-frontend/.next/
+client/node_modules/
+client/.next/
 
 # --- Temp ---
 /tmp/medi-scan/*
