@@ -3,7 +3,7 @@
 # .claude/projects/
 # .claude/cache/
 .claude
-
+CLAUDE.md
 # --- Secrets ---
 .env
 backend/src/main/resources/application-secret.properties

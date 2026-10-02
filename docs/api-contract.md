@@ -1,8 +1,8 @@
 # Medi-Scan: API Contract
 
-This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v2 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
+This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v3 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
 
-**Version:** 1.0
+**Version:** 2.1 (optional Google sign-in, history, trends, admin stats; cross-tab sign-in and key rotation)
 
 ---
 
@@ -24,7 +24,7 @@ All endpoints except health live under `/api`.
 - **IDs:** UUID v4 strings.
 - **Timestamps:** ISO-8601 in UTC, for example `2026-10-02T09:30:00Z`.
 - **Missing values:** `null`. Fields are never left out of a response; they are present with `null`.
-- **Enums:** uppercase strings. Clients must handle values they don't recognize (see 7.2).
+- **Enums:** uppercase strings. Clients must handle values they don't recognize (see 9.2).
 
 ### 1.3 Headers
 
@@ -32,7 +32,8 @@ All endpoints except health live under `/api`.
 
 | Header | When | Notes |
 |---|---|---|
-| `X-Session-Token` | All `/api/reports/**` calls | Token from `POST /api/sessions` |
+| `X-Session-Token` | Guest calls to `/api/reports/**` | Token from `POST /api/sessions` |
+| `Authorization` | Signed-in calls | `Bearer <access token>` from `/api/auth/google` or `/api/auth/refresh`. If both credentials are sent, this one wins. |
 | `Content-Type` | Requests with a body | `application/json` or `multipart/form-data` |
 | `Accept` | Chat | `text/event-stream` |
 
@@ -48,8 +49,8 @@ All endpoints except health live under `/api`.
 
 - **Allowed origin:** the value of `ALLOWED_ORIGIN` (the Vercel URL). No wildcards.
 - **Allowed methods:** `GET`, `POST`, `DELETE`, `OPTIONS`.
-- **Allowed request headers:** `Content-Type`, `X-Session-Token`, `Accept`.
-- **Exposed response headers:** `X-Request-Id`, `Retry-After`, `Location`.
+- **Allowed request headers:** `Content-Type`, `X-Session-Token`, `Authorization`, `Accept`.
+- **Exposed response headers:** `X-Request-Id`, `Retry-After`, `Location`, `WWW-Authenticate`.
 - **Credentials:** not used. No cookies.
 
 ### 1.5 Errors
@@ -84,26 +85,68 @@ Every error response uses RFC 9457 Problem Details (`application/problem+json`).
 }
 ```
 
-The full list of codes is in section 6.
+The full list of codes is in section 8.
 
 ### 1.6 Rate limits
 
 | Limit | Scope | Default | Exceeded |
 |---|---|---|---|
 | Session creation | Per IP | 20 per hour | 429 `RATE_LIMITED` |
-| Uploads | Per IP | 10 per hour | 429 `RATE_LIMITED` |
-| Chat messages | Per IP | 30 per hour | 429 `RATE_LIMITED` |
+| Google sign-in and token refresh | Per IP | 10 per minute | 429 `RATE_LIMITED` |
+| Uploads | Per user when signed in, otherwise per IP | 10 per hour | 429 `RATE_LIMITED` |
+| Chat messages | Per user when signed in, otherwise per IP | 30 per hour | 429 `RATE_LIMITED` |
 | LLM calls | Whole app | 500 per day (UTC) | 429 `CAPACITY`, or report fails with `CAPACITY` |
 
 429 responses always include `Retry-After`. For `CAPACITY`, it is the number of seconds until midnight UTC.
 
 ---
 
-## 2. Sessions
+## 2. Authentication
 
-### `POST /api/sessions`
+### 2.1 Callers and credentials
 
-Starts an anonymous session. The client stores the token in `sessionStorage` and sends it as `X-Session-Token` on every report call.
+| Caller | Credential | Can use |
+|---|---|---|
+| Anonymous | none | `POST /api/sessions`, `POST /api/auth/*`, `GET /api/samples`, health |
+| Guest | `X-Session-Token` | All of the above, plus `/api/reports/**` |
+| User | `Authorization: Bearer <access token>` | All of the above, plus `/api/me/**` and `/api/trends` |
+| Admin | Bearer token with role `ADMIN` | All of the above, plus `/api/admin/**` |
+
+**How the server reads credentials**
+- **Bearer token sent:** it must be valid. If it isn't, the request fails with `401 TOKEN_EXPIRED` or `401 TOKEN_INVALID`, even if a session token was also sent. The server never falls back to the guest token.
+- **Report endpoints with no valid credential:** return `401 SESSION_INVALID`.
+- **Signed-in-only endpoints called by a guest or anonymous caller:** return `401 AUTH_REQUIRED`.
+- **Admin endpoints called by a non-admin user:** return `403 FORBIDDEN`.
+- **Bearer failures:** responses include a `WWW-Authenticate: Bearer error="invalid_token"` header.
+
+**Client token storage (the $0 setup)**
+- **Access token:** in memory only. It is lost on reload.
+- **Refresh token:** in `sessionStorage`, so each tab has its own. On reload, call `POST /api/auth/refresh` to get a new access token.
+- **Guest session token:** in `sessionStorage`. It is created lazily, on the first guest action that needs it (an upload, picking a sample, or the history list), not on page load.
+
+**New tabs and returning visits (Google auto sign-in)**
+- **Auto sign-in:** a tab with no refresh token asks Google Identity Services for an ID token with auto sign-in turned on (`auto_select: true`). If the user signed in before and is still logged into Google, Google returns a token without a click. The client then calls `POST /api/auth/google` as usual.
+- **Separate families:** each tab gets its own refresh token family. Tabs never share a refresh token, so tabs can't race each other on refresh.
+- **When auto sign-in doesn't happen:** for example, the browser doesn't support it, Google has paused the prompt, or there are several Google accounts. The tab continues as a guest and shows the normal "Sign in with Google" button.
+- **Waiting for sign-in:** while sign-in is being checked, the client waits up to about 2 seconds before making report calls, so a report opened in a new tab isn't fetched as a guest and wrongly returns 404.
+
+**Refreshing an access token.** When a bearer call fails with `401 TOKEN_EXPIRED` or `401 TOKEN_INVALID`:
+1. Call `POST /api/auth/refresh` once.
+2. If it succeeds, retry the original call once.
+3. If the refresh fails with `401 REFRESH_TOKEN_INVALID`, clear the tokens and show the user as signed out.
+
+`TOKEN_INVALID` is included because the server's signing key may have been rotated (see 2.8). The refresh token doesn't depend on that key, so it still works.
+
+Within a tab, if several calls fail at the same time, share one refresh call between them. Two parallel refreshes from the same tab would look like token reuse and revoke that tab's family.
+
+**Signing out in every tab.** On logout, the tab that logged out sends a `BroadcastChannel` message. Every open tab then:
+- calls `POST /api/auth/logout` with its own refresh token
+- clears its tokens
+- calls Google's `disableAutoSelect()`, so the user isn't signed straight back in
+
+### 2.2 `POST /api/sessions`
+
+Starts an anonymous session. The client calls this lazily, on the first guest action that needs it (not on page load), stores the token in `sessionStorage`, and sends it as `X-Session-Token` on guest report calls.
 
 **Auth:** none
 **Request body:** none
@@ -124,7 +167,159 @@ Starts an anonymous session. The client stores the token in `sessionStorage` and
 
 **Errors:** `429 RATE_LIMITED`
 
-**Session errors on other endpoints.** Any `/api/reports/**` call with a missing, unknown, or expired token returns `401 SESSION_INVALID`. The client should then create a new session and drop any report ids it was holding.
+**Session errors on other endpoints.** Any `/api/reports/**` call with no bearer token and a missing, unknown, or expired session token returns `401 SESSION_INVALID`. The client should then create a new session and drop any report ids it was holding.
+
+### 2.3 `POST /api/auth/google`
+
+Signs in with Google. Exchanges a Google ID token for app tokens. If a guest session token is sent, that session's reports move to the user.
+
+**Auth:** none (the Google ID token is the credential)
+
+**Request body**
+
+```json
+{
+  "idToken": "eyJhbGciOiJSUzI1NiIs…",
+  "guestSessionToken": "mS9xQ2…"
+}
+```
+
+| Field | Type | Required | Rules |
+|---|---|---|---|
+| `idToken` | string | yes | Google ID token from Google Identity Services |
+| `guestSessionToken` | string | no | Current guest token. Its reports move to the user. |
+
+**What the server checks:**
+- **Signature:** against Google's published keys (JWKS).
+- **Issuer:** `iss` is `accounts.google.com` or `https://accounts.google.com`.
+- **Audience:** `aud` equals `GOOGLE_CLIENT_ID`.
+- **Expiry:** `exp` is in the future.
+
+The user is found or created by `sub`. The role is `ADMIN` if `sub` is listed in `ADMIN_GOOGLE_SUBS`, otherwise `USER`.
+
+**Response `200 OK`**
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9…",
+  "accessTokenExpiresAt": "2026-10-02T09:45:00Z",
+  "refreshToken": "r8Kp…43 chars, base64url",
+  "refreshTokenExpiresAt": "2026-10-09T09:30:00Z",
+  "user": {
+    "id": "0b6e…",
+    "displayName": "Saq",
+    "role": "USER",
+    "createdAt": "2026-10-02T09:30:00Z"
+  },
+  "claimedReportCount": 2,
+  "newUser": true
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `accessToken` | string | JWT, valid for 15 minutes. Send as `Authorization: Bearer`. |
+| `accessTokenExpiresAt` | timestamp | Lets the client refresh early instead of waiting for a 401 |
+| `refreshToken` | string | 32 random bytes, base64url. Stored hashed on the server. |
+| `refreshTokenExpiresAt` | timestamp | 7 days, and never more than 30 days after the original sign-in |
+| `user` | object | See `User` in 9.1 |
+| `claimedReportCount` | integer | Reports moved from the guest session. 0 if none. |
+| `newUser` | boolean | True on first sign-in. The UI can show a welcome. |
+
+**Access token claims:** `sub` (user id), `role`, `iss` (`JWT_ISSUER`), `aud` (`medi-scan-api`), `iat`, `exp`, `jti`. Signed with HS256. The header carries a `kid` naming the signing key (see 2.8). The client must treat it as opaque and not read the claims.
+
+**Errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `idToken` missing |
+| 401 | `GOOGLE_TOKEN_INVALID` | Signature, issuer, audience, or expiry check failed |
+| 429 | `RATE_LIMITED` | Too many sign-in attempts from this IP |
+
+An invalid or expired `guestSessionToken` is not an error. The sign-in succeeds with `claimedReportCount: 0`.
+
+### 2.4 `POST /api/auth/refresh`
+
+Swaps a refresh token for a new access token and a new refresh token. The old refresh token stops working.
+
+**Auth:** none (the refresh token is the credential)
+
+**Request body**
+
+```json
+{ "refreshToken": "r8Kp…" }
+```
+
+**Response `200 OK`:** the same shape as `POST /api/auth/google`, without `claimedReportCount` and `newUser`.
+
+**Reuse detection.** If a refresh token that was already used is sent again, the server revokes every token in that sign-in's family and returns `401 REFRESH_TOKEN_INVALID`. The user must sign in again.
+
+**Errors**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `refreshToken` missing |
+| 401 | `REFRESH_TOKEN_INVALID` | Unknown, expired, revoked, or reused token |
+| 429 | `RATE_LIMITED` | Too many refresh attempts from this IP |
+
+### 2.5 `POST /api/auth/logout`
+
+Revokes the refresh token's whole family. The access token stays valid until it expires (at most 15 minutes), so the client also deletes it from memory.
+
+**Auth:** none
+
+**Request body**
+
+```json
+{ "refreshToken": "r8Kp…" }
+```
+
+**Response `204 No Content`.** Also returns 204 for an unknown or already revoked token, so logout always succeeds from the client's point of view.
+
+### 2.6 `GET /api/me`
+
+Returns the signed-in user.
+
+**Auth:** Bearer
+
+**Response `200 OK`**
+
+```json
+{
+  "id": "0b6e…",
+  "displayName": "Saq",
+  "role": "USER",
+  "createdAt": "2026-10-02T09:30:00Z",
+  "reportCount": 4
+}
+```
+
+**Errors:** `401 AUTH_REQUIRED`, `401 TOKEN_EXPIRED`, `401 TOKEN_INVALID`
+
+### 2.7 `DELETE /api/me`
+
+Deletes the account and everything linked to it: reports, report text, biomarkers, summaries, and refresh tokens.
+
+**Auth:** Bearer
+
+**Response `204 No Content`.** The client clears all tokens and returns to guest mode.
+
+**Errors:** `401 AUTH_REQUIRED`, `401 TOKEN_EXPIRED`, `401 TOKEN_INVALID`
+
+### 2.8 Signing key rotation
+
+Access tokens carry a `kid` header that names the key they were signed with. The server signs with the current key and accepts tokens signed by any key in `JWT_SIGNING_KEYS`.
+
+**To rotate:**
+1. Add the new key, make it current, and restart. Keep the old key in the list.
+2. After 15 minutes (the access token lifetime), remove the old key.
+
+Clients see no change. Even if the old key is removed early, affected calls get `401 TOKEN_INVALID`, the client refreshes once (see 2.1), and carries on.
+
+**When:**
+- immediately if the key may have leaked
+- when moving hosts
+- at least once a year
 
 ---
 
@@ -174,11 +369,16 @@ The response can be cached by the client for the whole session (`Cache-Control: 
 
 ## 4. Reports
 
+Every report endpoint accepts a guest session token or a bearer token (see 2.1). A report belongs to exactly one owner: the guest session that created it, or the signed-in user. Callers only ever see their own reports.
+
+- **Expiry:** a guest's report expires with the session (24 hours). A signed-in user's report expires 30 days after creation.
+- **Bearer errors:** besides the errors listed for each endpoint, any call with a bad bearer token can return `401 TOKEN_EXPIRED` or `401 TOKEN_INVALID`.
+
 ### 4.1 `POST /api/reports`
 
 Creates a report and queues it for processing. Accepts exactly one of: a file, pasted text, or a sample id.
 
-**Auth:** `X-Session-Token`
+**Auth:** guest `X-Session-Token` or `Authorization: Bearer`
 
 **Option A: file upload** (`multipart/form-data`)
 
@@ -249,7 +449,7 @@ Headers: `Location: /api/reports/6f1c2a9e-…`
 
 Returns the report's status, and the results once processing is done. The client polls this every 1.5 seconds until `status` is `DONE` or `FAILED`, for up to 2 minutes.
 
-**Auth:** `X-Session-Token`
+**Auth:** guest `X-Session-Token` or `Authorization: Bearer`
 
 **Path parameters**
 
@@ -286,6 +486,7 @@ The response shape depends on `status`. Fields that don't apply to the current s
   "expiresAt": "2026-10-03T09:30:00Z",
   "error": null,
   "result": {
+    "collectedOn": "2026-09-28",
     "biomarkers": [
       {
         "id": "a1b2c3d4-…",
@@ -340,6 +541,8 @@ The response shape depends on `status`. Fields that don't apply to the current s
 
 A failed report is still a `200` response. The request succeeded; the processing didn't.
 
+`result.collectedOn` is the sample collection date (`YYYY-MM-DD`) when step 1 can find it on the report, otherwise `null`. Trends use it to date each point.
+
 **Errors**
 
 | Status | Code | When |
@@ -354,7 +557,7 @@ The API never says whether a report exists in another session. All of these case
 
 Deletes the report and everything derived from it (masked text, biomarkers, summary).
 
-**Auth:** `X-Session-Token`
+**Auth:** guest `X-Session-Token` or `Authorization: Bearer`
 
 **Response `204 No Content`** with an empty body.
 
@@ -366,7 +569,7 @@ Deleting a report that is still processing is allowed. The job notices the repor
 
 Asks a question about a report. The answer streams back as Server-Sent Events.
 
-**Auth:** `X-Session-Token`
+**Auth:** guest `X-Session-Token` or `Authorization: Bearer`
 **Request headers:** `Content-Type: application/json`, `Accept: text/event-stream`
 
 **Request body**
@@ -432,13 +635,179 @@ data: {"finishReason":"COMPLETE"}
 | `done` | `{ finishReason }` | `COMPLETE`, `DECLINED` (diagnosis or treatment question), or `NOT_IN_CONTEXT` (answer not in the report or pages) |
 | `error` | `{ code, message }` | Stream ends after this. Codes: `LLM_UNAVAILABLE`, `CAPACITY`, `INTERNAL_ERROR`. |
 
+**Chat history is never stored,** for guests or signed-in users.
+
 **Keep-alive.** The server sends an SSE comment line (`: ping`) every 15 seconds while the model is thinking, so proxies don't close the connection.
 
 **Client note.** The browser's built-in `EventSource` only supports GET requests and can't send custom headers. Use `fetch` and read the response body as a stream, or a library such as `@microsoft/fetch-event-source`.
 
+### 4.5 `GET /api/reports`
+
+Lists the caller's reports, newest first. For a guest, these are the current session's reports. For a user, these are all their reports that haven't expired.
+
+**Auth:** guest `X-Session-Token` or `Authorization: Bearer`
+
+**Query parameters**
+
+| Name | Type | Default | Rules |
+|---|---|---|---|
+| `page` | integer | 0 | 0 or more |
+| `size` | integer | 20 | 1 to 50 |
+| `status` | string | all | Optional filter: `PENDING`, `PROCESSING`, `DONE`, or `FAILED` |
+
+**Response `200 OK`**
+
+```json
+{
+  "items": [
+    {
+      "id": "6f1c2a9e-…",
+      "status": "DONE",
+      "sourceType": "PDF",
+      "createdAt": "2026-10-02T09:31:00Z",
+      "expiresAt": "2026-11-01T09:31:00Z",
+      "collectedOn": "2026-09-28",
+      "counts": { "total": 5, "low": 0, "normal": 4, "high": 1, "unknown": 0 },
+      "errorCode": null
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalItems": 1,
+  "totalPages": 1
+}
+```
+
+List items are summaries. `counts` and `collectedOn` are `null` unless the report is `DONE`. Use `GET /api/reports/{id}` for the full result.
+
+**Errors:** `400 VALIDATION_ERROR`, `401 SESSION_INVALID`
+
 ---
 
-## 5. Health
+## 5. Trends
+
+### `GET /api/trends`
+
+Returns one biomarker's values across the signed-in user's reports, for a line chart.
+
+**Auth:** Bearer (signed in only)
+
+**Query parameters**
+
+| Name | Type | Required | Rules |
+|---|---|---|---|
+| `marker` | string | yes | A `biomarkerSlug` (for example `ldl-cholesterol`), or a test name if the marker has no slug |
+
+**Matching rules**
+- **Matching:** biomarkers match by `biomarkerSlug` when present. Otherwise they match by normalized test name (lowercase, punctuation and extra spaces removed).
+- **Numeric only:** only `DONE` reports and numeric values are included. Qualitative values such as `Negative` are left out.
+- **Grouping by unit:** points are grouped by unit, and each group is drawn as its own chart. Values are never converted between units.
+- **Dates:** each point is dated by `collectedOn`, or by the upload date when that is missing. `dateSource` says which.
+
+**Response `200 OK`**
+
+```json
+{
+  "marker": "ldl-cholesterol",
+  "displayName": "LDL Cholesterol",
+  "series": [
+    {
+      "unit": "mg/dL",
+      "points": [
+        {
+          "reportId": "1a2b…",
+          "date": "2026-03-14",
+          "dateSource": "COLLECTED",
+          "value": 148,
+          "refLow": null,
+          "refHigh": 100,
+          "flag": "HIGH"
+        },
+        {
+          "reportId": "6f1c…",
+          "date": "2026-09-28",
+          "dateSource": "COLLECTED",
+          "value": 162,
+          "refLow": null,
+          "refHigh": 100,
+          "flag": "HIGH"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Points are sorted by date, oldest first. If nothing matches, `series` is an empty array, not an error.
+
+### `GET /api/trends/markers`
+
+Lists the biomarkers that appear in at least two of the user's `DONE` reports, for the trend picker.
+
+**Auth:** Bearer (signed in only)
+
+**Response `200 OK`**
+
+```json
+[
+  { "marker": "ldl-cholesterol", "displayName": "LDL Cholesterol", "reportCount": 3 },
+  { "marker": "tsh", "displayName": "TSH", "reportCount": 2 }
+]
+```
+
+**Errors for both trend endpoints:**
+- `400 VALIDATION_ERROR` when `marker` is missing.
+- `401 AUTH_REQUIRED`, `401 TOKEN_EXPIRED`, `401 TOKEN_INVALID`.
+
+---
+
+## 6. Admin
+
+### `GET /api/admin/stats`
+
+Returns aggregated usage numbers for the admin dashboard. It contains counts only: no report content, report ids, or user names.
+
+**Auth:** Bearer with role `ADMIN`
+
+**Query parameters**
+
+| Name | Type | Default | Rules |
+|---|---|---|---|
+| `days` | integer | 14 | 1 to 90. Number of past days to include (UTC). |
+
+**Response `200 OK`**
+
+```json
+{
+  "from": "2026-09-19",
+  "to": "2026-10-02",
+  "dailyLlmCap": 500,
+  "days": [
+    {
+      "date": "2026-10-02",
+      "llmCalls": 212,
+      "inputTokens": 418230,
+      "outputTokens": 61204,
+      "reportsCreated": 64,
+      "reportsFailed": 5,
+      "rateLimitRejections": 9,
+      "maskingConflicts": 3
+    }
+  ],
+  "failuresByCode": { "UNREADABLE": 3, "EXTRACTION_FAILED": 1, "NO_RESULTS_FOUND": 1 },
+  "avgProcessingMsBySource": { "PDF": 6200, "IMAGE": 14800, "TEXT": 4100, "SAMPLE": 3900 },
+  "users": { "total": 37, "activeLast7Days": 12 },
+  "activeReports": { "guest": 18, "user": 95 }
+}
+```
+
+**Errors:**
+- `401 AUTH_REQUIRED`, `401 TOKEN_EXPIRED`, `401 TOKEN_INVALID`.
+- `403 FORBIDDEN` when the caller isn't an admin.
+
+---
+
+## 7. Health
 
 ### `GET /actuator/health`
 
@@ -456,26 +825,32 @@ The client calls this on page load to wake the backend and to show a "starting u
 
 ---
 
-## 6. Error codes
+## 8. Error codes
 
-### 6.1 HTTP error codes (`code` in Problem Details)
+### 8.1 HTTP error codes (`code` in Problem Details)
 
 | Code | Status | Meaning |
 |---|---|---|
 | `VALIDATION_ERROR` | 400 | Request body or parameters are invalid. See `errors`. |
 | `FILE_SIGNATURE_MISMATCH` | 400 | File content doesn't match its declared type |
-| `SESSION_INVALID` | 401 | Token missing, unknown, or expired |
-| `REPORT_NOT_FOUND` | 404 | Report doesn't exist in this session |
+| `SESSION_INVALID` | 401 | Report endpoint called with no bearer token and a missing, unknown, or expired session token |
+| `AUTH_REQUIRED` | 401 | Signed-in-only endpoint called without a bearer token |
+| `TOKEN_EXPIRED` | 401 | Access token has expired. Refresh and retry once. |
+| `TOKEN_INVALID` | 401 | Access token is malformed, has a bad signature or unknown `kid`, or has the wrong issuer or audience. Refresh once and retry. |
+| `GOOGLE_TOKEN_INVALID` | 401 | Google ID token failed verification |
+| `REFRESH_TOKEN_INVALID` | 401 | Refresh token unknown, expired, revoked, or reused. Sign in again. |
+| `FORBIDDEN` | 403 | Signed in, but missing the required role |
+| `REPORT_NOT_FOUND` | 404 | Report doesn't exist for this caller (including other owners' reports) |
 | `SAMPLE_NOT_FOUND` | 404 | Unknown sample id |
 | `REPORT_NOT_READY` | 409 | Chat requested before the report is `DONE` |
 | `FILE_TOO_LARGE` | 413 | File over 10 MB |
 | `UNSUPPORTED_FILE_TYPE` | 415 | Not a PDF, PNG, or JPEG |
-| `RATE_LIMITED` | 429 | Per-IP limit reached |
+| `RATE_LIMITED` | 429 | Per-IP or per-user limit reached |
 | `CAPACITY` | 429 | Daily LLM cap reached |
 | `BUSY` | 429 | Processing queue full |
 | `INTERNAL_ERROR` | 500 | Unexpected server error. Quote `requestId` when reporting. |
 
-### 6.2 Report processing codes (`error.code` on a `FAILED` report)
+### 8.2 Report processing codes (`error.code` on a `FAILED` report)
 
 | Code | Meaning | Suggested UI message |
 |---|---|---|
@@ -490,9 +865,9 @@ The server sends `error.message` with this text, but the client may use its own 
 
 ---
 
-## 7. Shared types
+## 9. Shared types
 
-### 7.1 Type definitions
+### 9.1 Type definitions
 
 The client can keep these in `client/lib/api-types.ts`. The backend uses matching Java records.
 
@@ -535,6 +910,7 @@ export interface Biomarker {
 }
 
 export interface ReportResult {
+  collectedOn: string | null; // YYYY-MM-DD
   biomarkers: Biomarker[];
   summary: string;
   highlights: string[];
@@ -568,6 +944,114 @@ export type ChatEvent =
   | { event: "done"; data: { finishReason: "COMPLETE" | "DECLINED" | "NOT_IN_CONTEXT" } }
   | { event: "error"; data: { code: string; message: string } };
 
+// ---- Auth ----
+
+export type Role = "USER" | "ADMIN";
+
+export interface User {
+  id: string;
+  displayName: string;
+  role: Role;
+  createdAt: string;
+}
+
+export interface Me extends User {
+  reportCount: number;
+}
+
+export interface GoogleSignInRequest {
+  idToken: string;
+  guestSessionToken?: string;
+}
+
+export interface TokenResponse {
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  refreshToken: string;
+  refreshTokenExpiresAt: string;
+  user: User;
+}
+
+export interface GoogleSignInResponse extends TokenResponse {
+  claimedReportCount: number;
+  newUser: boolean;
+}
+
+export interface RefreshRequest {
+  refreshToken: string;
+}
+
+// ---- History ----
+
+export type FlagCounts = { total: number; low: number; normal: number; high: number; unknown: number };
+
+export interface ReportListItem {
+  id: string;
+  status: ReportStatus;
+  sourceType: SourceType;
+  createdAt: string;
+  expiresAt: string;
+  collectedOn: string | null;
+  counts: FlagCounts | null;
+  errorCode: string | null;
+}
+
+export interface Page<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+// ---- Trends ----
+
+export interface TrendPoint {
+  reportId: string;
+  date: string; // YYYY-MM-DD
+  dateSource: "COLLECTED" | "UPLOADED";
+  value: number;
+  refLow: number | null;
+  refHigh: number | null;
+  flag: Flag;
+}
+
+export interface TrendResponse {
+  marker: string;
+  displayName: string;
+  series: { unit: string | null; points: TrendPoint[] }[];
+}
+
+export interface TrendMarker {
+  marker: string;
+  displayName: string;
+  reportCount: number;
+}
+
+// ---- Admin ----
+
+export interface AdminStats {
+  from: string;
+  to: string;
+  dailyLlmCap: number;
+  days: {
+    date: string;
+    llmCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    reportsCreated: number;
+    reportsFailed: number;
+    rateLimitRejections: number;
+    maskingConflicts: number;
+  }[];
+  failuresByCode: Record<string, number>;
+  avgProcessingMsBySource: Partial<Record<SourceType, number>>;
+  users: { total: number; activeLast7Days: number };
+  activeReports: { guest: number; user: number };
+}
+
+// ---- Errors ----
+
 export interface ProblemDetail {
   type: string;
   title: string;
@@ -579,7 +1063,7 @@ export interface ProblemDetail {
 }
 ```
 
-### 7.2 Compatibility rules
+### 9.2 Compatibility rules
 
 - **Adding** a new optional field, endpoint, enum value, or error code is a compatible change.
 - **Removing or renaming** a field, changing a type, or changing what a status code means is a breaking change. Bump the version in this document and update the client in the same commit.
@@ -587,9 +1071,9 @@ export interface ProblemDetail {
 
 ---
 
-## 8. Example session
+## 10. Example sessions
 
-A full run from the client's point of view:
+**Guest run:**
 
 1. `GET /actuator/health` → `200`. The backend is awake.
 2. `POST /api/sessions` → `201` with a token. Save it.
@@ -599,11 +1083,46 @@ A full run from the client's point of view:
 6. User asks "Why is my LDL flagged?": `POST /api/reports/{id}/chat` → SSE stream with `meta`, `token` events, `sources`, `done`.
 7. User clicks "Delete my report": `DELETE /api/reports/{id}` → `204`.
 
+**Guest signs in, then comes back later:**
+
+1. The guest has one report in their session and clicks "Sign in with Google". Google Identity Services returns an ID token.
+2. `POST /api/auth/google` with `{ idToken, guestSessionToken }` → `200`.
+   - The response has `claimedReportCount: 1`.
+   - Keep the access token in memory and the refresh token in `sessionStorage`.
+   - Delete the guest token.
+3. `GET /api/reports` with `Authorization: Bearer …` → the claimed report, now expiring in 30 days.
+4. Fifteen minutes later, a call returns `401 TOKEN_EXPIRED`.
+   - `POST /api/auth/refresh` → `200` with new tokens. Replace both.
+   - Retry the call.
+5. `GET /api/trends/markers` → markers that appear in two or more reports. Then `GET /api/trends?marker=ldl-cholesterol` → chart data.
+6. The user middle-clicks a report on "My reports". The new tab has no refresh token.
+   - Google auto sign-in returns an ID token.
+   - `POST /api/auth/google` → `200` with this tab's own tokens.
+   - Then `GET /api/reports/{id}` → `200`.
+7. The user closes all tabs and comes back two days later. Auto sign-in runs again, and history and trends are there. If auto sign-in doesn't happen, one click on "Sign in with Google" does the same.
+8. Signing out in one tab: `POST /api/auth/logout` → `204`.
+   - A `BroadcastChannel` message makes every other tab log out its own refresh token and clear its tokens.
+   - Every tab calls `disableAutoSelect()`.
+
 ---
 
-## 9. Changes from the data flow design
+## 11. Changelog
 
-The contract settles a few points the data flow document left open:
+**2.1**
+- **Refresh rule:** the client now refreshes once on `401 TOKEN_INVALID` as well as `TOKEN_EXPIRED`, so rotating the signing key is invisible to users.
+- **Key ids:** access tokens carry a `kid` header, and the server accepts any key in `JWT_SIGNING_KEYS` (see 2.8).
+- **Cross-tab sign-in:** new tabs and returning visits sign in through Google auto sign-in, with one refresh family per tab. Logout is broadcast to every tab.
+- **Lazy guest sessions:** guest sessions are created on the first guest action instead of on page load.
+
+**2.0 (auth)**
+- **New auth endpoints:** `POST /api/auth/google`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/me`, `DELETE /api/me`.
+- **New data endpoints:** `GET /api/reports` (list), `GET /api/trends`, `GET /api/trends/markers`, `GET /api/admin/stats`.
+- **Bearer tokens on report endpoints:** they now accept `Authorization: Bearer` as well as `X-Session-Token`.
+- **New error codes:** `AUTH_REQUIRED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `GOOGLE_TOKEN_INVALID`, `REFRESH_TOKEN_INVALID`, `FORBIDDEN`.
+- **New `result.collectedOn` field.**
+- **Per-user rate limits:** limits are keyed by user when signed in.
+
+**1.0.** The contract settled a few points the data flow document left open:
 
 - **Full queue:** returns `429 BUSY` without creating a report. Before, the design created a report and immediately marked it `FAILED`.
 - **Daily cap at upload:** the cap is checked at upload too, so users get `429 CAPACITY` right away instead of a report that fails later.
