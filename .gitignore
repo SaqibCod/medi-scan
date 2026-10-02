@@ -1,0 +1,19 @@
+# --- Claude local ---
+# .claude/settings.local.json
+# .claude/projects/
+# .claude/cache/
+.claude
+
+# --- Secrets ---
+.env
+backend/src/main/resources/application-secret.properties
+.env.local
+
+# --- Java/Node ---
+backend/target/
+frontend/node_modules/
+frontend/.next/
+
+# --- Temp ---
+/tmp/medi-scan/*
+*.log
