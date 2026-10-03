@@ -80,10 +80,21 @@
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
 
-		<!-- Flyway owns the schema; versions come from Boot's dependency management. -->
+		<!--
+		  Flyway owns the schema; versions come from Boot's dependency management.
+
+		  The starter, not a bare flyway-core: Boot 4 split autoconfiguration into
+		  per-technology modules, so flyway-core on its own gives you the library
+		  with nothing wired up. Migrations then never run, and the first symptom
+		  is Hibernate failing schema validation on a missing table rather than
+		  anything mentioning Flyway. The starter pulls in flyway-core itself.
+
+		  flyway-database-postgresql is still needed explicitly: Flyway 10+ ships
+		  each database's support as its own artifact.
+		-->
 		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-core</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
