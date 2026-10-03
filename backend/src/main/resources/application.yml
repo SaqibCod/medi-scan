@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: medi-scan-backend
+
+  # Everything here comes from the environment. No secrets in code or YAML.
+  # See .env.example at the repo root for the full list.
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/mediscan}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+
+  jpa:
+    # Flyway owns the schema. `validate` makes a drift between the entities and
+    # the migrations fail at startup instead of Hibernate silently "fixing" it.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  # Caddy sets X-Forwarded-For in production. Without this, every rate-limit
+  # bucket would key on the proxy's IP instead of the caller's (plan section 5).
+  forward-headers-strategy: framework
+  error:
+    # Errors are rendered as RFC 9457 Problem Details by ApiExceptionHandler and
+    # the security handlers, never by the servlet container's default page.
+    whitelabel:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Health only. Nothing else is exposed publicly (contract section 7).
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+
+logging:
+  pattern:
+    # requestId comes from RequestIdFilter's MDC entry, so every log line can be
+    # tied back to the X-Request-Id the client was given.
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
+
+mediscan:
+  # Single allowed CORS origin, no wildcards (contract section 1.4).
+  allowed-origin: ${ALLOWED_ORIGIN:http://localhost:3000}
+  session:
+    # Guest sessions, and the reports they own, live this long (plan section 6).
+    ttl-hours: ${RETENTION_HOURS:24}
+  ratelimit:
+    # Contract section 1.6. docs/plan.md section 10 has no variable for this one,
+    # so it is read from the environment with the contract's default.
+    sessions-per-hour: ${RATE_LIMIT_SESSIONS_PER_HOUR:20}
+  retention:
+    # dataflow 9.2 runs the cleanup every 15 minutes.
+    interval-ms: 900000
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+# Local only: health details help while developing. Production keeps `never`.
+management:
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+
+logging:
+  level:
+    medi_scan.backend: DEBUG
+    org.flywaydb: INFO
