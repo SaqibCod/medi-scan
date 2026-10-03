@@ -1,18 +1,44 @@
 # --- Claude local ---
-# .claude/settings.local.json
-# .claude/projects/
-# .claude/cache/
 .claude
 CLAUDE.md
+skills-lock.json
+
 # --- Secrets ---
 .env
-backend/src/main/resources/application-secret.properties
 .env.local
+.env.*.local
+backend/src/main/resources/application-secret.properties
 
-# --- Java/Node ---
+# --- Java ---
 backend/target/
+*.class
+*.jar
+!backend/.mvn/wrapper/maven-wrapper.jar
+hs_err_pid*.log
+replay_pid*.log
+
+# --- Node ---
 client/node_modules/
 client/.next/
+client/out/
+client/coverage/
+client/.vercel
+client/next-env.d.ts
+*.tsbuildinfo
+
+# --- IDE ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*
+!.vscode/settings.json
+*.swp
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # --- Temp ---
 /tmp/medi-scan/*
