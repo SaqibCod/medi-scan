@@ -39,17 +39,15 @@ export function HealthNotice() {
   }, [isPending]);
 
   const unreachable = isError || data === false;
-
-  // Quiet until there is something to say.
-  if (!unreachable && !(isPending && slow)) {
-    return null;
-  }
+  const wakingUp = isPending && slow;
 
   return (
-    // `aria-live="polite"` because this appears after load: without it a screen-reader user
-    // would never hear that the backend is waking up or unreachable.
-    <div aria-live="polite" className="mx-auto w-full max-w-5xl px-4 pt-4 sm:px-6">
-      {unreachable ? (
+    // The live region is always in the DOM, with only its contents changing. Mounting a
+    // region and its content together is unreliable: several screen readers only announce
+    // changes inside a region that already existed, so a notice that appears with its
+    // wrapper can go unread. The empty wrapper is invisible and takes no space.
+    <div aria-live="polite" className="mx-auto w-full max-w-5xl empty:hidden px-4 pt-4 sm:px-6">
+      {!unreachable && !wakingUp ? null : unreachable ? (
         <p className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
           <CloudOff aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <span className="min-w-0 text-pretty">

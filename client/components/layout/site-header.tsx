@@ -12,7 +12,7 @@ const NAV_LINKS = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur supports-backdrop-filter:bg-background/70">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
         <Link
           href="/"
@@ -47,7 +47,17 @@ export function SiteHeader() {
             No Google wordmark or "G" logo until the button actually signs you in with
             Google; branding on a dead control is a small lie.
           */}
-          <Badge id="signin-status" variant="secondary" className="hidden sm:inline-flex">
+          {/*
+            `sr-only sm:not-sr-only`, not `hidden sm:inline-flex`: `hidden` is display:none,
+            which drops the element from the accessibility tree, so on a narrow screen the
+            aria-describedby below would point at nothing and the explanation would vanish for
+            exactly the users who most need it.
+          */}
+          <Badge
+            id="signin-status"
+            variant="secondary"
+            className="sr-only sm:not-sr-only sm:inline-flex"
+          >
             Sign&#8209;in coming soon
           </Badge>
           <Button variant="outline" size="sm" disabled aria-describedby="signin-status">

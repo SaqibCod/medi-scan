@@ -71,8 +71,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <DisclaimerBanner />
             <HealthNotice />
 
-            {/* scroll-margin-top keeps the sticky header off an anchored heading. */}
-            <main id="main" tabIndex={-1} className="flex-1 scroll-mt-20 outline-none">
+            {/*
+              tabIndex={-1} so the skip link can move focus here. It keeps a focus ring:
+              suppressing it would land a keyboard user somewhere invisible, which defeats
+              the point of the skip link. scroll-mt keeps the sticky header off an anchor.
+            */}
+            <main
+              id="main"
+              tabIndex={-1}
+              className="flex-1 scroll-mt-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
               {children}
             </main>
 
