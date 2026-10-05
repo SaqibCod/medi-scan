@@ -5,7 +5,9 @@ spring:
   # Everything here comes from the environment. No secrets in code or YAML.
   # See .env.example at the repo root for the full list.
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/mediscan}
+    # 5433 matches docker-compose.yml, which avoids a natively installed Postgres
+    # on 5432. Tests ignore this entirely - Testcontainers supplies its own URL.
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/mediscan}
     username: ${DATABASE_USER:postgres}
     password: ${DATABASE_PASSWORD:postgres}
 
