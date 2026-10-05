@@ -1,0 +1,19 @@
+# Test profile. The datasource is supplied by PostgresTestBase's container.
+mediscan:
+  allowed-origin: http://localhost:3000
+  session:
+    ttl-hours: 24
+  ratelimit:
+    # Deliberately high so the shared in-memory buckets cannot run out part-way
+    # through the suite and fail an unrelated test. SessionRateLimitTest lowers
+    # this for itself.
+    sessions-per-hour: 1000
+  retention:
+    interval-ms: 3600000
+
+logging:
+  level:
+    # Quiet the container and migration noise; test failures should be readable.
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN
+    org.flywaydb: WARN

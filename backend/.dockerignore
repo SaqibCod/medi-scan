@@ -1,0 +1,25 @@
+# Keep the build context small: everything here would be sent to the daemon and
+# some of it would poison the build.
+
+# Local build output. Copying a host-built target/ in would mean the image
+# contains a jar compiled by whatever JDK the host happens to have.
+target/
+
+# Never ship secrets, and never let them into a layer.
+.env
+.env.*
+src/main/resources/application-secret.properties
+
+# IDE and OS noise
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Docs and git metadata are not needed to compile
+HELP.md
+*.md
+.git/
+.gitignore
+.gitattributes

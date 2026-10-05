@@ -1,21 +1,34 @@
+# Local development database only.
+# Production uses Neon (see docs/plan.md section 11); the production compose file
+# lives in deploy/ and arrives in phase 8.
 services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: medi-scan-postgres
     environment:
-      POSTGRES_DB: mediScan
+      POSTGRES_DB: mediscan
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
+      POSTGRES_PASSWORD: postgres
     ports:
+      # 5433 on the host, not 5432: a native Postgres install commonly already owns
+      # 5432, and the failure mode when it does is nasty rather than obvious - the
+      # app connects to the wrong server and migrates the wrong database, on a
+      # server with no pgvector. 5433 keeps the two side by side.
       - "5433:5432"
     volumes:
-      - medi-scan_pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
+      # Runs only on first initialisation of an empty volume. Flyway's
+      # V1__baseline.sql also creates the extension, so a pre-existing volume
+      # without it still works.
       - ./docker/postgres/init-extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d mediScan"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mediscan"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
-  medi-scan_pg_data:
+  pg_data:
+    name: medi-scan_pg_data
