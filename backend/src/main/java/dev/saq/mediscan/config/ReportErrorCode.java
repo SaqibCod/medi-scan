@@ -1,4 +1,4 @@
-package dev.saq.mediscan.report;
+package dev.saq.mediscan.config;
 
 /**
  * Every report <em>processing</em> failure code in {@code docs/api-contract.md} section 8.2.

@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
+import dev.saq.mediscan.config.ReportErrorCode;
 import dev.saq.mediscan.config.SqlTime;
 
 /**

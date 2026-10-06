@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import dev.saq.mediscan.config.ReportErrorCode;
 import dev.saq.mediscan.support.PostgresTestBase;
 import dev.saq.mediscan.support.ReportFixtures;
 

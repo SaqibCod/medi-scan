@@ -1,4 +1,4 @@
-package dev.saq.mediscan.report;
+package dev.saq.mediscan.config;
 
 /**
  * An expected failure of the processing pipeline, carrying the code to store on the report.

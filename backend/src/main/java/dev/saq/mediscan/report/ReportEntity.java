@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import dev.saq.mediscan.config.ReportErrorCode;
 import dev.saq.mediscan.session.OwnerRef;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
