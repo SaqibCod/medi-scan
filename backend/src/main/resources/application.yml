@@ -26,6 +26,23 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  ai:
+    # The google-genai module, not vertex-ai-gemini: setting api-key selects the
+    # Gemini Developer API (Google AI Studio), which needs no Google Cloud
+    # project. See the dependency comment in pom.xml.
+    #
+    # When mediscan.llm.provider=fake, LlmProviderEnvironmentPostProcessor sets
+    # spring.ai.model.chat=none so none of this is instantiated.
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY:}
+        chat:
+          options:
+            model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
+            # Both pipeline steps are transcription and summarisation of fixed
+            # input, so there is nothing for sampling to improve.
+            temperature: 0.0
+
   servlet:
     multipart:
       # Kept in step with mediscan.upload.max-bytes. Spring rejects an oversized

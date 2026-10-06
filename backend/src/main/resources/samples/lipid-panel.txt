@@ -1,0 +1,27 @@
+NORTHSIDE COMMUNITY LABORATORY
+2400 Rimer Avenue, Springfield
+Phone: (555) 555-0100
+
+                        LIPID PANEL, FASTING
+
+Patient Name: Jane Q. Roe                 Accession: NC-4471829
+DOB: 04/12/1985                           Specimen ID: 20260928-0114
+Patient ID: A1234567                      Collected: 09/28/2026
+Phone: (555) 555-0142                     Reported: 09/29/2026
+Ordered by: Dr. Alan Whitfield, MD        Fasting: Yes
+
+------------------------------------------------------------------------
+TEST                        RESULT      UNIT        REFERENCE      FLAG
+------------------------------------------------------------------------
+Total Cholesterol           238         mg/dL       <200           H
+HDL Cholesterol             38          mg/dL       >40            L
+LDL Cholesterol             172         mg/dL       <100           H
+Triglycerides               140         mg/dL       <150
+Non-HDL Cholesterol         200         mg/dL       <130           H
+------------------------------------------------------------------------
+
+Method: Enzymatic colorimetric. LDL calculated (Friedewald).
+Performed at Northside Community Laboratory.
+
+This is a synthetic report created for demonstration. It does not describe
+a real person and contains no real patient data.

@@ -1,0 +1,4 @@
+# Registered here rather than as a @Component because autoconfiguration conditions
+# are evaluated before the bean factory exists. See the class javadoc.
+org.springframework.boot.EnvironmentPostProcessor=\
+dev.saq.mediscan.config.LlmProviderEnvironmentPostProcessor

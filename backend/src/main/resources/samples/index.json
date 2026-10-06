@@ -1,0 +1,23 @@
+[
+  {
+    "id": "lipid-panel",
+    "file": "lipid-panel.txt",
+    "title": "Lipid panel",
+    "description": "Cholesterol and triglycerides, with high LDL.",
+    "markerCount": 5
+  },
+  {
+    "id": "cbc",
+    "file": "cbc.txt",
+    "title": "Complete blood count",
+    "description": "Red and white blood cells, all in range.",
+    "markerCount": 12
+  },
+  {
+    "id": "thyroid-panel",
+    "file": "thyroid-panel.txt",
+    "title": "Thyroid panel",
+    "description": "TSH and free T4, with low TSH.",
+    "markerCount": 3
+  }
+]
