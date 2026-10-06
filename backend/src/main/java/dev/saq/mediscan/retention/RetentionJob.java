@@ -1,5 +1,6 @@
 package dev.saq.mediscan.retention;
 
+import java.time.Clock;
 import java.time.Instant;
 
 import org.slf4j.Logger;
@@ -27,9 +28,11 @@ public class RetentionJob {
 	private static final Logger log = LoggerFactory.getLogger(RetentionJob.class);
 
 	private final SessionRepository sessionRepository;
+	private final Clock clock;
 
-	public RetentionJob(SessionRepository sessionRepository) {
+	public RetentionJob(SessionRepository sessionRepository, Clock clock) {
 		this.sessionRepository = sessionRepository;
+		this.clock = clock;
 	}
 
 	/**
@@ -42,7 +45,7 @@ public class RetentionJob {
 	@Scheduled(fixedDelayString = "${mediscan.retention.interval-ms}", initialDelay = 60_000)
 	@Transactional
 	public void deleteExpiredSessions() {
-		Instant now = Instant.now();
+		Instant now = Instant.now(clock);
 		int deleted = sessionRepository.deleteExpired(now);
 
 		// Counts only, never ids or content.
