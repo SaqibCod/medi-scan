@@ -66,6 +66,14 @@ public final class TestProperties {
 				base.extract(), base.mask());
 	}
 
+	public static MediScanProperties withJobs(int workers, int queueCapacity) {
+		MediScanProperties base = defaults();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(),
+				new MediScanProperties.Jobs(workers, queueCapacity, base.jobs().shutdownGrace()),
+				base.extract(), base.llm(), base.mask(), base.retention());
+	}
+
 	public static MediScanProperties withOpenNlp(boolean enabled, double minProbability) {
 		MediScanProperties base = defaults();
 		MediScanProperties.Mask mask = base.mask();

@@ -11,6 +11,7 @@ import dev.saq.mediscan.report.ReportRepository;
 import dev.saq.mediscan.report.SourceType;
 import dev.saq.mediscan.session.Session;
 import dev.saq.mediscan.session.SessionRepository;
+import dev.saq.mediscan.session.SessionService;
 
 /**
  * Sessions and reports for tests that need rows to exist.
@@ -24,10 +25,24 @@ public class ReportFixtures {
 
 	private final SessionRepository sessions;
 	private final ReportRepository reports;
+	private final SessionService sessionService;
 
-	public ReportFixtures(SessionRepository sessions, ReportRepository reports) {
+	public ReportFixtures(SessionRepository sessions, ReportRepository reports,
+			SessionService sessionService) {
 		this.sessions = sessions;
 		this.reports = reports;
+		this.sessionService = sessionService;
+	}
+
+	/**
+	 * A live session's raw token, for tests that call an endpoint.
+	 *
+	 * <p>Goes through {@link SessionService} rather than inserting a row and inventing a
+	 * token, because the token the client sends has to hash to the stored value - so building
+	 * one by hand would mean reimplementing the hashing the filter depends on.
+	 */
+	public String sessionToken() {
+		return sessionService.create().token();
 	}
 
 	/** A live guest session, expiring in 24 hours. */

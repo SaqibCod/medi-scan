@@ -15,9 +15,9 @@ import dev.saq.mediscan.config.MediScanProperties;
 /**
  * Per-IP rate limiting with Bucket4j.
  *
- * <p>Phase 1 limits session creation to 20 per hour per IP (contract section 1.6). Upload and
- * chat limits, which key on the user id when signed in, arrive with the endpoints they
- * protect.
+ * <p>Session creation and report creation have their own limits and their own buckets
+ * (contract section 1.6). The chat limit, which keys on the user id when signed in, arrives
+ * with the endpoint it protects.
  *
  * <p>Buckets are held in memory. Losing them on restart is acceptable and intended
  * ({@code docs/dataflow.md} section 9.3): the limit exists to stop casual abuse of a free
@@ -27,10 +27,13 @@ import dev.saq.mediscan.config.MediScanProperties;
 public class IpRateLimiter {
 
 	private final Map<String, Bucket> sessionBuckets = new ConcurrentHashMap<>();
+	private final Map<String, Bucket> uploadBuckets = new ConcurrentHashMap<>();
 	private final int sessionsPerHour;
+	private final int uploadsPerHour;
 
 	public IpRateLimiter(MediScanProperties properties) {
 		this.sessionsPerHour = properties.ratelimit().sessionsPerHour();
+		this.uploadsPerHour = properties.ratelimit().uploadsPerHour();
 	}
 
 	/**
@@ -46,6 +49,34 @@ public class IpRateLimiter {
 		if (!probe.isConsumed()) {
 			throw new RateLimitExceededException(retryAfterSeconds(probe));
 		}
+	}
+
+	/**
+	 * Consumes one token for report creation from this request's IP.
+	 *
+	 * <p>A separate bucket from session creation, not a shared one. The two limits exist for
+	 * different reasons - sessions are cheap and only need abuse protection, while an upload
+	 * spends LLM budget - and sharing a bucket would let a burst of session creation lock a
+	 * legitimate user out of uploading.
+	 *
+	 * @throws RateLimitExceededException with the seconds to wait, when the bucket is empty
+	 */
+	public void checkUpload(HttpServletRequest request) {
+		String ip = clientIp(request);
+		Bucket bucket = uploadBuckets.computeIfAbsent(ip, key -> newUploadBucket());
+
+		ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+		if (!probe.isConsumed()) {
+			throw new RateLimitExceededException(retryAfterSeconds(probe));
+		}
+	}
+
+	private Bucket newUploadBucket() {
+		return Bucket.builder()
+				.addLimit(limit -> limit
+						.capacity(uploadsPerHour)
+						.refillGreedy(uploadsPerHour, Duration.ofHours(1)))
+				.build();
 	}
 
 	private Bucket newSessionBucket() {
