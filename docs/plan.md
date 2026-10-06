@@ -140,24 +140,42 @@ Masking is best-effort, not a guarantee. The test suite checks both directions: 
 
 ### 4.4 Structured extraction (two steps)
 
-**Step 1: extraction.** Spring AI's `BeanOutputConverter` maps the masked text into typed objects:
+**Step 1: extraction.** Two separate shapes are involved, and keeping them apart is the point of this section.
+
+**What the model is asked for.** Strings as printed, nothing else:
+
+```java
+// The step-1 model schema. No numbers, no bounds, no flags.
+record ModelRow(
+    String testName,
+    String rawValue,           // exactly as printed: "5.4", "<0.5", "Negative", "Trace"
+    String unit,               // or null
+    String referenceRangeText  // exactly as printed: "3.5-5.0", "<200", "Negative"
+) {}
+
+record ModelExtraction(List<ModelRow> biomarkers, String collectedOn) {}
+```
+
+**What code produces and stores.** Validation turns each `ModelRow` into the shape the API returns:
 
 ```java
 enum Flag { LOW, NORMAL, HIGH, UNKNOWN }
 
 record Biomarker(
     String testName,
-    String rawValue,          // exactly as printed: "5.4", "<0.5", "Negative", "Trace"
-    Double numericValue,      // null when the value is not numeric
+    String rawValue,
+    Double numericValue,      // parsed in code; null when the value is not numeric
     String unit,
-    String referenceRangeText,// exactly as printed: "3.5-5.0", "<200", "Negative"
-    Double refLow,            // null if the range has no lower bound
-    Double refHigh,           // null if the range has no upper bound
-    Flag flag                 // always recomputed in code
+    String referenceRangeText,
+    Double refLow,            // parsed in code; null if the range has no lower bound
+    Double refHigh,           // parsed in code; null if the range has no upper bound
+    Flag flag                 // always computed in code
 ) {}
 
 record ExtractionResult(List<Biomarker> biomarkers) {}
 ```
+
+`numericValue`, `refLow`, `refHigh`, the flag, and every count are always computed in code from the model's strings, and are never requested from the model. Asking the model for a number it could silently round, or for a flag it could get backwards, would put an unchecked value in front of a patient. Keeping the schema to strings means the only thing the model can get wrong is what it transcribed, which the value check below catches.
 
 **Validation in code**
 - **Value check:** every `rawValue` must appear in the masked source text. Rows that don't are dropped and logged, which stops the model from inventing values.
@@ -339,9 +357,9 @@ It reads only aggregated counts. It never shows report content, ids of other use
 - `app_user(id UUID, google_sub UNIQUE, display_name, role, created_at, last_login_at)`
 - `refresh_token(id, user_id, family_id, token_hash UNIQUE, issued_at, expires_at, revoked_at, family_started_at)`
 - `session(id, token_hash, created_at, expires_at)`
-- `report(id UUID, session_id NULL, user_id NULL, source_type, status, error_code, collected_on NULL, created_at, expires_at)`. A check constraint requires exactly one of `session_id` and `user_id`. Both foreign keys use `ON DELETE CASCADE`.
-- `report_text(report_id, masked_text)`
-- `biomarker(id, report_id, test_name, test_name_norm, biomarker_slug, raw_value, numeric_value, unit, reference_range_text, ref_low, ref_high, flag)`. `test_name_norm` is lowercase with punctuation removed, used to match markers for trends.
+- `report(id UUID, session_id NULL, user_id NULL, source_type, status, error_code, collected_on NULL, created_at, started_at NULL, finished_at NULL, expires_at)`. A check constraint requires exactly one of `session_id` and `user_id`. Both foreign keys use `ON DELETE CASCADE`. `started_at` and `finished_at` bound the job run and feed the processing-time stats; both are null until the job reaches that point. Phase 2 creates the table with `session_id NOT NULL` and no `user_id`; Phase 6 adds `user_id`, makes `session_id` nullable, and adds the check constraint.
+- `report_text(report_id, masked_text)`. Written only when the report reaches `DONE`, in the same transaction as the biomarkers and summary, so a failed report stores no text.
+- `biomarker(id, report_id, position, test_name, test_name_norm, biomarker_slug, raw_value, numeric_value, unit, reference_range_text, ref_low, ref_high, flag)`. `position` keeps the order the values had in the report and is what results are ordered by. `test_name_norm` is lowercase with punctuation removed, used to match markers for trends.
 - `report_summary(report_id, patient_summary, highlights_json)`
 - `llm_usage(day, calls)`
 - `daily_stats(day, input_tokens, output_tokens, reports_created, reports_failed, rate_limit_rejections, masking_conflicts)`
@@ -442,6 +460,7 @@ ALLOWED_ORIGIN=http://localhost:3000
 RATE_LIMIT_UPLOADS_PER_HOUR=10
 RATE_LIMIT_SESSIONS_PER_HOUR=20    # per IP; api-contract.md 1.6
 GLOBAL_DAILY_LLM_CALLS=500
+UPLOAD_TEMP_DIR=                   # blank uses the default under the system temp directory
 RETENTION_HOURS=24                 # guest sessions
 USER_RETENTION_DAYS=30             # signed-in users' reports
 INACTIVE_ACCOUNT_DAYS=180

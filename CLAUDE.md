@@ -14,6 +14,8 @@ It is a portfolio demo built for synthetic data. Running cost must stay at $0.
 - `docs/plan.md`: scope, stack, data model, auth design (sections 4.9–4.12), API, deployment
 - `docs/dataflow.md`: pipeline stages, sequence diagrams, error codes, retention
 - `docs/api-contract.md`: every endpoint, request and response shape, error code, and SSE event. This is the source of truth for the API.
+- `backend/CLAUDE.md`: backend-specific rules, the package map, and the backend checklists.
+- `docs/phase-<n>-lld.md`: the low-level design for the phase being built; read it before coding that phase.
 
 **Keep the contract in sync.** Any change to an endpoint, field, enum, error code, or SSE event must update `docs/api-contract.md` and `client/lib/api-types.ts` in the same change. If code and the contract disagree, stop and ask which one is right.
 
@@ -27,24 +29,7 @@ docker/    local Postgres + pgvector init
 docs/      design docs
 ```
 
-Backend packages under `backend/src/main/java/.../`:
-
-| Package | Contents |
-|---|---|
-| `auth` | Security filter chain, Google ID token verification, JWT issue, refresh rotation, logout |
-| `session` | Guest token issue and the guest auth filter |
-| `user` | `/api/me`, account deletion, report history |
-| `trends` | Matching biomarkers across a user's reports |
-| `admin` | Aggregated stats for the admin dashboard |
-| `upload` | Controllers, validation, async jobs |
-| `extract` | PDFBox text extraction, the scanned-PDF fallback, Tess4J OCR |
-| `mask` | Regex rules, OpenNLP, the value integrity check |
-| `analysis` | Step-1 extraction, validation and flag recomputation, step-2 summary |
-| `llm` | The provider interface, Gemini and OpenAI providers, usage logging |
-| `chat` | Context building, RAG over biomarker pages, SSE |
-| `ratelimit` | Bucket4j limits (per user when signed in, otherwise per IP), the Postgres daily cap |
-| `retention` | The scheduled cleanup job |
-| `config` | Spring configuration |
+Backend packages and their rules: see `backend/CLAUDE.md`.
 
 ## Commands
 
@@ -107,7 +92,7 @@ These are the core guarantees of the project. Don't weaken them, even to fix a b
 - **LLM access:** all model calls go through the `llm` provider interface. Don't call a Spring AI client directly from other packages.
 - **Embeddings:** the embedding model is fixed. Changing it requires re-embedding and a pgvector column migration, so don't change it casually.
 - **HTTP errors:** return RFC 9457 `ProblemDetail` with extra `code` and `requestId` fields, from one `@RestControllerAdvice`. Use only the codes in `docs/api-contract.md` section 8. Add a new code to the contract first.
-- **Report failure codes:** `UNREADABLE`, `NO_RESULTS_FOUND`, `EXTRACTION_FAILED`, `CAPACITY`, `LLM_UNAVAILABLE`, `INTERRUPTED`. These are stored on the report and returned in `error.code`.
+- **Report failure codes:** `UNREADABLE`, `DOCUMENT_TOO_LONG`, `NO_RESULTS_FOUND`, `EXTRACTION_FAILED`, `CAPACITY`, `LLM_UNAVAILABLE`, `INTERRUPTED`. These are stored on the report and returned in `error.code`.
 - **Full queue or reached cap at upload:** return `429 BUSY` or `429 CAPACITY` without creating a report. Always set `Retry-After` on 429.
 - **Spring AI versions:** its APIs change between versions. Check the version in `pom.xml` and that version's docs before writing Spring AI code. Don't guess class or method names.
 - **Schema changes:** use Flyway migrations in `src/main/resources/db/migration`. Never edit a migration that has already been committed.

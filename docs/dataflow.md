@@ -50,7 +50,7 @@ Each report's data changes form as it moves through the pipeline.
 |---|---|---|---|---|---|
 | 1 | Upload | File bytes (PDF/image) or text | Temp file on EC2 disk | Possibly | Deleted right after step 2, even on failure |
 | 2 | Extraction | Raw text (String) | JVM memory only | Possibly | Dropped right after step 3 |
-| 3 | Masking | Masked text | `report_text` table | No (best-effort) | Report lifetime |
+| 3 | Masking | Masked text | JVM memory until the report is DONE, then the `report_text` table | No (best-effort) | Report lifetime |
 | 4 | Step-1 LLM | Extraction JSON from the model | JVM memory only | No | Dropped after step 5 |
 | 5 | Validation | Validated biomarker rows + `collected_on` | `biomarker`, `report` tables | No | Report lifetime |
 | 6 | Step-2 LLM | Summary + highlights | `report_summary` table | No | Report lifetime |
@@ -386,15 +386,13 @@ flowchart TD
     RT --> DEL["Delete temp file"]
     DEL --> MASK["Mask personal data<br/>regex + OpenNLP"]
     MASK --> INT["Value integrity check"]
-    INT --> SAVE1[("Save report_text")]
-    SAVE1 --> CAP{"Daily LLM cap<br/>reached?"}
+    INT --> CAP{"Daily LLM cap<br/>reached?"}
     CAP -->|"yes"| FAIL["status = FAILED<br/>error = CAPACITY"]
     CAP -->|"no"| L1["Step-1 LLM call<br/>biomarkers + collection date"]
     L1 --> V["Validate in code<br/>value in source, parse numbers,<br/>recompute flags, parse date"]
-    V --> SAVE2[("Save biomarkers + collected_on")]
-    SAVE2 --> L2["Step-2 LLM call<br/>summary from validated data"]
-    L2 --> SAVE3[("Save report_summary")]
-    SAVE3 --> DONE["status = DONE"]
+    V --> L2["Step-2 LLM call<br/>summary from validated data"]
+    L2 --> SAVE[("One transaction:<br/>report_text + biomarkers +<br/>collected_on + report_summary")]
+    SAVE --> DONE["status = DONE"]
     DONE --> STATS[("Update daily stats<br/>counts and timing only")]
     FAIL --> STATS
 ```
@@ -402,6 +400,7 @@ flowchart TD
 **Step details**
 
 1. **Extraction.** The job picks a path by source type. Scanned PDF pages are detected per page (for example, fewer than 50 characters of text) so mixed PDFs work too. OCR is guarded by a semaphore with one permit.
+   - **Until the Phase 4 OCR fallback exists:** a PDF with no usable text layer has nowhere to fall back to, so the job fails with `UNREADABLE`. Image uploads don't reach the job at all — they are rejected at upload with `415 UNSUPPORTED_FILE_TYPE` (contract 4.1).
 2. **Temp file deletion.** Happens right after extraction in a `finally` block.
 3. **Masking.**
    - Regex rules run first, then OpenNLP.
@@ -419,7 +418,7 @@ flowchart TD
    - `collectedOn` is kept only if it parses as a real date that appears in the masked text and isn't in the future. Otherwise it's `null`.
    - If zero rows survive, the job fails with `NO_RESULTS_FOUND`.
 7. **Step-2 LLM call.** Input is only the validated biomarker list as JSON. The model writes the summary and picks highlights only from rows flagged `LOW` or `HIGH`.
-8. **Saving.** Steps 5–7 save in one transaction, so a report is never left with biomarkers but no summary.
+8. **Saving.** The masked text, the biomarkers, `collected_on`, the summary, and `status = DONE` are all written in one transaction at the end, so a report is never left with biomarkers but no summary. Until that transaction commits, the masked text exists only in JVM memory, which means **a report that fails stores no text at all**.
 9. **Deleted mid-job.** If the report was deleted while processing (by the user, by account deletion, or by expiry), the save finds no row. The job stops without writing anything.
 10. **Stats.** Daily counters are updated with counts and timing only.
 
@@ -442,6 +441,7 @@ stateDiagram-v2
 | Code | Meaning | What the user sees |
 |---|---|---|
 | `UNREADABLE` | No usable text found, even after OCR | "We couldn't read text from this file. Try a clearer image." |
+| `DOCUMENT_TOO_LONG` | Extracted text is over the length or page limit | "This document is too long to process. Try a shorter report." |
 | `NO_RESULTS_FOUND` | No lab values survived validation | "We didn't find lab results in this document." |
 | `EXTRACTION_FAILED` | Model output invalid twice | "Something went wrong reading the results. Please try again." |
 | `CAPACITY` | Daily LLM cap reached mid-job | "The demo has hit today's limit. Try again tomorrow." |
