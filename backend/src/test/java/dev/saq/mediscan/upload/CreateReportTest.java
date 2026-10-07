@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.file.Files;
+import java.time.Instant;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -22,7 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 
 import dev.saq.mediscan.report.ReportRepository;
-import dev.saq.mediscan.report.ReportStatus;
+import dev.saq.mediscan.report.SourceType;
 import dev.saq.mediscan.support.PostgresTestBase;
 import dev.saq.mediscan.support.ReportFixtures;
 import dev.saq.mediscan.support.TestPdfs;
@@ -49,11 +50,13 @@ class CreateReportTest extends PostgresTestBase {
 	TempFileStore tempFiles;
 
 	private String sessionToken;
+	private UUID sessionId;
 
 	@BeforeEach
 	void freshSession() {
 		fixtures.clear();
 		sessionToken = fixtures.sessionToken();
+		sessionId = fixtures.sessionIdFor(sessionToken);
 	}
 
 	// --- the accepted paths -------------------------------------------------
@@ -98,8 +101,8 @@ class CreateReportTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("the report is persisted as PENDING, owned by the caller's session")
-	void persistsPendingReport() throws Exception {
+	@DisplayName("the report is persisted, owned by the caller's session")
+	void persistsReport() throws Exception {
 		String body = mockMvc.perform(json("""
 				{"sampleId": "cbc", "consent": true}"""))
 				.andExpect(status().isAccepted())
@@ -107,13 +110,34 @@ class CreateReportTest extends PostgresTestBase {
 
 		UUID reportId = UUID.fromString(body.replaceAll(".*\"id\"\\s*:\\s*\"([^\"]+)\".*", "$1"));
 
-		assertThat(reports.findById(reportId)).isPresent()
+		// Deliberately not asserting PENDING. A worker picks the job up the moment the row
+		// exists, so by the time this line runs the status is a race - PENDING, PROCESSING,
+		// or already terminal. The endpoint's guarantee is that the row exists and belongs to
+		// the caller; what the pipeline then does with it is ReportPipelineTest's subject.
+		assertThat(reports.findOwnedBySession(reportId, sessionId, Instant.now()))
+				.isPresent()
 				.get()
 				.satisfies(report -> {
-					assertThat(report.getStatus()).isEqualTo(ReportStatus.PENDING);
-					assertThat(report.getStartedAt()).isNull();
-					assertThat(report.getFinishedAt()).isNull();
+					assertThat(report.getSourceType()).isEqualTo(SourceType.SAMPLE);
+					assertThat(report.getCreatedAt()).isNotNull();
+					assertThat(report.getExpiresAt()).isAfter(report.getCreatedAt());
 				});
+	}
+
+	@Test
+	@DisplayName("a report belongs only to the session that created it")
+	void reportIsOwnerScoped() throws Exception {
+		String body = mockMvc.perform(json("""
+				{"sampleId": "cbc", "consent": true}"""))
+				.andExpect(status().isAccepted())
+				.andReturn().getResponse().getContentAsString();
+
+		UUID reportId = UUID.fromString(body.replaceAll(".*\"id\"\\s*:\\s*\"([^\"]+)\".*", "$1"));
+		UUID otherSession = fixtures.session();
+
+		// CLAUDE.md rule 7, at the repository level. The endpoint test for this is in
+		// ReportResultsTest; this is the layer underneath it.
+		assertThat(reports.findOwnedBySession(reportId, otherSession, Instant.now())).isEmpty();
 	}
 
 	// --- consent ------------------------------------------------------------

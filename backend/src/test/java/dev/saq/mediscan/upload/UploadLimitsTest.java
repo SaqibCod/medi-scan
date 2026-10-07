@@ -28,8 +28,11 @@ import dev.saq.mediscan.support.ReportFixtures;
  * cleanly, and a {@code PENDING} report nobody will ever process is worse than no report -
  * the client would poll it until it expired.
  *
- * <p>The limits are lowered here rather than exercised at their production values, because
- * eleven real uploads per test would be slow and would say nothing extra.
+ * <p>The upload limit is lowered rather than exercised at its production value, because eleven
+ * real uploads per test would be slow and would say nothing extra. The daily cap is
+ * <em>raised</em> for the opposite reason: accepted uploads run the real pipeline, which spends
+ * the cap, so a low cap would make the rate-limit tests fail with {@code CAPACITY} before they
+ * ever reached the limit they are about.
  *
  * <p>Each test uses its own client address. The rate limiter's buckets are in-memory and
  * keyed by IP, so they outlive a single test method within the shared context - and a test
@@ -38,7 +41,7 @@ import dev.saq.mediscan.support.ReportFixtures;
  */
 @TestPropertySource(properties = {
 		"mediscan.ratelimit.uploads-per-hour=3",
-		"mediscan.llm.daily-cap=2",
+		"mediscan.llm.daily-cap=50",
 })
 class UploadLimitsTest extends PostgresTestBase {
 
@@ -138,8 +141,9 @@ class UploadLimitsTest extends PostgresTestBase {
 	@Test
 	@DisplayName("an upload is accepted while the cap still has room")
 	void acceptsBelowCap() throws Exception {
-		// One of two spent, so there is still room and the upload must not be refused.
+		// Some of the budget spent, but not all of it, so the upload must not be refused.
 		assertThat(capGuard.tryAcquire()).isTrue();
+		assertThat(capGuard.isCapReached()).isFalse();
 
 		mockMvc.perform(sample("10.0.0.6")).andExpect(status().isAccepted());
 	}
@@ -153,8 +157,11 @@ class UploadLimitsTest extends PostgresTestBase {
 	 * invented.
 	 */
 	private void spendCap() {
-		assertThat(capGuard.tryAcquire()).isTrue();
-		assertThat(capGuard.tryAcquire()).isTrue();
+		// Loops rather than assuming the cap size, so raising the configured cap for the
+		// rate-limit tests cannot silently stop these from spending it.
+		while (capGuard.tryAcquire()) {
+			// Spend the whole budget.
+		}
 		assertThat(capGuard.isCapReached()).isTrue();
 	}
 

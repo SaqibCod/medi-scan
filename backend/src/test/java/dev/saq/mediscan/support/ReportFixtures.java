@@ -45,6 +45,11 @@ public class ReportFixtures {
 		return sessionService.create().token();
 	}
 
+	/** The session id behind a raw token, for tests that need to query by owner. */
+	public UUID sessionIdFor(String token) {
+		return sessionService.findActive(token).orElseThrow().getId();
+	}
+
 	/** A live guest session, expiring in 24 hours. */
 	public UUID session() {
 		Instant now = Instant.now();

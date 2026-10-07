@@ -1,0 +1,113 @@
+[
+  {
+    "slug": "total-cholesterol",
+    "displayName": "Total Cholesterol",
+    "aliases": ["Total Cholesterol", "Cholesterol, Total", "Cholesterol Total", "CHOL"]
+  },
+  {
+    "slug": "hdl-cholesterol",
+    "displayName": "HDL Cholesterol",
+    "aliases": ["HDL Cholesterol", "HDL", "HDL-C", "Cholesterol, HDL", "HDL Chol"]
+  },
+  {
+    "slug": "ldl-cholesterol",
+    "displayName": "LDL Cholesterol",
+    "aliases": ["LDL Cholesterol", "LDL", "LDL-C", "Cholesterol, LDL", "LDL Chol", "LDL Calculated"]
+  },
+  {
+    "slug": "non-hdl-cholesterol",
+    "displayName": "Non-HDL Cholesterol",
+    "aliases": ["Non-HDL Cholesterol", "Non HDL Cholesterol", "Non-HDL", "Non-HDL Chol"]
+  },
+  {
+    "slug": "triglycerides",
+    "displayName": "Triglycerides",
+    "aliases": ["Triglycerides", "Triglyceride", "TRIG", "TG"]
+  },
+  {
+    "slug": "glucose",
+    "displayName": "Glucose",
+    "aliases": ["Glucose", "Glucose, Fasting", "Fasting Glucose", "Blood Glucose", "GLU"]
+  },
+  {
+    "slug": "hemoglobin",
+    "displayName": "Hemoglobin",
+    "aliases": ["Hemoglobin", "Haemoglobin", "HGB", "Hb"]
+  },
+  {
+    "slug": "hematocrit",
+    "displayName": "Hematocrit",
+    "aliases": ["Hematocrit", "Haematocrit", "HCT", "PCV"]
+  },
+  {
+    "slug": "wbc",
+    "displayName": "White Blood Cell Count",
+    "aliases": ["WBC", "White Blood Cell Count", "White Blood Cells", "Leukocytes", "WBC Count"]
+  },
+  {
+    "slug": "rbc",
+    "displayName": "Red Blood Cell Count",
+    "aliases": ["RBC", "Red Blood Cell Count", "Red Blood Cells", "Erythrocytes", "RBC Count"]
+  },
+  {
+    "slug": "platelets",
+    "displayName": "Platelet Count",
+    "aliases": ["Platelet Count", "Platelets", "PLT", "Thrombocytes"]
+  },
+  {
+    "slug": "mcv",
+    "displayName": "Mean Corpuscular Volume",
+    "aliases": ["MCV", "Mean Corpuscular Volume", "Mean Cell Volume"]
+  },
+  {
+    "slug": "mch",
+    "displayName": "Mean Corpuscular Hemoglobin",
+    "aliases": ["MCH", "Mean Corpuscular Hemoglobin", "Mean Cell Hemoglobin"]
+  },
+  {
+    "slug": "mchc",
+    "displayName": "Mean Corpuscular Hemoglobin Concentration",
+    "aliases": ["MCHC", "Mean Corpuscular Hemoglobin Concentration"]
+  },
+  {
+    "slug": "rdw",
+    "displayName": "Red Cell Distribution Width",
+    "aliases": ["RDW", "Red Cell Distribution Width", "RDW-CV"]
+  },
+  {
+    "slug": "neutrophils",
+    "displayName": "Neutrophils",
+    "aliases": ["Neutrophils", "Neutrophil", "Neutrophils %", "NEUT"]
+  },
+  {
+    "slug": "lymphocytes",
+    "displayName": "Lymphocytes",
+    "aliases": ["Lymphocytes", "Lymphocyte", "Lymphocytes %", "LYMPH"]
+  },
+  {
+    "slug": "monocytes",
+    "displayName": "Monocytes",
+    "aliases": ["Monocytes", "Monocyte", "Monocytes %", "MONO"]
+  },
+  {
+    "slug": "tsh",
+    "displayName": "TSH (Thyroid Stimulating Hormone)",
+    "aliases": ["TSH", "Thyroid Stimulating Hormone", "Thyrotropin"]
+  },
+  {
+    "slug": "free-t4",
+    "displayName": "Free T4",
+    "aliases": ["Free T4", "FT4", "Free Thyroxine", "T4, Free", "Thyroxine, Free"]
+  },
+  {
+    "slug": "thyroid-peroxidase-antibodies",
+    "displayName": "Thyroid Peroxidase Antibodies",
+    "aliases": [
+      "Thyroid Peroxidase Antibodies",
+      "TPO Antibodies",
+      "TPO Ab",
+      "Anti-TPO",
+      "Thyroid Peroxidase Ab"
+    ]
+  }
+]
