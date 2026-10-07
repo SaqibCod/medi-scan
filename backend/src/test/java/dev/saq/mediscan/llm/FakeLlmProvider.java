@@ -11,6 +11,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -71,10 +72,20 @@ public class FakeLlmProvider implements LlmProvider {
 
 	private volatile int callCount;
 
-	public FakeLlmProvider() {
+	/**
+	 * Whether an unscripted call synthesizes an answer instead of failing.
+	 *
+	 * <p>True only under the {@code local} profile. A test that reaches an unscripted call has
+	 * under-specified itself, and inventing an answer there would hide the gap - so the two
+	 * profiles get opposite behaviour on purpose.
+	 */
+	private final boolean synthesizeWhenUnscripted;
+
+	public FakeLlmProvider(Environment environment) {
 		for (LlmPurpose purpose : LlmPurpose.values()) {
 			scripts.put(purpose, new ArrayDeque<>());
 		}
+		this.synthesizeWhenUnscripted = List.of(environment.getActiveProfiles()).contains("local");
 	}
 
 	// --- scripting ----------------------------------------------------------
@@ -155,6 +166,13 @@ public class FakeLlmProvider implements LlmProvider {
 
 		Script script = next(request.purpose());
 		if (script == null) {
+			if (synthesizeWhenUnscripted) {
+				// Local development: behave like a plausible model so the app is usable by
+				// hand without a key. Under the test profile this throws instead - a test
+				// reaching an unscripted call has under-specified itself, and quietly
+				// inventing an answer would hide that.
+				return result((T) UnscriptedResponses.forPurpose(request, outputType));
+			}
 			throw new IllegalStateException(
 					"FakeLlmProvider has no script queued for " + request.purpose()
 							+ "; the test under-specified its expectations");
