@@ -82,6 +82,14 @@ public final class TestProperties {
 						mask.maxIntegrityPasses()));
 	}
 
+	public static MediScanProperties withOpenNlpModel(String modelLocation) {
+		MediScanProperties base = defaults();
+		MediScanProperties.Mask mask = base.mask();
+		return copyWith(base, base.upload(), base.extract(),
+				new MediScanProperties.Mask(true, modelLocation, mask.opennlpMinProbability(),
+						mask.maxIntegrityPasses()));
+	}
+
 	private static MediScanProperties copyWith(MediScanProperties base,
 			MediScanProperties.Upload upload,
 			MediScanProperties.Extract extract,
