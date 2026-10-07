@@ -13,6 +13,7 @@ import dev.saq.mediscan.ratelimit.IpRateLimiter;
 import dev.saq.mediscan.ratelimit.UploadRateLimitFilter;
 import dev.saq.mediscan.session.GuestAuthFilter;
 import dev.saq.mediscan.session.SessionService;
+import dev.saq.mediscan.stats.StatsRecorder;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -32,7 +33,8 @@ public class SecurityConfig {
 			ProblemAuthenticationEntryPoint authenticationEntryPoint,
 			ProblemAccessDeniedHandler accessDeniedHandler,
 			IpRateLimiter ipRateLimiter,
-			JsonMapper jsonMapper) throws Exception {
+			JsonMapper jsonMapper,
+			StatsRecorder statsRecorder) throws Exception {
 
 		http
 				.cors(cors -> cors.configurationSource(corsConfigurationSource))
@@ -98,7 +100,7 @@ public class SecurityConfig {
 				// before the controller, because a multipart body is up to 10 MB and letting
 				// Spring spool that to disk before rejecting the request is most of what the
 				// limit exists to prevent.
-				.addFilterAfter(new UploadRateLimitFilter(ipRateLimiter, jsonMapper),
+				.addFilterAfter(new UploadRateLimitFilter(ipRateLimiter, jsonMapper, statsRecorder),
 						GuestAuthFilter.class);
 
 		// ---------------------------------------------------------------------

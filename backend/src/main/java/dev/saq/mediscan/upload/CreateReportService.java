@@ -27,6 +27,7 @@ import dev.saq.mediscan.report.ReportRepository;
 import dev.saq.mediscan.report.SourceType;
 import dev.saq.mediscan.session.Session;
 import dev.saq.mediscan.session.SessionRepository;
+import dev.saq.mediscan.stats.StatsRecorder;
 
 /**
  * Turns an accepted request into a queued report.
@@ -65,13 +66,14 @@ public class CreateReportService {
 	private final ReportRepository reports;
 	private final SessionRepository sessions;
 	private final ReportJobFactory jobFactory;
+	private final StatsRecorder stats;
 	private final Clock clock;
 	private final long maxBytes;
 
 	public CreateReportService(UploadValidator validator, TempFileStore tempFiles,
 			JobSubmitter jobs, DailyCapGuard capGuard, ReportRepository reports,
-			SessionRepository sessions, ReportJobFactory jobFactory, Clock clock,
-			MediScanProperties properties) {
+			SessionRepository sessions, ReportJobFactory jobFactory, StatsRecorder stats,
+			Clock clock, MediScanProperties properties) {
 
 		this.validator = validator;
 		this.tempFiles = tempFiles;
@@ -80,6 +82,7 @@ public class CreateReportService {
 		this.reports = reports;
 		this.sessions = sessions;
 		this.jobFactory = jobFactory;
+		this.stats = stats;
 		this.clock = clock;
 		this.maxBytes = properties.upload().maxBytes();
 	}
@@ -143,6 +146,7 @@ public class CreateReportService {
 			throw busy();
 		}
 
+		stats.recordReportCreated();
 		log.info("report accepted id={} source={}", report.getId(), source.sourceType());
 		return report;
 	}

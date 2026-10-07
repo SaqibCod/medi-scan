@@ -78,8 +78,11 @@ management:
 logging:
   pattern:
     # requestId comes from RequestIdFilter's MDC entry, so every log line can be
-    # tied back to the X-Request-Id the client was given.
-    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
+    # tied back to the X-Request-Id the client was given. reportId is set by
+    # ReportJobRunner for the life of a job (LLD 16) - a job runs on a worker
+    # thread with no request behind it, so without this its lines could not be
+    # tied to anything.
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}%X{reportId:-}] %logger{36} - %msg%n"
 
 mediscan:
   # Single allowed CORS origin, no wildcards (contract section 1.4).

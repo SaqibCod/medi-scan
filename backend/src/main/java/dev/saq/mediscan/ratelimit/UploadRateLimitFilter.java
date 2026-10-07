@@ -10,6 +10,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import dev.saq.mediscan.config.ErrorCode;
 import dev.saq.mediscan.config.ProblemDetails;
+import dev.saq.mediscan.stats.StatsRecorder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,10 +40,14 @@ public class UploadRateLimitFilter extends OncePerRequestFilter {
 
 	private final IpRateLimiter rateLimiter;
 	private final JsonMapper jsonMapper;
+	private final StatsRecorder stats;
 
-	public UploadRateLimitFilter(IpRateLimiter rateLimiter, JsonMapper jsonMapper) {
+	public UploadRateLimitFilter(IpRateLimiter rateLimiter, JsonMapper jsonMapper,
+			StatsRecorder stats) {
+
 		this.rateLimiter = rateLimiter;
 		this.jsonMapper = jsonMapper;
+		this.stats = stats;
 	}
 
 	/**
@@ -64,6 +69,8 @@ public class UploadRateLimitFilter extends OncePerRequestFilter {
 			rateLimiter.checkUpload(request);
 		}
 		catch (RateLimitExceededException ex) {
+			// Counted so the dashboard can distinguish "quiet day" from "being hammered".
+			stats.recordRateLimitRejection();
 			writeRateLimited(response, ex.retryAfterSeconds());
 			return;
 		}
