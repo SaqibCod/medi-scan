@@ -409,10 +409,39 @@ Exceptions thrown by providers, all with messages that never include content:
 
 ### 8.2 `GeminiProvider`
 
-- Uses Spring AI with an API-key Gemini integration. The free tier is the Google AI Studio API, so the Vertex AI integration (which needs a Google Cloud project) is probably not the right module. Use Context7 to find the current Spring AI module and starter for Gemini with an API key, and confirm before adding the dependency.
-- Structured output uses `BeanOutputConverter` (or the provider's native response schema if the current Spring AI version supports it for Gemini; check the docs).
+**Verified and settled.** Spring AI's **Google GenAI** module supports the API-key route
+directly, so no Vertex AI project is needed and the $0 constraint holds.
+
+| | |
+|---|---|
+| Starter | `org.springframework.ai:spring-ai-starter-model-google-genai` |
+| Version | 2.0.1, from the `spring-ai-bom` already in `pom.xml` |
+| Selects the Developer API | setting `spring.ai.google.genai.api-key` — the presence of that property is what chooses the Gemini Developer API over Vertex AI |
+| Model | `spring.ai.google.genai.chat.options.model`, default `gemini-2.5-flash` |
+
+Note this is the `google-genai` module, **not** `vertex-ai-gemini`. The latter requires
+`project-id` and `location`.
+
+**Structured output uses both mechanisms.** The JSON schema generated from the target record by
+`BeanOutputConverter.getJsonSchema()` is sent as Gemini's native `responseSchema` with
+`responseMimeType=application/json`, and the reply is parsed by that same converter. The native
+schema makes malformed output rare; the converter is what notices when it happens anyway.
+Relying on the schema alone would mean trusting the provider to be perfect, and on the converter
+alone would mean paying for prose responses that have to be retried.
+
 - Temperature 0 for both steps.
-- Maps the provider's exceptions to the three types above.
+- Maps the provider's exceptions to the three types above, **by exception type and HTTP status,
+  never by message text** - messages differ between Spring AI versions, and matching on them
+  would silently reclassify every error on an upgrade. 429 and 5xx are transient, other 4xx are
+  permanent, anything unrecognised is treated as transient because one wasted retry is cheaper
+  than failing a report that would have succeeded.
+
+**One consequence of adding the starter.** Spring AI's chat autoconfiguration is gated on
+`spring.ai.model.chat=google-genai` with `matchIfMissing=true`, and its client factory throws at
+startup without an API key - so simply adding the dependency breaks every test, which all run on
+the fake provider. `LlmProviderEnvironmentPostProcessor` translates
+`mediscan.llm.provider=fake` into `spring.ai.model.chat=none`, keeping `LLM_PROVIDER` the single
+switch rather than two settings that have to agree.
 
 ### 8.3 `LlmGateway`
 
@@ -570,7 +599,18 @@ Rules run in this order: `Ssn`, `Email`, `Identifier`, `BirthDate`, `Phone`, `La
   - the line is not a protected result row;
   - the span's text (normalized) isn't a known biomarker name or alias from `BiomarkerCatalog`, and isn't a common lab term (`Reference`, `Range`, `Result`, `Flag`, `Specimen`, `Collected`, `Reported`, `Laboratory`...);
   - the span is 2 or more tokens, or 1 token that is capitalized and not at the start of a sentence.
-- **Model file.** Check Context7 and the OpenNLP site for the current pre-trained person-name model and how to obtain it (a Maven artifact if one exists, otherwise a download). If it's a file in `src/main/resources/opennlp/`, put the source URL, license, and SHA-256 in a README next to it. Pre-trained name models are trained on news text. Expect misses, which is why the label rules matter and why `SECURITY.md` says masking is best effort.
+- **Model file — resolved.** There is **no English person-name model on Maven Central.** Apache
+  publishes about 37 pre-trained models (`opennlp-models-*`), covering sentence detection,
+  tokenisation, POS tagging and lemmatisation, and none of them is a named-entity model. The
+  only option is the legacy 1.5 `en-ner-person.bin` download, committed at
+  `src/main/resources/opennlp/en-ner-person.bin` with its source URL, size, SHA-256 and
+  provenance caveats recorded in the README beside it. 5,207,953 bytes; built September 2010;
+  confirmed by test to load under `opennlp-tools` 2.5.12.
+- **Current stable OpenNLP is 2.5.12.** 3.0.0-M6 exists but is a milestone, and the pre-trained
+  models are only published against 2.x.
+- As expected of a news-trained model, it misses names on lab reports - which is why the label
+  rules are the real defence and why the rule is off by default. See section 19 item 4 for the
+  measurements.
 
 ### 10.5 Integrity check
 
@@ -868,10 +908,115 @@ Done means all of these:
 
 ---
 
-## 19. Decisions to confirm before building
+## 19. Decisions, as resolved
 
-1. **`DOCUMENT_TOO_LONG` as a new failure code** (section 2, item 1). The alternative is reusing `UNREADABLE`, which would be misleading.
-2. **Save `report_text` only on success** (section 2, item 3). This stores less data, at the cost of a slightly different flow from the earlier dataflow doc.
-3. **Gemini through Spring AI with an API key.** If the current Spring AI release doesn't support Gemini's API-key route cleanly, the fallback is Gemini's OpenAI-compatible endpoint through Spring AI's OpenAI module. Decide after checking Context7.
-4. **Pre-trained OpenNLP name model.** If it produces too many false positives on lab text even with the filters, the fallback is to keep only the label-based rules and rely on synthetic-data-only. That's a weaker claim to make in the README, so decide with the test results in hand.
-5. **Image uploads return 415 in Phase 2** instead of being accepted and failing later.
+All five were settled before or during the build. Recorded here with what was decided and why,
+so the next phase starts from the answers rather than the questions.
+
+1. **`DOCUMENT_TOO_LONG` as a new failure code.** Added. Reusing `UNREADABLE` would have told a
+   user to "try a clearer image" for a document that was perfectly legible and merely long.
+   Contract 8.2, dataflow 4.3, and the root `CLAUDE.md` list it.
+2. **Save `report_text` only on success.** Done, in the final transaction with the biomarkers
+   and summary. A failed report therefore stores no text at all, which is less data than the
+   earlier flow kept and is asserted by `ReportPipelineTest.failedReportStoresNothing`.
+3. **Gemini through Spring AI with an API key.** Confirmed and clean, so the OpenAI-compatible
+   fallback was not needed and is withdrawn. See section 8.2 for the module and property.
+4. **Pre-trained OpenNLP name model.** Kept, but **off by default**
+   (`mediscan.mask.opennlp-enabled=false`). Measured on the three samples it contributes zero
+   additional true positives - lab reports label their people, so the label rules already have
+   them - and on its own finds 1 of 6 planted names. It proposed two false positives, both now
+   filtered: a span running across a column gap into the next field's label, and `O.B.`
+   extracted from a `D.O.B.:` label. The model is also a 5 MB legacy 1.5 artefact with no
+   per-model licence statement and no Maven coordinate. Numbers and provenance are in
+   `SECURITY.md` and `src/main/resources/opennlp/README.md`.
+5. **Image uploads return 415 in Phase 2.** Done, and expressed as "no extractor claims
+   `IMAGE`" rather than a check for PNG - so phase 4 enables images by registering a bean,
+   with nothing in the upload layer to remember to change.
+
+---
+
+## 20. What was built differently from this document
+
+The design held up; these are the places the code departs from it, and why. Each was a
+correctness or layering problem rather than a preference.
+
+### 20.1 Class placement
+
+- **`JobSource` lives in `extract`, not `upload`** (sections 3.1, 6.4). `TextExtractor` is
+  defined in terms of it, and `extract` must not depend on `upload`
+  (`backend/CLAUDE.md`, "Dependency direction"). It is the input to extraction, not an upload
+  detail.
+- **`JobSource.Sample` carries the sample text as well as its id** (section 6.4). Resolving the
+  id inside `extract` would need the sample catalogue, which lives in `upload` and would invert
+  the dependency. The text is a reference to a string the catalogue already holds for the life
+  of the process, so the queue grows by a pointer per job rather than a copy of the file.
+- **`ReportErrorCode` and `ReportFailure` live in `config`, not `report`** (section 3.2). They
+  are raised by `extract` and `mask`, neither of which may depend on `report`. `config` already
+  holds `ErrorCode`, their sibling - the two code sets of contract section 8 - so it was the
+  consistent home.
+- **New classes section 3 does not name:** `ReportResponse` and its nested records,
+  `ValidatedBiomarker`, `ValidationOutcome`, `ParsedValue`, `Range`, `Comparator`,
+  `TestNameNormalizer`, `ProtectedSpans`, `MaskType`, `Span`, `LabTerms`, `RegexMaskRule`,
+  `LlmRequest`, `LlmResult`, `LlmPurpose`, `LlmException`, `LlmProviderGuard`, `SqlTime`,
+  `ValidationException`, `FileType`, `UploadTooLargeException`, `JobExecutorConfig`,
+  `ClockConfig`, `LlmProviderEnvironmentPostProcessor`, `TextNormalizer`.
+
+### 20.2 Configuration
+
+**Properties are nested under `mediscan.*`**, not the top-level `upload.*`, `jobs.*`, `llm.*`
+roots section 5 implies. Phase 1 established one `MediScanProperties` record with nested
+records, and keeping every environment variable mapped in one block of `application.yml` is
+worth more than matching the section's shorthand. The property names are otherwise as listed.
+
+Two settings section 5 does not mention:
+
+| Property | Default | Why |
+|---|---|---|
+| `mediscan.upload.min-text-chars` | 20 | Contract 4.1 bounds pasted text at both ends |
+| `mediscan.mask.opennlp-enabled` | `false` | Decision 4 above |
+
+### 20.3 Masking
+
+**The integrity check fails the report rather than retrying** (section 10.5). The design called
+for discarding the last offending span and retrying up to three passes. A mismatch means a rule
+matched inside a protected result row *despite* the protected-span check - so the span
+bookkeeping itself is wrong, and retrying would be building on the thing that just proved
+untrustworthy. The report fails with `EXTRACTION_FAILED`. The condition is unreachable in
+normal operation and no test has produced it.
+
+**Rules report candidates and the masker arbitrates.** Section 10.3 has the phone rule skipping
+protected spans itself. Doing that in every rule made the conflict counter dead - a rule that
+drops its own overlapping matches leaves the masker nothing to count, and a rule reaching into
+lab values would go unnoticed. Rules now report what they see and `Masker` decides.
+
+**The labelled-name rule requires a colon** after the label. Without it the alternation
+backtracks: `Patient Name: not recorded` fails on the long label, retries with the short
+`patient` label, and masks the word `Name`. The cost is a name in a colon-less column layout,
+recorded as a known false negative in `SECURITY.md`.
+
+**Lab-term filtering is local to `mask`** (`LabTerms`), not read from `BiomarkerCatalog` as
+section 10.4 suggests. The catalogue is in `analysis`, which `mask` may not depend on; and "what
+a news-trained name finder gets wrong" is a different list from "which biomarkers have curated
+pages".
+
+### 20.4 Validation
+
+**A value with its unit glued to it is dropped.** Section 11.2's `(?<![\w.])VALUE(?![\w.])`
+boundaries mean `38` does not match in `38mg/dL`. Kept as specified: the boundary's whole job is
+to refuse a partial numeric match, and a dropped row is visible to the reader while a wrongly
+matched one is not.
+
+### 20.5 Retention
+
+**`RetentionJob` uses a `TransactionTemplate`, not `@Transactional`.** The scheduled method
+calls its sweeps on `this`, which bypasses the Spring proxy - so the annotations were silently
+ignored and the bulk deletes ran with no transaction. Caught by
+`RetentionAdditionsTest.sweepsAreIndependent`.
+
+### 20.6 Phase 1 code touched
+
+Agreed before building, and both are in the step 1 commit:
+
+- `RetentionJob` now takes an injected `Clock` instead of calling `Instant.now()`.
+- The test-only `/api/reports/whoami` probe moved to `/api/reports/support/whoami` so it cannot
+  shadow the real `GET /api/reports/{id}`.
