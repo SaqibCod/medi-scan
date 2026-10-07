@@ -66,6 +66,17 @@ public final class TestProperties {
 				base.extract(), base.mask());
 	}
 
+	public static MediScanProperties withLlmProvider(String provider, String apiKey) {
+		MediScanProperties base = defaults();
+		MediScanProperties.Llm llm = base.llm();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(), base.jobs(), base.extract(),
+				new MediScanProperties.Llm(provider, apiKey, llm.model(), llm.timeout(),
+						llm.maxInvalidRetries(), llm.maxTransientRetries(), llm.dailyCap(),
+						llm.maxRows(), llm.maxSummaryChars(), llm.maxHighlights()),
+				base.mask(), base.retention());
+	}
+
 	public static MediScanProperties withJobs(int workers, int queueCapacity) {
 		MediScanProperties base = defaults();
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
