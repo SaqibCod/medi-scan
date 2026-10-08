@@ -906,6 +906,26 @@ Done means all of these:
 6. The Docker image still builds for `linux/arm64`.
 7. `SECURITY.md` is updated: masking is best-effort, which rules exist, and the false-positive and false-negative limits found in testing.
 
+### Running it by hand against the fake provider
+
+`FakeLlmProvider` lives in test sources, so the run needs the test classes on the classpath.
+`-Dspring-boot.run.useTestClasspath=true` on its own is not enough - it adds the test
+dependencies but the bean is still not component-scanned, and startup then fails with
+"required a bean of type `LlmProvider`". Name the directory explicitly as well:
+
+```bash
+cd backend
+./mvnw spring-boot:run \
+  -Dspring-boot.run.useTestClasspath=true \
+  -Dspring-boot.run.additional-classpath-elements="$PWD/target/test-classes" \
+  -Dspring-boot.run.profiles=local \
+  -Dspring-boot.run.arguments="--mediscan.llm.provider=fake --mediscan.upload.temp-dir=<dir>"
+```
+
+`./mvnw verify` (or at least `test-compile`) has to have run first, so `target/test-classes`
+exists. `./mvnw spring-boot:stop` does not work for this run - it needs the JMX-enabled
+`start` goal - so stop it by killing the process that holds port 8080.
+
 ---
 
 ## 19. Decisions, as resolved
