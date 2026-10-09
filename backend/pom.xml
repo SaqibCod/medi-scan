@@ -35,6 +35,18 @@
 		  `bucket4j-core` coordinate stopped at 8.10.1.
 		-->
 		<bucket4j.version>8.21.0</bucket4j.version>
+
+		<!--
+		  Neither PDFBox nor OpenNLP is in Spring Boot's managed dependencies and
+		  neither has a Boot starter, so both versions are pinned here.
+		-->
+		<pdfbox.version>3.0.8</pdfbox.version>
+
+		<!--
+		  2.5.12 is the current stable line. 3.0.0-M6 exists but is a milestone,
+		  and the pre-trained models are only published against 2.x.
+		-->
+		<opennlp.version>2.5.12</opennlp.version>
 	</properties>
 
 	<dependencyManagement>
@@ -113,6 +125,44 @@
 			<version>${bucket4j.version}</version>
 		</dependency>
 
+		<!--
+		  Gemini through the Google AI Studio API key, not Vertex AI.
+
+		  This is the `google-genai` module, not `vertex-ai-gemini`: setting
+		  `spring.ai.google.genai.api-key` selects the Gemini Developer API, which
+		  needs nothing but the key. The Vertex AI module wants a Google Cloud
+		  project and location, which would break the $0 constraint in
+		  docs/plan.md section 1.
+
+		  Version comes from the Spring AI BOM above.
+		-->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-google-genai</artifactId>
+		</dependency>
+
+		<!--
+		  PDF text extraction (phase 2) and, from phase 4, rendering scanned pages
+		  for OCR. `pdfbox` pulls in `pdfbox-io`, which is where IOUtils and the
+		  temp-file stream cache live.
+		-->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>${pdfbox.version}</version>
+		</dependency>
+
+		<!--
+		  Person-name detection for masking, behind mediscan.mask.opennlp-enabled.
+		  Off by default - see SECURITY.md for why, and for what the label-based
+		  rules cover instead.
+		-->
+		<dependency>
+			<groupId>org.apache.opennlp</groupId>
+			<artifactId>opennlp-tools</artifactId>
+			<version>${opennlp.version}</version>
+		</dependency>
+
 		<!-- Boot 4's granular test starters, in place of spring-boot-starter-test. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -149,6 +199,18 @@
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!--
+		  Polling with a deadline, for assertions on the async job pipeline.
+		  backend/CLAUDE.md forbids sleeping in tests: a fixed sleep is either
+		  slower than it needs to be or flaky on a loaded CI box, and usually
+		  both. Version comes from Boot's dependency management.
+		-->
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

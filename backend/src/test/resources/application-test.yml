@@ -5,9 +5,18 @@ mediscan:
     ttl-hours: 24
   ratelimit:
     # Deliberately high so the shared in-memory buckets cannot run out part-way
-    # through the suite and fail an unrelated test. SessionRateLimitTest lowers
-    # this for itself.
+    # through the suite and fail an unrelated test. SessionRateLimitTest and
+    # UploadRateLimitTest lower these for themselves.
     sessions-per-hour: 1000
+    uploads-per-hour: 1000
+  llm:
+    # No test ever reaches a real provider. FakeLlmProvider is scripted per test
+    # (backend/CLAUDE.md, "Testing").
+    provider: fake
+    api-key: ""
+    model: fake-model
+    # Tests assert on retry counts, so these stay at the production defaults.
+    timeout: 5s
   retention:
     interval-ms: 3600000
 

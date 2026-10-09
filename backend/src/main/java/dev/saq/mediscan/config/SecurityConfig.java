@@ -9,8 +9,12 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
+import dev.saq.mediscan.ratelimit.IpRateLimiter;
+import dev.saq.mediscan.ratelimit.UploadRateLimitFilter;
 import dev.saq.mediscan.session.GuestAuthFilter;
 import dev.saq.mediscan.session.SessionService;
+import dev.saq.mediscan.stats.StatsRecorder;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The application's one security filter chain.
@@ -27,7 +31,10 @@ public class SecurityConfig {
 			CorsConfigurationSource corsConfigurationSource,
 			SessionService sessionService,
 			ProblemAuthenticationEntryPoint authenticationEntryPoint,
-			ProblemAccessDeniedHandler accessDeniedHandler) throws Exception {
+			ProblemAccessDeniedHandler accessDeniedHandler,
+			IpRateLimiter ipRateLimiter,
+			JsonMapper jsonMapper,
+			StatsRecorder statsRecorder) throws Exception {
 
 		http
 				.cors(cors -> cors.configurationSource(corsConfigurationSource))
@@ -86,7 +93,15 @@ public class SecurityConfig {
 				// Resolves X-Session-Token into a guest principal. Placed where the standard
 				// authentication filter would sit, so it runs before authorization.
 				.addFilterBefore(new GuestAuthFilter(sessionService),
-						UsernamePasswordAuthenticationFilter.class);
+						UsernamePasswordAuthenticationFilter.class)
+
+				// The per-IP upload limit, after the guest filter so an unauthenticated
+				// request is refused before it can spend a token (LLD 6.1). It has to run
+				// before the controller, because a multipart body is up to 10 MB and letting
+				// Spring spool that to disk before rejecting the request is most of what the
+				// limit exists to prevent.
+				.addFilterAfter(new UploadRateLimitFilter(ipRateLimiter, jsonMapper, statsRecorder),
+						GuestAuthFilter.class);
 
 		// ---------------------------------------------------------------------
 		// PHASE 6: bearer tokens go here.

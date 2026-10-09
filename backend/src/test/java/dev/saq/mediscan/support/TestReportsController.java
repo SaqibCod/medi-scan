@@ -10,7 +10,7 @@ import dev.saq.mediscan.session.GuestPrincipal;
 import dev.saq.mediscan.session.OwnerRef;
 
 /**
- * A stand-in for the report endpoints, which arrive in phase 2.
+ * A probe for what the guest filter handed the handler.
  *
  * <p>Lives in the test sources only, and is picked up by component scan because the tests sit
  * under the same base package. It exists so the guest filter can be tested for what it is
@@ -18,12 +18,13 @@ import dev.saq.mediscan.session.OwnerRef;
  * not merely for "did not return 401".
  *
  * <p>Path is under {@code /api/reports} so it is governed by the same authorization rule as
- * the real endpoints will be.
+ * the real endpoints, but on a two-segment {@code support/} path so it cannot be mistaken for
+ * - or shadow - the real {@code GET /api/reports/{id}} that phase 2 added.
  */
 @RestController
 class TestReportsController {
 
-	@GetMapping("/api/reports/whoami")
+	@GetMapping("/api/reports/support/whoami")
 	Map<String, String> whoami(@AuthenticationPrincipal GuestPrincipal principal) {
 		OwnerRef owner = principal.toOwnerRef();
 		return Map.of(

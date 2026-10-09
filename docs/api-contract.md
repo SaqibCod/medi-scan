@@ -2,7 +2,7 @@
 
 This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v3 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
 
-**Version:** 2.1 (optional Google sign-in, history, trends, admin stats; cross-tab sign-in and key rotation)
+**Version:** 2.2 (adds the `DOCUMENT_TOO_LONG` failure code; images rejected until OCR ships)
 
 ---
 
@@ -387,6 +387,8 @@ Creates a report and queues it for processing. Accepts exactly one of: a file, p
 | `file` | file | yes | PDF, PNG, or JPEG. Max 10 MB. The file signature (magic bytes) must match the type. |
 | `consent` | string | yes | Must be `"true"` |
 
+**Until Phase 4 (OCR):** PNG and JPEG uploads return `415 UNSUPPORTED_FILE_TYPE`. Only text-based PDFs, pasted text, and samples are accepted. A PDF with no usable text layer is accepted here and then fails the job with `UNREADABLE` (see 8.2).
+
 **Option B: pasted text** (`application/json`)
 
 ```json
@@ -440,7 +442,7 @@ Headers: `Location: /api/reports/6f1c2a9e-…`
 | 401 | `SESSION_INVALID` | Missing, unknown, or expired token |
 | 404 | `SAMPLE_NOT_FOUND` | Unknown `sampleId` |
 | 413 | `FILE_TOO_LARGE` | File over 10 MB |
-| 415 | `UNSUPPORTED_FILE_TYPE` | Anything other than PDF, PNG, or JPEG |
+| 415 | `UNSUPPORTED_FILE_TYPE` | Anything other than PDF, PNG, or JPEG. Until Phase 4, also PNG and JPEG. |
 | 429 | `RATE_LIMITED` | Upload limit for this IP reached |
 | 429 | `CAPACITY` | Daily LLM cap already reached, so the report is not created |
 | 429 | `BUSY` | Job queue is full, so the report is not created |
@@ -855,6 +857,7 @@ The client calls this on page load to wake the backend and to show a "starting u
 | Code | Meaning | Suggested UI message |
 |---|---|---|
 | `UNREADABLE` | No usable text, even after OCR | "We couldn't read text from this file. Try a clearer image." |
+| `DOCUMENT_TOO_LONG` | Extracted text is over the length or page limit | "This document is too long to process. Try a shorter report." |
 | `NO_RESULTS_FOUND` | No lab values survived validation | "We didn't find lab results in this document." |
 | `EXTRACTION_FAILED` | The model returned invalid output twice | "Something went wrong reading the results. Please try again." |
 | `CAPACITY` | Daily LLM cap was reached mid-job | "The demo has hit today's limit. Try again tomorrow." |
@@ -1107,6 +1110,10 @@ export interface ProblemDetail {
 ---
 
 ## 11. Changelog
+
+**2.2**
+- **New report failure code `DOCUMENT_TOO_LONG`** (8.2): the extracted text is over the character or page limit. Previously these reports failed as `UNREADABLE`, which was misleading. `ReportError.code` is typed `string`, so `client/lib/api-types.ts` needs no change.
+- **Images rejected until Phase 4:** `POST /api/reports` returns `415 UNSUPPORTED_FILE_TYPE` for PNG and JPEG until the OCR pipeline ships (4.1). A text-less PDF is still accepted and fails the job with `UNREADABLE`.
 
 **2.1**
 - **Refresh rule:** the client now refreshes once on `401 TOKEN_INVALID` as well as `TOKEN_EXPIRED`, so rotating the signing key is invisible to users.

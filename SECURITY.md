@@ -20,33 +20,94 @@ The upload form carries a consent checkbox that repeats this.
 
 ## What masking does, and where it stops
 
-Before any text reaches a model or the database, it goes through:
+Before any text reaches a model or the database, it goes through four stages.
 
-1. **Regex rules** for social security numbers, phone numbers, email addresses,
-   ID and MRN patterns, and dates of birth — dates only when they sit next to a
-   label such as "DOB" or "Date of Birth", so the collection date survives for
-   trend charts.
-2. **An OpenNLP name finder** for person names.
-3. **A value integrity check**: any match that overlaps a numeric value or a
-   reference range in a results row is skipped rather than masked, and counted as
-   a masking conflict. Corrupting a lab value is treated as worse than leaving a
-   borderline match in place.
+**1. Result rows are identified and protected.** A line counts as a lab result
+when it holds a number *and* at least one of: a unit, a reference range, or a
+trailing `H`/`L` flag. The whole line is then untouchable — test name, value,
+unit and range. This happens *first*, because everything after it is a heuristic
+over text full of digits, and a phone-number pattern will happily match part of a
+result row given the chance.
 
-Matches are replaced with typed placeholders such as `[NAME]` and `[PHONE]`.
+Requiring that second signal is deliberate. `Patient ID: 12345` has a number and
+nothing else, so it stays maskable — if ID lines were protected, no MRN would ever
+be masked.
 
-**Known limits.** Masking will miss:
+**2. Label-anchored rules run, highest precision first:** social security
+numbers, email addresses, labelled identifiers (`MRN`, `Patient ID`, `Accession`,
+`Specimen ID`, …), birth dates, phone numbers, labelled names (`Patient Name:`,
+`Ordered by:`, `Physician:`, …), and names after an honorific (`Dr.`).
 
-- names it doesn't recognise as names — unusual spellings, names in languages the
-  model wasn't trained on, names that are also common words
-- personal details in free-text comment fields and physician notes
-- identifiers in unusual formats, or ones that look like lab values
-- anything in a layout the regex rules don't anticipate — a name inside a logo, a
-  footer, a signature block, or an "Ordered by" field
+Two of those are narrow on purpose:
+
+- **Dates are only masked next to a birth-date label.** A bare date is never
+  touched, so the specimen collection date survives — losing it would silently
+  drop the report from every trend chart.
+- **Identifiers are only masked next to an identifier label.** A bare
+  alphanumeric token is far more often a lab value than an id.
+
+**3. An optional OpenNLP name finder**, for names with no label at all. **It is
+off by default** (`MASK_OPENNLP_ENABLED=false`) — see the measurements below.
+
+**4. A value integrity check.** The numeric tokens of every protected result row
+are compared before and after masking. If any differ, the report fails rather
+than being stored. Stages 1–3 are best-effort; this one is a hard guarantee.
+Corrupting a lab value would put a wrong number in front of a patient, which is
+worse than leaving a borderline match unmasked.
+
+Matches are replaced with typed placeholders such as `[NAME]` and `[PHONE]`
+rather than deleted, so the line keeps its shape for the extraction step and a
+reader can see what was removed.
+
+### Measured on the bundled samples
+
+Against the three sample reports, each carrying a planted name, physician name,
+MRN, accession number, specimen id, birth date and two phone numbers:
+
+| | Label rules only (default) | With OpenNLP enabled |
+|---|---|---|
+| Planted personal data masked | all of it | all of it |
+| Spans masked per report | 8 | 8 |
+| Masking conflicts | 0 | 0 |
+| Lab values or ranges altered | 0 | 0 |
+| Collection dates lost | 0 | 0 |
+
+**The OpenNLP model contributed nothing.** On these reports it found no name the
+label rules had not already caught, because lab reports label their people. On
+its own it found 1 of the 6 planted names.
+
+It did produce false positives, which is why its filters exist and why it stays
+off:
+
+- It proposed `Jane Q. Roe        Accession` as a single name — running across a
+  column gap into the next field's label. The model works on tokens and cannot see
+  the layout. Now rejected by a filter on runs of two or more spaces.
+- It proposed `O.B.`, pulled out of a `D.O.B.:` label, as a person. Now rejected
+  by a filter requiring at least one word of two or more letters.
+
+With both filters in place it proposes no false positives on these samples — but
+it also adds no value on them, so the label rules are what the project relies on.
+
+### Known limits
+
+Masking will miss:
+
+- **names in a column layout with no colon** — the labelled-name rule requires
+  `Label: Name`, which is how lab reports punctuate headers, but a
+  space-aligned `Patient Name    Jane Roe` is missed
+- names with no label and no honorific anywhere near them — in a logo, a footer,
+  or a scanned signature
+- names it cannot recognise as names: unusual spellings, non-Latin scripts, names
+  that are also common words
+- personal details written into free-text comment fields and physician notes
+- identifiers in formats the label list does not anticipate
 - text that OCR mangled badly enough to break the patterns
 
-The test suite checks masking in **both** directions: that personal data is
-removed, *and* that every lab value and reference range survives unchanged. It
-uses synthetic reports with names in deliberately awkward positions.
+The test suite checks masking in **both** directions — that personal data is
+removed, *and* that every lab value and reference range survives byte for byte,
+column spacing included. A separate canary test runs a unique fake name and id
+through the whole pipeline and asserts they appear in no log line, no database
+column, no model prompt, and no response body.
 
 ## What is stored, and for how long
 
