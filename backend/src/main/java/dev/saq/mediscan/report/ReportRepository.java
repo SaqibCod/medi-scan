@@ -53,6 +53,30 @@ public interface ReportRepository extends JpaRepository<ReportEntity, UUID> {
 	int deleteOwnedBySession(@Param("id") UUID id, @Param("sessionId") UUID sessionId);
 
 	/**
+	 * One report, if it belongs to this user and has not expired.
+	 *
+	 * <p>The user-owned twin of {@link #findOwnedBySession}. Two methods rather than one query
+	 * with two nullable parameters: each filters on the column its own index covers, and a
+	 * reader can see at a glance that neither can match the other owner's rows.
+	 */
+	@Query("""
+			select r from ReportEntity r
+			where r.id = :id and r.userId = :userId and r.expiresAt > :now
+			""")
+	Optional<ReportEntity> findOwnedByUser(@Param("id") UUID id,
+			@Param("userId") UUID userId,
+			@Param("now") Instant now);
+
+	/** Deletes one report if it belongs to this user. No expiry filter, as above. */
+	@Modifying
+	@Query("delete from ReportEntity r where r.id = :id and r.userId = :userId")
+	int deleteOwnedByUser(@Param("id") UUID id, @Param("userId") UUID userId);
+
+	/** How many live reports this user has, for {@code GET /api/me}'s {@code reportCount}. */
+	@Query("select count(r) from ReportEntity r where r.userId = :userId and r.expiresAt > :now")
+	long countOwnedByUser(@Param("userId") UUID userId, @Param("now") Instant now);
+
+	/**
 	 * Expired reports, removed as a safety net.
 	 *
 	 * <p>The session cascade already takes a guest's reports when the session expires. This

@@ -2,6 +2,8 @@ package dev.saq.mediscan.report;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -20,6 +22,12 @@ import dev.saq.mediscan.session.OwnerRef;
  * method ({@code CLAUDE.md} rule 7). A report belonging to someone else is indistinguishable
  * from one that never existed: both are {@code 404}, so the API never confirms that an id
  * exists. Report ids are random UUIDs, so there is nothing to enumerate either.
+ *
+ * <p>Each lookup switches over the sealed {@link OwnerRef} rather than passing
+ * {@code owner.id()} to a single query. An owner id on its own cannot say which column to
+ * filter on, and treating a user id as a session id is exactly the confusion rule 7 exists to
+ * prevent. The switches are exhaustive, so a third kind of owner would stop compiling here
+ * instead of silently matching nothing.
  */
 @Service
 public class ReportViewService {
@@ -52,15 +60,14 @@ public class ReportViewService {
 	public ReportResponse find(UUID reportId, OwnerRef owner) {
 		Instant now = Instant.now(clock);
 
-		ReportEntity report = reports.findOwnedBySession(reportId, owner.id(), now)
+		ReportEntity report = findOwned(reportId, owner, now)
 				.orElseThrow(ReportViewService::notFound);
 
 		return switch (report.getStatus()) {
 			case PENDING, PROCESSING -> mapper.inProgress(report);
 			case FAILED -> mapper.failed(report);
-			case DONE -> mapper.done(report,
-					biomarkers.findOwnedBySession(reportId, owner.id(), now),
-					summaries.findOwnedBySession(reportId, owner.id(), now).orElse(null));
+			case DONE -> mapper.done(report, biomarkersOf(reportId, owner, now),
+					summaryOf(reportId, owner, now).orElse(null));
 		};
 	}
 
@@ -75,12 +82,36 @@ public class ReportViewService {
 	 */
 	@Transactional
 	public void delete(UUID reportId, OwnerRef owner) {
-		int deleted = reports.deleteOwnedBySession(reportId, owner.id());
+		int deleted = switch (owner) {
+			case OwnerRef.Guest guest -> reports.deleteOwnedBySession(reportId, guest.id());
+			case OwnerRef.User user -> reports.deleteOwnedByUser(reportId, user.id());
+		};
 		if (deleted == 0) {
 			throw notFound();
 		}
 		// The child rows go with it through ON DELETE CASCADE.
 		log.info("report deleted id={}", reportId);
+	}
+
+	private Optional<ReportEntity> findOwned(UUID reportId, OwnerRef owner, Instant now) {
+		return switch (owner) {
+			case OwnerRef.Guest guest -> reports.findOwnedBySession(reportId, guest.id(), now);
+			case OwnerRef.User user -> reports.findOwnedByUser(reportId, user.id(), now);
+		};
+	}
+
+	private List<BiomarkerEntity> biomarkersOf(UUID reportId, OwnerRef owner, Instant now) {
+		return switch (owner) {
+			case OwnerRef.Guest guest -> biomarkers.findOwnedBySession(reportId, guest.id(), now);
+			case OwnerRef.User user -> biomarkers.findOwnedByUser(reportId, user.id(), now);
+		};
+	}
+
+	private Optional<ReportSummaryEntity> summaryOf(UUID reportId, OwnerRef owner, Instant now) {
+		return switch (owner) {
+			case OwnerRef.Guest guest -> summaries.findOwnedBySession(reportId, guest.id(), now);
+			case OwnerRef.User user -> summaries.findOwnedByUser(reportId, user.id(), now);
+		};
 	}
 
 	/** The same answer for "no such report" and "not yours". */

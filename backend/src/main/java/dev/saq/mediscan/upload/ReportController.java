@@ -58,7 +58,7 @@ public class ReportController {
 			// the validator and becomes a field error rather than a bare 400.
 			@RequestParam(name = "consent", required = false) String consent) {
 
-		ReportEntity report = createReport.createFromFile(principal.sessionId(), file, consent);
+		ReportEntity report = createReport.createFromFile(principal.toOwnerRef(), file, consent);
 		return accepted(report);
 	}
 
@@ -68,7 +68,7 @@ public class ReportController {
 			@AuthenticationPrincipal GuestPrincipal principal,
 			@RequestBody CreateReportRequest request) {
 
-		ReportEntity report = createReport.createFromJson(principal.sessionId(), request);
+		ReportEntity report = createReport.createFromJson(principal.toOwnerRef(), request);
 		return accepted(report);
 	}
 

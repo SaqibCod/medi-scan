@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import dev.saq.mediscan.report.ReportEntity;
 import dev.saq.mediscan.report.ReportRepository;
 import dev.saq.mediscan.report.SourceType;
+import dev.saq.mediscan.session.OwnerRef;
 import dev.saq.mediscan.session.Session;
 import dev.saq.mediscan.session.SessionRepository;
 import dev.saq.mediscan.session.SessionService;
@@ -66,7 +67,17 @@ public class ReportFixtures {
 	public UUID pendingReport(UUID sessionId, SourceType sourceType) {
 		Instant now = Instant.now();
 		UUID id = UUID.randomUUID();
-		reports.save(new ReportEntity(id, sessionId, sourceType, now, now.plus(24, ChronoUnit.HOURS)));
+		reports.save(new ReportEntity(id, new OwnerRef.Guest(sessionId), sourceType, now,
+				now.plus(24, ChronoUnit.HOURS)));
+		return id;
+	}
+
+	/** A {@code PENDING} report owned by a signed-in user, with the 30-day user expiry. */
+	public UUID pendingUserReport(UUID userId) {
+		Instant now = Instant.now();
+		UUID id = UUID.randomUUID();
+		reports.save(new ReportEntity(id, new OwnerRef.User(userId), SourceType.SAMPLE, now,
+				now.plus(30, ChronoUnit.DAYS)));
 		return id;
 	}
 
@@ -74,7 +85,7 @@ public class ReportFixtures {
 	public UUID expiredReport(UUID sessionId) {
 		Instant now = Instant.now();
 		UUID id = UUID.randomUUID();
-		reports.save(new ReportEntity(id, sessionId, SourceType.SAMPLE,
+		reports.save(new ReportEntity(id, new OwnerRef.Guest(sessionId), SourceType.SAMPLE,
 				now.minus(48, ChronoUnit.HOURS), now.minus(1, ChronoUnit.HOURS)));
 		return id;
 	}

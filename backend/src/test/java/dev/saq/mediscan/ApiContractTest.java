@@ -208,14 +208,19 @@ class ApiContractTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("the contract version was bumped for the 2.2 changes")
+	@DisplayName("the contract version was bumped for the 2.3 changes")
 	void contractVersionIsCurrent() throws Exception {
 		String contract = readContract();
 
-		// Phase 2 added DOCUMENT_TOO_LONG and the image restriction, both of which are
-		// changelog entries under 2.2.
-		assertThat(contract).contains("**Version:** 2.2");
-		assertThat(section(contract, "## 11. Changelog", "**2.1**"))
+		// Phase 6a changed no shapes, so 2.3 is a status entry: it records which endpoints
+		// are implemented, so the contract and the running API can be told apart.
+		assertThat(contract).contains("**Version:** 2.3");
+		assertThat(section(contract, "**2.3**", "**2.2**"))
+				.contains("Phase 6a")
+				.contains("No shape changes");
+
+		// Phase 2's entry is still there and still describes DOCUMENT_TOO_LONG.
+		assertThat(section(contract, "**2.2**", "**2.1**"))
 				.contains("DOCUMENT_TOO_LONG");
 	}
 
