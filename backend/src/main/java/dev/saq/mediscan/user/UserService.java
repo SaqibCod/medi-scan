@@ -64,6 +64,23 @@ public class UserService {
 	}
 
 	/**
+	 * Writes the role back when config says it should have changed.
+	 *
+	 * <p>Called on every refresh, so {@code app_user.role} converges on
+	 * {@code ADMIN_GOOGLE_SUBS} without the user signing in again. Conditional because the
+	 * common case is "unchanged", and an unconditional update would write to every row on
+	 * every refresh.
+	 */
+	@Transactional
+	public void updateRoleIfChanged(UserEntity user, UserRole role) {
+		if (user.getRole() == role) {
+			return;
+		}
+		users.updateRole(user.getId(), role);
+		log.info("role changed user={} role={}", user.getId(), role);
+	}
+
+	/**
 	 * Whether the account still exists.
 	 *
 	 * <p>Called on every bearer request while resolving the owner (LLD 6.5). One primary-key

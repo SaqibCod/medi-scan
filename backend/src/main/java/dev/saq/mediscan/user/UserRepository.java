@@ -33,4 +33,14 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
 	@Modifying
 	@Query("delete from UserEntity u where u.lastLoginAt < :cutoff")
 	int deleteInactiveSince(@Param("cutoff") Instant cutoff);
+
+	/**
+	 * Writes a recomputed role.
+	 *
+	 * <p>A targeted update rather than loading, mutating and flushing the entity: the role is
+	 * the only field a refresh may change, and this makes that explicit.
+	 */
+	@Modifying
+	@Query("update UserEntity u set u.role = :role where u.id = :id")
+	int updateRole(@Param("id") UUID id, @Param("role") UserRole role);
 }
