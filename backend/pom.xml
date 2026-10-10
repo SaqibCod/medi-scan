@@ -82,14 +82,31 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
-		<!--
-		  Phase 1 uses one stateless filter chain with a guest-token filter. The
-		  bearer-token resource server (spring-boot-starter-oauth2-resource-server)
-		  arrives in phase 6 - see SecurityConfig.
-		-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+
+		<!--
+		  Bearer-token authentication for the app's own access tokens (phase 6a).
+		  Beyond what starter-security already gives us, this adds five jars:
+		  spring-boot-security-oauth2-resource-server (Boot 4 splits
+		  autoconfiguration per technology), spring-security-oauth2-resource-server,
+		  spring-security-oauth2-jose, spring-security-oauth2-core, and
+		  com.nimbusds:nimbus-jose-jwt - which is where the JWK, JWS and key
+		  selection types live. No hand-written token parsing or signature checks
+		  anywhere (CLAUDE.md, "Auth library code").
+
+		  Nothing in application.yml sets spring.security.oauth2.resourceserver.*,
+		  so Boot's JwtDecoderConfiguration stays inactive and
+		  AccessTokenDecoderConfig owns the only JwtDecoder bean. Boot's
+		  OAuth2ResourceServerWebSecurityAutoConfiguration is
+		  @ConditionalOnDefaultWebSecurity and backs off because SecurityConfig
+		  already declares a SecurityFilterChain.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
 
 		<!--
