@@ -556,43 +556,51 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 ## 14. Build Order
 
-1. **Foundation:**
+**Phase numbers are labels, not positions.** Each phase keeps the number it was given when the work was first described, because code comments, migrations, and the design docs refer to "Phase 2" or "Phase 6" by name. The order of this list is the build order; the numbers in the labels are not. Phase 6 is split into 6a (accounts backend) and 6b (the data endpoints it enables), and 6a is built before phases 3, 4, and 5 so that chat is written against the final ownership model instead of being rewritten once users exist.
+
+1. **Foundation (Phase 1) — done:**
    - Monorepo setup.
    - Docker Postgres + pgvector.
    - Spring Boot and Next.js skeletons.
    - Health endpoint and CORS.
    - Session tokens and ownership checks.
-2. **Text and PDF pipeline:**
+2. **Text and PDF pipeline (Phase 2) — done:**
    - Upload with background jobs and status.
    - PDFBox extraction.
    - Masking with the integrity check.
    - Step-1 extraction, validation, and flag recomputation.
    - Step-2 summary.
    - Sample reports.
-3. **Evaluation:** build the synthetic test set and scoring script now, before adding OCR, so every later change is measured.
-4. **OCR:** Tess4J for images and the scanned-PDF fallback, feeding the same pipeline.
-5. **Chat:**
+3. **Accounts, backend only (Phase 6a):**
+   - Spring Security filter chain for guest and bearer callers.
+   - Google sign-in, JWT issue with `kid`, and refresh rotation.
+   - Users, and reports owned by a user.
+   - Claiming guest reports at sign-in.
+   - `/api/me` and account deletion.
+   - The admin role and the `/api/admin/**` rule (no admin endpoint yet).
+   - Authorization tests.
+
+   Built here, before the pipeline work that follows, because every later phase reads or writes reports through the owner model. Chat in particular would otherwise be built against guest-only ownership and rewritten. No frontend work: the sign-in UI ships with phase 7.
+4. **Evaluation (Phase 3):** build the synthetic test set and scoring script now, before adding OCR, so every later change is measured.
+5. **OCR (Phase 4):** Tess4J for images and the scanned-PDF fallback, feeding the same pipeline.
+6. **Chat (Phase 5):**
    - Curated biomarker content and embeddings.
    - Report-context chat with RAG and SSE.
    - Prompt-injection defenses.
    - Rate limits and the Postgres daily cap.
    - Caching and token logging.
-6. **Accounts:**
-   - Spring Security filter chain for guest and bearer callers.
-   - Google sign-in, JWT issue, and refresh rotation.
-   - Claiming guest reports.
-   - `/api/me` and account deletion.
-   - Report history and trends.
-   - Admin role and stats.
-   - CSP.
-   - Authorization tests.
-7. **Frontend polish and SEO:**
+7. **History, trends, and admin stats (Phase 6b):**
+   - `GET /api/reports` (history list).
+   - `GET /api/trends` and `GET /api/trends/markers`.
+   - `GET /api/admin/stats`.
+8. **Frontend polish and SEO (Phase 7):**
+   - Sign in with Google, auto sign-in, cross-tab logout, and the CSP entries Google needs.
    - Results view with range bars.
    - History and trend charts.
    - Status and skeleton states.
    - Disclaimer and consent.
    - Biomarker pages with metadata.
-8. **Deploy and harden:**
+9. **Deploy and harden (Phase 8):**
    - arm64 image, EC2 + Caddy + DuckDNS.
    - Neon.
    - Budget alert and retention job.

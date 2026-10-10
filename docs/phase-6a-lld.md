@@ -46,7 +46,7 @@ This phase adds Google sign-in to the backend: users, the app's own access and r
 3. **`docs/dataflow.md` section 3.2, "Admin role" bullet:** the role is recomputed from `ADMIN_GOOGLE_SUBS` on every sign-in and every refresh, so a config change applies within 15 minutes without the user signing in again.
 4. **`docs/dataflow.md` section 3.6:** add the user-existence check to the bearer branch of the diagram notes.
 5. **`docs/plan.md` section 10 and `.env.example`:** make sure these exist: `GOOGLE_CLIENT_ID`, `JWT_SIGNING_KEYS`, `JWT_CURRENT_KID`, `JWT_ISSUER`, `JWT_AUDIENCE`, `ACCESS_TOKEN_TTL_MINUTES`, `REFRESH_TOKEN_TTL_DAYS`, `REFRESH_FAMILY_MAX_DAYS`, `USER_RETENTION_DAYS`, `INACTIVE_ACCOUNT_DAYS`, `ADMIN_GOOGLE_SUBS`.
-6. **`backend/CLAUDE.md` package map:** update the `auth` row to "Security filter chain, Google ID token verification, JWT issue and validation, refresh tokens" and add a `user` row ("Users, `/api/me`, account deletion").
+6. **`backend/CLAUDE.md` package map:** update the `auth` row to "Google ID token verification, access token issue and validation, signing keys, refresh tokens, the auth endpoints" and add a `user` row ("Users, `/api/me`, account deletion"). Add the security filter chain and its 401/403 problem handlers to the `config` row, because that is where Phase 1 put them and this phase extends them in place (section 3.1).
 7. **`docs/api-contract.md`:** no shape changes. Add a changelog line under 2.2 or 2.3 saying the auth endpoints are implemented in Phase 6a and the 6b endpoints are not yet available.
 
 ---
@@ -57,9 +57,10 @@ This phase adds Google sign-in to the backend: users, the app's own access and r
 
 ### 3.1 `auth`
 
+The filter chain and the two problem-detail handlers are **not** in this package. Phase 1 put `SecurityConfig`, `ProblemAuthenticationEntryPoint`, and `ProblemAccessDeniedHandler` in `config`, where the rest of the cross-cutting wiring lives, and `SecurityConfig` already carries the placeholder comment for this phase. They are extended in place (section 3.3) rather than moved here or duplicated under new names, so there is still exactly one filter chain and one 401 mapping in the codebase.
+
 | Class | Responsibility |
 |---|---|
-| `SecurityConfig` | The single stateless filter chain (section 6) |
 | `JwtProperties` | Issuer, audience, TTL, clock skew, and the parsed signing keys |
 | `SigningKeyRing` | Parses `JWT_SIGNING_KEYS`, validates them, exposes the JWK set and the current key id |
 | `AccessTokenIssuer` | Builds and signs access tokens with the current key |
@@ -70,8 +71,6 @@ This phase adds Google sign-in to the backend: users, the app's own access and r
 | `AuthController` | The three `/api/auth/*` endpoints |
 | `AuthService` | Sign-in, refresh, logout orchestration |
 | `RefreshTokenService`, `RefreshTokenRepository` | Issue, rotate, revoke family (via `JdbcClient` for the conditional updates) |
-| `ApiAuthenticationEntryPoint` | Maps authentication failures to `SESSION_INVALID`, `AUTH_REQUIRED`, `TOKEN_EXPIRED`, `TOKEN_INVALID` |
-| `ApiAccessDeniedHandler` | Maps authorization failures to `FORBIDDEN` (or `AUTH_REQUIRED` for guests) |
 | `AuthRateLimitFilter` | 10 per minute per IP on `/api/auth/google` and `/api/auth/refresh` |
 
 ### 3.2 `user`
@@ -88,7 +87,7 @@ This phase adds Google sign-in to the backend: users, the app's own access and r
 | Package | Change |
 |---|---|
 | `session` | `GuestSessionFilter` skips when an `Authorization` header is present. `OwnerRef.User(userId)` gets used |
-| `config` | A `CurrentOwner` argument resolver that turns the security principal into an `OwnerRef`, with the user-existence check |
+| `config` | `SecurityConfig` gains the resource server, the bearer filter, and the new route rules (6.4). `ProblemAuthenticationEntryPoint` gains the bearer-failure branch that tells `TOKEN_EXPIRED` from `TOKEN_INVALID`; `ProblemAccessDeniedHandler` already maps 403 to `FORBIDDEN`. A new `CurrentOwner` argument resolver turns the security principal into an `OwnerRef`, with the user-existence check |
 | `report` | Repository queries handle both owner kinds; `ReportOwnershipService.claimGuestReports`; `CreateReportService` sets `expires_at` by owner kind |
 | `ratelimit` | Upload limit keyed by user id when signed in |
 | `retention` | Refresh token cleanup, inactive account cleanup |
@@ -97,7 +96,7 @@ This phase adds Google sign-in to the backend: users, the app's own access and r
 
 ## 4. Database: migration `V3__accounts.sql`
 
-Match the token hash column type used for `session.token_hash` in V1.
+The token hash column matches `session.token_hash` in V1, which is `varchar(64)`: SHA-256 hex, a fixed 64 characters, so the length is a real constraint rather than decoration.
 
 ```sql
 CREATE TABLE app_user (
@@ -115,7 +114,7 @@ CREATE TABLE refresh_token (
     id                 uuid PRIMARY KEY,
     user_id            uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
     family_id          uuid NOT NULL,
-    token_hash         text NOT NULL UNIQUE,      -- same type as session.token_hash
+    token_hash         varchar(64) NOT NULL UNIQUE,   -- SHA-256 hex, as session.token_hash in V1
     issued_at          timestamptz NOT NULL,
     expires_at         timestamptz NOT NULL,
     family_started_at  timestamptz NOT NULL,
@@ -197,7 +196,7 @@ CREATE INDEX report_user_created_idx ON report (user_id, created_at DESC);
   - **Required claims:** `sub` (UUID) and `role` (`USER` or `ADMIN`).
 - **Authorities:** a `JwtAuthenticationConverter` maps `role` to `ROLE_USER` or `ROLE_ADMIN`. The principal name is the user id.
 
-### 6.4 Filter chain (`SecurityConfig`)
+### 6.4 Filter chain (`config.SecurityConfig`)
 
 Stateless, CSRF disabled (with the existing comment), CORS from Phase 1.
 
@@ -221,7 +220,7 @@ A request with an `Authorization` header is authenticated by the bearer filter o
 | `/api/reports/**` | an authenticated user or guest |
 | anything else | keep the Phase 1 rule |
 
-**Entry point mapping (`ApiAuthenticationEntryPoint`):**
+**Entry point mapping (`config.ProblemAuthenticationEntryPoint`, extended):**
 
 | Situation | Response |
 |---|---|
@@ -230,7 +229,7 @@ A request with an `Authorization` header is authenticated by the bearer filter o
 | No valid credential on `/api/reports/**` | 401 `SESSION_INVALID` |
 | No bearer on `/api/me/**`, `/api/trends/**`, `/api/admin/**` | 401 `AUTH_REQUIRED` |
 
-**Access denied mapping (`ApiAccessDeniedHandler`):**
+**Access denied mapping (`config.ProblemAccessDeniedHandler`):**
 
 | Situation | Response |
 |---|---|
@@ -239,7 +238,7 @@ A request with an `Authorization` header is authenticated by the bearer filter o
 
 All of these are Problem Details with `code` and `requestId`, as in Phase 1.
 
-### 6.5 Owner resolution (`CurrentOwner`)
+### 6.5 Owner resolution (`config.CurrentOwner`)
 
 A `HandlerMethodArgumentResolver` gives controllers an `OwnerRef`:
 
