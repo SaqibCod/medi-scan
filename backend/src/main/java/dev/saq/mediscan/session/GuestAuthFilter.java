@@ -42,8 +42,14 @@ public class GuestAuthFilter extends OncePerRequestFilter {
 
 	public static final String HEADER = "X-Session-Token";
 
-	/** Guests get this authority; it is not a user {@code role} in the sign-in sense. */
-	private static final String GUEST_AUTHORITY = "ROLE_GUEST";
+	/**
+	 * Guests get this authority; it is not a user {@code role} in the sign-in sense.
+	 *
+	 * <p>Public because the access-denied handler keys on it to tell a guest who needs to
+	 * sign in ({@code 401 AUTH_REQUIRED}) from a user who lacks a role
+	 * ({@code 403 FORBIDDEN}). One definition, so the two cannot drift apart.
+	 */
+	public static final String GUEST_AUTHORITY = "ROLE_GUEST";
 
 	private final SessionService sessionService;
 

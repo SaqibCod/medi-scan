@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -93,6 +94,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	private static ResponseEntity<ProblemDetail> fileTooLarge() {
 		return ResponseEntity.status(ErrorCode.FILE_TOO_LARGE.status())
 				.body(ProblemDetails.of(ErrorCode.FILE_TOO_LARGE, FILE_TOO_LARGE_DETAIL));
+	}
+
+	/**
+	 * A {@code @PreAuthorize} denial on a route the filter chain allowed.
+	 *
+	 * <p>Needed because method security throws inside the controller invocation, so Spring
+	 * MVC resolves it here and the {@code ExceptionTranslationFilter} - and with it
+	 * {@link ProblemAccessDeniedHandler} - never sees it. Without this the catch-all below
+	 * would turn an authorization failure into {@code 500 INTERNAL_ERROR}.
+	 *
+	 * <p>It stays invisible on {@code /api/admin/**}, where the chain's matcher denies first.
+	 * It only shows up on a path the matcher allows, which is exactly where a
+	 * {@code @PreAuthorize} is the sole protection.
+	 */
+	@ExceptionHandler(AuthorizationDeniedException.class)
+	public ResponseEntity<ProblemDetail> handleAuthorizationDenied(AuthorizationDeniedException ex) {
+		ErrorCode code = DeniedAccess.codeForCurrentCaller();
+		return ResponseEntity.status(code.status())
+				.body(ProblemDetails.of(code, DeniedAccess.detailFor(code)));
 	}
 
 	/** A path variable or query parameter of the wrong type, such as a malformed UUID. */
