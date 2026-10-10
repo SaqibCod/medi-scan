@@ -23,12 +23,6 @@ public class UserService {
 
 	private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
-	/** Google's `name` claim is free text; 100 characters is more than a header can show. */
-	static final int MAX_DISPLAY_NAME = 100;
-
-	/** What to store when Google sent no usable name. Never blank, because the UI shows it. */
-	static final String FALLBACK_DISPLAY_NAME = "User";
-
 	private final UserRepository users;
 	private final UserUpsert upsert;
 	private final AdminSubjects adminSubjects;
@@ -51,8 +45,9 @@ public class UserService {
 	 */
 	public UserUpsert.Result signIn(String googleSub, String displayName) {
 		UserRole role = adminSubjects.roleFor(googleSub);
-		return upsert.upsert(googleSub, normalizeDisplayName(displayName), role,
-				Instant.now(clock));
+		// displayName arrives already trimmed, capped and defaulted by GoogleIdentity.of,
+		// which is the single place that decides what a display name may be.
+		return upsert.upsert(googleSub, displayName, role, Instant.now(clock));
 	}
 
 	/**
@@ -95,21 +90,4 @@ public class UserService {
 		log.info("account deleted user={}", userId);
 	}
 
-	/**
-	 * Trims, caps at {@value #MAX_DISPLAY_NAME} characters, and falls back to
-	 * {@value #FALLBACK_DISPLAY_NAME}.
-	 *
-	 * <p>Google's {@code name} claim is user-controlled, so it is treated as untrusted input:
-	 * capped so it cannot bloat a row, and never interpolated anywhere but a JSON response the
-	 * client renders as text.
-	 */
-	static String normalizeDisplayName(String raw) {
-		if (raw == null || raw.isBlank()) {
-			return FALLBACK_DISPLAY_NAME;
-		}
-		String trimmed = raw.trim();
-		return trimmed.length() > MAX_DISPLAY_NAME
-				? trimmed.substring(0, MAX_DISPLAY_NAME)
-				: trimmed;
-	}
 }
