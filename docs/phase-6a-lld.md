@@ -61,11 +61,12 @@ The filter chain and the two problem-detail handlers are **not** in this package
 
 | Class | Responsibility |
 |---|---|
-| `JwtProperties` | Issuer, audience, TTL, clock skew, and the parsed signing keys |
 | `SigningKeyRing` | Parses `JWT_SIGNING_KEYS`, validates them, exposes the JWK set and the current key id |
 | `AccessTokenIssuer` | Builds and signs access tokens with the current key |
 | `AccessTokenDecoderConfig` | The `JwtDecoder` bean: verifies by `kid` against all listed keys, plus validators |
 | `ExpiryValidator` | Replaces the default timestamp validator so an expired token carries a distinct error code |
+| `RequiredKeyIdValidator` | Rejects a token whose `kid` header is absent or blank (6.3, D2) |
+| `AuthProperties` | `mediscan.auth.*`: Google, JWT and refresh settings, and the admin subject list |
 | `GoogleIdTokenVerifier` | Verifies Google ID tokens with Google's JWKS (section 5) |
 | `GoogleIdentity` (record) | `sub`, `displayName`. Never email or picture |
 | `AuthController` | The three `/api/auth/*` endpoints |
@@ -144,7 +145,10 @@ CREATE INDEX report_user_created_idx ON report (user_id, created_at DESC);
 
 ## 5. Google ID token verification (`GoogleIdTokenVerifier`)
 
-- A dedicated `JwtDecoder` (Nimbus, built with Google's JWK set URI `https://www.googleapis.com/oauth2/v3/certs`). Spring and Nimbus cache the keys. Check the current caching behavior and configuration in Context7.
+- A dedicated `JwtDecoder` built with `NimbusJwtDecoder.withJwkSetUri("https://www.googleapis.com/oauth2/v3/certs")`.
+- **It is never a bean** (D9). `GoogleIdTokenVerifier` builds it internally, so the application has exactly **one** `JwtDecoder` bean: the access-token decoder. A second one would make both Boot's `JwtDecoderConfiguration` and `oauth2ResourceServer`'s decoder lookup ambiguous. A constructor taking a ready-made `JwtDecoder` exists for tests only.
+- **Caching, verified** (Nimbus 10.9.1 defaults, with what Spring sets): `JwkSetUriJwtDecoderBuilder.jwkSource()` builds `JWKSourceBuilder.create(...).refreshAheadCache(false).rateLimited(false).cache(true)`, giving a `CachingJWKSetSource` with `DEFAULT_CACHE_TIME_TO_LIVE` of **5 minutes** and `DEFAULT_CACHE_REFRESH_TIMEOUT` of 15 seconds. Refresh-ahead (30 s) and rate limiting (30 s minimum interval) are both switched off by Spring, and there is no outage tolerance.
+- **Google key rotation needs no special handling:** `JWKSetBasedJWKSource.get` re-fetches and re-selects when the first selection comes back empty, so a `kid` that is not in the cached set triggers one refresh inside the request rather than failing for up to five minutes.
 - **Algorithm:** RS256 only.
 - **Validators:**
   - **Issuer:** `accounts.google.com` or `https://accounts.google.com` (both are valid for Google).
@@ -153,6 +157,10 @@ CREATE INDEX report_user_created_idx ON report (user_id, created_at DESC);
   - **Subject:** `sub` is present and not blank.
 - **Output:** `GoogleIdentity(sub, displayName)`. Every other claim is ignored and dropped.
 - **Failures:** every verification failure becomes `401 GOOGLE_TOKEN_INVALID`. The log line names only the category (`signature`, `issuer`, `audience`, `expired`, `malformed`, `jwks_unavailable`). The token itself is never logged.
+- **How the category is decided** — by exception and error-code type, never by message text:
+  - `JwtException` that is **not** a `BadJwtException` → `jwks_unavailable`. `NimbusJwtDecoder.createJwt` wraps `RemoteKeySourceException` and `JOSEException` in the plain `JwtException`, and everything else in `BadJwtException`.
+  - `BadJwtException` whose cause is a `ParseException` → `malformed`; otherwise → `signature` (this is where `BadJWSException` "Invalid signature" and `BadJOSEException` "no matching key(s) found" arrive).
+  - `JwtValidationException` → read the error codes. Google's validator list uses distinct custom codes (`google_issuer`, `google_audience`, `token_expired`, `google_subject`) precisely so that the category is readable from a code rather than from a description.
 - **Google's keys unreachable:** if the JWKS fetch fails and nothing is cached, return `401 GOOGLE_TOKEN_INVALID` and log `jwks_unavailable` at WARN. Don't add a new error code.
 - **Config:** `GOOGLE_CLIENT_ID` is required in the `prod` profile (startup fails without it). In `local`, a blank value disables Google sign-in: the endpoint always returns `GOOGLE_TOKEN_INVALID`, and startup logs one WARN line saying sign-in is disabled.
 - **Tests** inject a decoder built from a local test key (section 13). One test also serves a JWK set from a local HTTP server to cover the URI-based configuration.
@@ -173,7 +181,9 @@ CREATE INDEX report_user_created_idx ON report (user_id, created_at DESC);
 
 ### 6.2 Issuing (`AccessTokenIssuer`)
 
-- **Encoder:** Spring's `NimbusJwtEncoder` over the JWK set. The JWS header sets `alg=HS256` and `kid=<current>` so the encoder picks the current key. Verify the exact key-selection behavior in Context7; when several keys are in the set, the header must name one.
+- **Encoder:** Spring's `NimbusJwtEncoder` over the JWK set. The JWS header sets `alg=HS256`, `typ=JWT`, and `kid=<current>`.
+- **Key selection is by `kid`, verified** (D10): `NimbusJwtEncoder.selectJwk` builds a Nimbus `JWKMatcher` from the `JwsHeader`, and for the HMAC family that matcher is `keyType(oct)`, `keyID(headers.getKeyId())`, `privateOnly(true)`, `algorithms(HS256, null)`. Naming the `kid` therefore selects exactly that key.
+  - **If the header names no `kid`,** `JWKMatcher` treats the key id as *unconstrained* rather than "absent", so every key matches. With two or more keys the encoder's default selector throws `JwtEncodingException`; **with one key it silently signs anyway.** A missing `kid` would therefore stay invisible until the first rotation, so the `kid` is always set explicitly and `AccessTokenIssuerTest` signs against a two-key ring.
 - **Claims:**
 
 | Claim | Value |
@@ -188,25 +198,55 @@ CREATE INDEX report_user_created_idx ON report (user_id, created_at DESC);
 
 ### 6.3 Validating (`AccessTokenDecoderConfig`, `ExpiryValidator`)
 
-- **Decoder:** `NimbusJwtDecoder` built from a JWT processor whose key selector looks up keys by `kid` in the same JWK set. A token without a `kid`, or with an unknown one, fails.
-- **Validators:**
-  - **Issuer:** equals `JWT_ISSUER`.
-  - **Audience:** contains `JWT_AUDIENCE`.
-  - **Expiry:** `ExpiryValidator` replaces the default timestamp validator. It checks `exp` and `nbf` with 30 seconds of skew, and returns an `OAuth2Error` with the custom error code `token_expired` when `exp` has passed. The entry point uses that code to choose `TOKEN_EXPIRED` over `TOKEN_INVALID`. Don't match on error description text.
-  - **Required claims:** `sub` (UUID) and `role` (`USER` or `ADMIN`).
-- **Authorities:** a `JwtAuthenticationConverter` maps `role` to `ROLE_USER` or `ROLE_ADMIN`. The principal name is the user id.
+- **Decoder** (D1): `NimbusJwtDecoder.withJwkSource(ring)` — but **not** `.jwsAlgorithm(SignatureAlgorithm.HS256)`, because `SignatureAlgorithm` holds only the asymmetric algorithms (`RS*`, `ES*`, `PS*`); HS256 lives in `MacAlgorithm`, which that builder method does not accept. The HS256 selector is installed through the escape hatch the builder provides:
+
+  ```java
+  NimbusJwtDecoder.withJwkSource(jwkSource)
+      .jwtProcessorCustomizer(p -> p.setJWSKeySelector(
+              new JWSVerificationKeySelector<>(JWSAlgorithm.HS256, jwkSource)))
+      .build();
+  ```
+
+  The customizer runs after the builder has set its default RS256 selector, so it replaces it, and Spring's no-op claims verifier and type verifier are kept.
+- **An unknown `kid` fails** on its own: the matcher constrains the key id, nothing matches, and Nimbus throws `BadJOSEException` ("no matching key(s) found"), which becomes `TOKEN_INVALID`.
+- **A missing `kid` does not fail on its own** (D2). An unconstrained key id matches every key, and `DefaultJWTProcessor` tries each candidate in turn, so a token with no `kid` signed with any listed key would verify. `RequiredKeyIdValidator` therefore rejects a blank or absent `kid` header as a validator. The outcome the contract promises is unchanged — `401 TOKEN_INVALID` — only the layer that enforces it moves.
+- **Validators** (D3). They are assembled explicitly:
+
+  ```java
+  decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(List.of(
+          JwtTypeValidator.jwt(), new RequiredKeyIdValidator(), new ExpiryValidator(skew, clock),
+          new JwtIssuerValidator(issuer), new JwtAudienceValidator(audience),
+          requiredSubject, requiredRole)));
+  ```
+
+  **Not** `JwtValidators.createDefaultWithValidators(...)`: that helper prepends a `JwtTimestampValidator` unless it finds one in the list by type, and `JwtTimestampValidator` is `final`, so `ExpiryValidator` can never satisfy that check. The default would run alongside ours and report an expired token as plain `invalid_token` as well.
+  - **Issuer:** `JwtIssuerValidator`, equals `JWT_ISSUER`.
+  - **Audience:** `JwtAudienceValidator`, contains `JWT_AUDIENCE`.
+  - **Expiry:** `ExpiryValidator` checks `exp` and `nbf` against an injected `Clock` with 30 seconds of skew, and returns an `OAuth2Error` whose error **code** is `token_expired` once `exp` has passed. `nbf` is optional, matching the framework default. Never match on error description text.
+  - **Required claims:** `sub` (a UUID) and `role` (`USER` or `ADMIN`), each a `JwtClaimValidator` with a predicate that null-checks, because an absent claim reaches the predicate as `null`.
+- **How the entry point sees `token_expired`** (D4). The code does **not** survive on the exception that reaches the entry point. The chain is:
+
+  `NimbusJwtDecoder.validateJwt` throws `JwtValidationException(message, errors)`, preserving the `OAuth2Error` collection → `JwtValidationException extends BadJwtException extends JwtException` → `JwtAuthenticationProvider.getJwt` catches `BadJwtException` and throws `new InvalidBearerTokenException(message, failed)`, which calls `initCause(failed)` but hardcodes its own error to `BearerTokenErrors.invalidToken(...)`, i.e. code `invalid_token`.
+
+  So the entry point reads the cause: `authException.getCause() instanceof JwtValidationException jve` and then looks for an error whose `getErrorCode()` is `token_expired`. Code-based, never text-based.
+- **Authorities:** a `JwtAuthenticationConverter` with `setPrincipalClaimName("sub")` and a granted-authorities converter mapping `role` to `ROLE_USER` or `ROLE_ADMIN`. The principal name is the user id.
 
 ### 6.4 Filter chain (`config.SecurityConfig`)
 
 Stateless, CSRF disabled (with the existing comment), CORS from Phase 1.
 
-**Filter order:**
-1. Request id filter (Phase 1)
-2. `AuthRateLimitFilter` and the other rate limit filters
-3. `BearerTokenAuthenticationFilter` (from the OAuth2 resource server)
-4. `GuestSessionFilter`, which runs only when no `Authorization` header is present
+Method security is switched on with `@EnableMethodSecurity` (D8). Spring Boot 4.1.1 ships **no** method-security autoconfiguration — grepped through `spring-boot-security:4.1.1` — so without the annotation every `@PreAuthorize` on an admin controller is silently inert and the "belt and braces" second layer would not exist. Its defaults are `prePostEnabled = true`, `securedEnabled = false`, `jsr250Enabled = false`.
 
-A request with an `Authorization` header is authenticated by the bearer filter or rejected. It never falls through to the guest filter.
+**Filter order** (D5). The guest filter is anchored with `addFilterAfter(guestFilter, BearerTokenAuthenticationFilter.class)`, **not** Phase 1's `addFilterBefore(..., UsernamePasswordAuthenticationFilter.class)`. `FilterOrderRegistration` in spring-security-config 7.1.1 orders `UsernamePasswordAuthenticationFilter` → … → `DigestAuthenticationFilter` → `BearerTokenAuthenticationFilter` → `BasicAuthenticationFilter` → … → `AuthorizationFilter`, so the Phase 1 anchor would put the guest filter *before* the bearer filter — the opposite of what this section requires. The resulting order is:
+
+1. Request id filter (Phase 1)
+2. `AuthRateLimitFilter`
+3. `BearerTokenAuthenticationFilter` (from the OAuth2 resource server)
+4. `GuestAuthFilter`, which runs only when no `Authorization` header is present
+5. `UploadRateLimitFilter`, still after the guest filter so an unauthenticated upload is refused before it spends a token
+6. `AuthorizationFilter`
+
+A request with an `Authorization` header is authenticated by the bearer filter or rejected, and never falls through to the guest filter. That holds structurally, confirmed in `BearerTokenAuthenticationFilter.doFilterInternal`: a malformed header calls the entry point and returns, an authentication failure calls the failure handler and returns — neither continues the chain — and on success the security context is set, so `GuestAuthFilter`'s existing `!hasBearer && !alreadyAuthenticated` guard declines anyway.
 
 **Route rules:**
 
@@ -216,9 +256,11 @@ A request with an `Authorization` header is authenticated by the bearer filter o
 | `POST /api/sessions`, `GET /api/samples`, `GET /actuator/health` | permit |
 | `POST /api/auth/google`, `POST /api/auth/refresh`, `POST /api/auth/logout` | permit |
 | `/api/admin/**` | `hasRole('ADMIN')`. Controllers there also use `@PreAuthorize("hasRole('ADMIN')")` |
-| `/api/me/**`, `/api/trends/**` | an authenticated user (bearer) |
-| `/api/reports/**` | an authenticated user or guest |
+| `/api/me/**`, `/api/trends/**` | `hasAnyRole('USER','ADMIN')` (D6) |
+| `/api/reports/**` | an authenticated user or guest (`authenticated()`) |
 | anything else | keep the Phase 1 rule |
+
+**Why not `.authenticated()` for the signed-in-only routes** (D6): guests are authenticated too — `GuestAuthFilter` gives them `ROLE_GUEST` — so `.authenticated()` would let a guest reach `/api/me` and the handler would fail on a missing user instead of answering `401 AUTH_REQUIRED`. `hasAnyRole('USER','ADMIN')` denies them at the authorization filter, and the access-denied handler below turns a guest denial into `401 AUTH_REQUIRED`, which is the row this section already specified.
 
 **Entry point mapping (`config.ProblemAuthenticationEntryPoint`, extended):**
 
@@ -237,6 +279,13 @@ A request with an `Authorization` header is authenticated by the bearer filter o
 | User without `ADMIN` on `/api/admin/**` | 403 `FORBIDDEN` |
 
 All of these are Problem Details with `code` and `requestId`, as in Phase 1.
+
+**Wiring the entry point** (D7). `ProblemAuthenticationEntryPoint` has to be registered in **two** places:
+
+- `exceptionHandling().authenticationEntryPoint(...)` — already done in Phase 1 — which handles a request that carried no credential at all. An explicitly set entry point wins over the resource server's `defaultAuthenticationEntryPointFor(...)` registration, because `ExceptionHandlingConfigurer.getAuthenticationEntryPoint(http)` only falls back to a default when none was set. Worth knowing: the resource server registers its own against a broad matcher (any JSON/REST-ish non-HTML request, not just requests carrying a bearer token), so had Phase 1 not set one explicitly, guest 401s would have started coming back from `BearerTokenAuthenticationEntryPoint` with no `code` field.
+- `oauth2ResourceServer(o -> o.authenticationEntryPoint(...))`, because `OAuth2ResourceServerConfigurer` separately calls `filter.setAuthenticationEntryPoint(...)` with its own, defaulting to `BearerTokenAuthenticationEntryPoint`. Without this, every bearer failure would bypass our mapping.
+
+The entry point writes `WWW-Authenticate: Bearer error="invalid_token"` itself. The framework default also appends `error_description` and `resource_metadata`; the description is derived from the validation failure, and this API does not put that in a response header.
 
 ### 6.5 Owner resolution (`config.CurrentOwner`)
 
@@ -388,22 +437,24 @@ Added to the existing `RetentionJob`:
 
 ## 11. Configuration
 
+Property names are under the existing `mediscan.*` root, not a new `auth.*` root: `MediScanProperties` documents one prefix for the whole application so the environment-to-property mapping stays in one block of `application.yml`. The environment variable names are exactly as specified. The `auth` subtree binds to `auth.AuthProperties`; the two retention values and the rate limit join the `MediScanProperties` records that already own their siblings.
+
 | Property | Env var | Default |
 |---|---|---|
-| `auth.google.client-id` | `GOOGLE_CLIENT_ID` | none (required in `prod`) |
-| `auth.google.jwk-set-uri` | none | `https://www.googleapis.com/oauth2/v3/certs` |
-| `auth.jwt.signing-keys` | `JWT_SIGNING_KEYS` | none (required) |
-| `auth.jwt.current-kid` | `JWT_CURRENT_KID` | none (required) |
-| `auth.jwt.issuer` | `JWT_ISSUER` | `medi-scan` |
-| `auth.jwt.audience` | `JWT_AUDIENCE` | `medi-scan-api` |
-| `auth.jwt.access-ttl` | `ACCESS_TOKEN_TTL_MINUTES` | 15 minutes |
-| `auth.jwt.clock-skew` | none | 30 seconds |
-| `auth.refresh.ttl` | `REFRESH_TOKEN_TTL_DAYS` | 7 days |
-| `auth.refresh.family-max-age` | `REFRESH_FAMILY_MAX_DAYS` | 30 days |
-| `auth.admin-subjects` | `ADMIN_GOOGLE_SUBS` | empty |
-| `retention.user-report-days` | `USER_RETENTION_DAYS` | 30 |
-| `retention.inactive-account-days` | `INACTIVE_ACCOUNT_DAYS` | 180 |
-| `ratelimit.auth-per-minute` | none | 10 |
+| `mediscan.auth.google.client-id` | `GOOGLE_CLIENT_ID` | none (required in `prod`) |
+| `mediscan.auth.google.jwk-set-uri` | none | `https://www.googleapis.com/oauth2/v3/certs` |
+| `mediscan.auth.jwt.signing-keys` | `JWT_SIGNING_KEYS` | none (required) |
+| `mediscan.auth.jwt.current-kid` | `JWT_CURRENT_KID` | none (required) |
+| `mediscan.auth.jwt.issuer` | `JWT_ISSUER` | `medi-scan` |
+| `mediscan.auth.jwt.audience` | `JWT_AUDIENCE` | `medi-scan-api` |
+| `mediscan.auth.jwt.access-ttl` | `ACCESS_TOKEN_TTL_MINUTES` | 15 minutes |
+| `mediscan.auth.jwt.clock-skew` | none | 30 seconds |
+| `mediscan.auth.refresh.ttl` | `REFRESH_TOKEN_TTL_DAYS` | 7 days |
+| `mediscan.auth.refresh.family-max-age` | `REFRESH_FAMILY_MAX_DAYS` | 30 days |
+| `mediscan.auth.admin-subjects` | `ADMIN_GOOGLE_SUBS` | empty |
+| `mediscan.retention.user-report-days` | `USER_RETENTION_DAYS` | 30 |
+| `mediscan.retention.inactive-account-days` | `INACTIVE_ACCOUNT_DAYS` | 180 |
+| `mediscan.ratelimit.auth-per-minute` | none | 10 |
 
 The `local` profile's `.env` gets a generated development key: `openssl rand -base64 32`. Local and production keys are never the same.
 
@@ -526,7 +577,30 @@ A throwaway page prints a real Google ID token so you can test the backend with 
 
 ---
 
-## 16. Decisions to confirm before building
+## 16. Verified API deviations (D1–D10)
+
+Before any code was written, every security API this phase uses was checked against the versions the build actually resolves. Ten points where the design above could not be implemented as first written are listed here, each with the approved resolution and where it is applied. The sections above already carry the corrected instruction; this table is the index.
+
+**Versions checked:** Spring Boot 4.1.1, Spring Security 7.1.1, `nimbus-jose-jwt` 10.9.1 — resolved with `dependency:tree` against `spring-boot-starter-oauth2-resource-server:4.1.1`, which is the single new declared dependency and brings in `spring-boot-security-oauth2-resource-server`, `spring-security-oauth2-resource-server`, `spring-security-oauth2-jose`, `spring-security-oauth2-core`, and Nimbus. No new test dependencies: Nimbus's `RSAKeyGenerator` mints the test RSA keys and the JDK's `com.sun.net.httpserver.HttpServer` serves the one URI-based JWK set test.
+
+| # | Design as first written | Verified behaviour | Resolution | Section |
+|---|---|---|---|---|
+| D1 | Decoder configured for HS256 via `jwsAlgorithm(...)` | `SignatureAlgorithm` has no HS256 (it is in `MacAlgorithm`), and that builder method takes only `SignatureAlgorithm` | `withJwkSource(...).jwtProcessorCustomizer(...)` installing a `JWSVerificationKeySelector<>(JWSAlgorithm.HS256, ring)` | 6.3 |
+| D2 | "A token without a `kid` fails" at the decoder | A null key id is *unconstrained*, so every key matches and `DefaultJWTProcessor` tries each one; such a token verifies | `RequiredKeyIdValidator` rejects a blank or absent `kid`. Response is unchanged (`TOKEN_INVALID`) | 6.3, 3.1 |
+| D3 | `ExpiryValidator` "replaces the default timestamp validator" | `JwtValidators.createDefaultWithValidators` re-adds `JwtTimestampValidator` unless one is present by type, and that class is `final` | Build the list explicitly with `DelegatingOAuth2TokenValidator` and `setJwtValidator` | 6.3 |
+| D4 | The entry point reads the `token_expired` code off the failure | `InvalidBearerTokenException` hardcodes `invalid_token`; the custom code survives only in the cause's `JwtValidationException.getErrors()` | Read the cause. Still code-based, never description text | 6.3 |
+| D5 | Bearer filter before the guest filter | `BearerTokenAuthenticationFilter` is ordered *after* `UsernamePasswordAuthenticationFilter`, which is Phase 1's anchor | Anchor on `addFilterAfter(guestFilter, BearerTokenAuthenticationFilter.class)` | 6.4 |
+| D6 | `/api/me/**`, `/api/trends/**` require "an authenticated user" | Guests hold `ROLE_GUEST` and are authenticated, so `.authenticated()` admits them | `hasAnyRole('USER','ADMIN')`; the access-denied handler maps a guest denial to `401 AUTH_REQUIRED` | 6.4 |
+| D7 | One entry point, configured once | The resource server sets its own on the bearer filter, independently of `exceptionHandling` | Register `ProblemAuthenticationEntryPoint` on `oauth2ResourceServer` too, and write `WWW-Authenticate` ourselves | 6.4 |
+| D8 | `@PreAuthorize` on admin controllers as a second layer | Boot 4.1.1 has no method-security autoconfiguration, so the annotation would be inert | Add `@EnableMethodSecurity`, and have the admin test assert it actually denies | 6.4 |
+| D9 | `GoogleIdTokenVerifier` and the access-token decoder both described as decoders | Two `JwtDecoder` beans make Boot's and the DSL's decoder lookup ambiguous | Google's decoder is built inside the verifier and is never a bean; exactly one `JwtDecoder` bean exists | 5 |
+| D10 | "when several keys are in the set, the header must name one" | Correct, and with a *single* key a missing `kid` signs silently, hiding the mistake until the first rotation | Always set `kid`; the issuer unit test signs against a two-key ring | 6.2 |
+
+**Tooling note.** These were verified by resolving the dependency tree and reading the unpacked sources jars of Spring Security 7.1.1, Nimbus 10.9.1, and Boot 4.1.1, because the Context7 MCP server was unavailable throughout. Those are the same upstream sources Context7 indexes, but the checks were not made through the tool `CLAUDE.md` nominates, and that is worth re-running when the server is reachable again.
+
+---
+
+## 17. Decisions to confirm before building
 
 1. **HS256 with key ids** for the app's own tokens (one service signs and verifies, so an asymmetric algorithm isn't needed).
 2. **A user-existence check on every bearer request** (one primary-key lookup). This makes account deletion take effect immediately and avoids foreign-key errors.
