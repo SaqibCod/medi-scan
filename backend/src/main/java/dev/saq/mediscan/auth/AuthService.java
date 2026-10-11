@@ -6,7 +6,8 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import dev.saq.mediscan.config.MediScanProperties;
 import dev.saq.mediscan.report.ReportOwnershipService;
@@ -42,12 +43,14 @@ public class AuthService {
 	private final ReportOwnershipService reportOwnership;
 	private final RefreshTokenService refreshTokens;
 	private final AccessTokenIssuer accessTokens;
+	private final TransactionTemplate transactions;
 	private final int userRetentionDays;
 
 	public AuthService(GoogleIdTokenVerifier googleVerifier, UserService userService,
 			SessionService sessions, SessionRepository sessionRepository,
 			ReportOwnershipService reportOwnership, RefreshTokenService refreshTokens,
-			AccessTokenIssuer accessTokens, MediScanProperties properties) {
+			AccessTokenIssuer accessTokens, PlatformTransactionManager transactionManager,
+			MediScanProperties properties) {
 
 		this.googleVerifier = googleVerifier;
 		this.userService = userService;
@@ -56,6 +59,7 @@ public class AuthService {
 		this.reportOwnership = reportOwnership;
 		this.refreshTokens = refreshTokens;
 		this.accessTokens = accessTokens;
+		this.transactions = new TransactionTemplate(transactionManager);
 		this.userRetentionDays = properties.retention().userReportDays();
 	}
 
@@ -71,11 +75,19 @@ public class AuthService {
 		// also means a forged token never opens a transaction at all.
 		GoogleIdentity identity = googleVerifier.verify(request.idToken());
 
-		return completeSignIn(identity, request.guestSessionToken());
+		// An explicit TransactionTemplate, not @Transactional on the method below.
+		//
+		// @Transactional is applied by a proxy, so it does nothing when a method is called
+		// from inside the same bean - which this is. The four writes would each commit on
+		// their own, and a failure in the last of them would leave the reports moved and the
+		// guest's session deleted: the user would own reports they could not see and the
+		// guest would have lost everything. ClaimRollbackTest catches exactly that.
+		return transactions.execute(status -> completeSignIn(identity,
+				request.guestSessionToken()));
 	}
 
-	@Transactional
-	AuthDtos.GoogleSignInResponse completeSignIn(GoogleIdentity identity, String guestSessionToken) {
+	private AuthDtos.GoogleSignInResponse completeSignIn(GoogleIdentity identity,
+			String guestSessionToken) {
 		UserUpsert.Result user = userService.signIn(identity.sub(), identity.displayName());
 
 		int claimed = claimGuestReports(guestSessionToken, user.userId());

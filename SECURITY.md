@@ -140,7 +140,65 @@ timings.
 - **Refresh tokens rotate on every use.** Reusing a revoked one is treated as a
   stolen copy and revokes the whole family.
 - **Admin is granted by config only** (`ADMIN_GOOGLE_SUBS`). No endpoint or UI
-  grants roles, and admin endpoints return aggregated counts only.
+  grants roles, and admin endpoints return aggregated counts only. The role is
+  recomputed from that list on every sign-in **and every refresh**, so adding or
+  removing a subject takes effect within one access-token lifetime without the
+  user signing in again. `app_user.role` is a cache of the config, never the
+  source of truth.
+- **A bad bearer token never falls back to guest access.** If `Authorization` is
+  present and invalid the request fails, even when a valid `X-Session-Token` is
+  sent too — otherwise a client with an expired token would silently keep
+  working as a guest and see an empty report list instead of being told to
+  refresh.
+
+### What an account actually is
+
+Four columns and two timestamps: Google's `sub`, a display name for the header,
+a role, and when the account was created and last used. No email address, no
+profile photo, no locale, and the Google ID token is discarded the moment it has
+been verified. The database has nowhere to put any of them.
+
+The display name comes from Google's `name` claim, trimmed and capped at 100
+characters, or `"User"` when Google sends nothing usable. It is treated as
+untrusted input, because the account holder controls it.
+
+### Deleting your account
+
+`DELETE /api/me` removes the account and everything linked to it — reports,
+report text, biomarkers, summaries, and every refresh token — in one cascading
+delete. There is no soft delete and no recovery window.
+
+It takes effect **immediately**, not when your access token expires. That token
+would still pass every signature and claim check for up to 15 minutes, so each
+authenticated request also checks that the account still exists; once it does
+not, every endpoint answers `401 AUTH_REQUIRED`. Jobs still processing a deleted
+report stop at their next status write, because the row they would write to is
+gone.
+
+### Signing key rotation
+
+Access tokens are signed with HS256 and carry a `kid` naming the key. The server
+signs with `JWT_CURRENT_KID` and accepts any key listed in `JWT_SIGNING_KEYS`, so
+rotating is: add the new key and make it current, keep the old one for 15
+minutes, then remove it. Nobody is signed out — refresh tokens are random values
+checked against the database and do not depend on the signing key, so even a
+leftover token signed by a removed key just causes one silent refresh.
+
+Rotate at least yearly, whenever the backend moves hosts, and immediately if a
+key may have leaked. Keys are never committed, never logged, and never shared
+between local and production. Generate one with `openssl rand -base64 32`.
+
+### One operational rule about logging
+
+Nothing in the application logs a raw token, a Google `sub`, or a display name,
+at any level, and a test drives every auth path and reads the logs back to prove
+it.
+
+That guarantee stops at the framework boundary. **Do not enable `TRACE` on
+`org.springframework.jdbc`, `org.postgresql`, or `org.hibernate` in production.**
+Those loggers print bound SQL parameter values by design, which means they print
+`google_sub` and `display_name` along with everything else. No application code
+can prevent it; the only control is not switching them on.
 
 ### The browser-storage trade-off
 
