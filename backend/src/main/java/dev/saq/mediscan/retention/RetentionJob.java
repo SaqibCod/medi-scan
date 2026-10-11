@@ -1,6 +1,7 @@
 package dev.saq.mediscan.retention;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -12,10 +13,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import dev.saq.mediscan.auth.RefreshTokenRepository;
 import dev.saq.mediscan.config.MediScanProperties;
 import dev.saq.mediscan.report.ReportRepository;
 import dev.saq.mediscan.session.SessionRepository;
 import dev.saq.mediscan.stats.StatsRecorder;
+import dev.saq.mediscan.user.UserRepository;
 import dev.saq.mediscan.upload.TempFileStore;
 
 /**
@@ -46,26 +49,41 @@ public class RetentionJob {
 
 	private static final Logger log = LoggerFactory.getLogger(RetentionJob.class);
 
+	/**
+	 * How long a revoked refresh token is kept so reuse can still be detected.
+	 *
+	 * <p>A day is far longer than any legitimate client needs - a tab refreshes within
+	 * minutes - and short enough that the table does not accumulate.
+	 */
+	private static final Duration REVOKED_GRACE = Duration.ofDays(1);
+
 	private final SessionRepository sessionRepository;
 	private final ReportRepository reportRepository;
+	private final RefreshTokenRepository refreshTokens;
+	private final UserRepository users;
 	private final TempFileStore tempFiles;
 	private final StatsRecorder stats;
 	private final TransactionTemplate transactions;
 	private final Clock clock;
 	private final int statsDays;
+	private final int inactiveAccountDays;
 
 	public RetentionJob(SessionRepository sessionRepository, ReportRepository reportRepository,
+			RefreshTokenRepository refreshTokens, UserRepository users,
 			TempFileStore tempFiles, StatsRecorder stats,
 			PlatformTransactionManager transactionManager, Clock clock,
 			MediScanProperties properties) {
 
 		this.sessionRepository = sessionRepository;
 		this.reportRepository = reportRepository;
+		this.refreshTokens = refreshTokens;
+		this.users = users;
 		this.tempFiles = tempFiles;
 		this.stats = stats;
 		this.transactions = new TransactionTemplate(transactionManager);
 		this.clock = clock;
 		this.statsDays = properties.retention().statsDays();
+		this.inactiveAccountDays = properties.retention().inactiveAccountDays();
 	}
 
 	/**
@@ -79,8 +97,60 @@ public class RetentionJob {
 	public void run() {
 		runSweep("expired sessions", this::deleteExpiredSessions);
 		runSweep("expired reports", this::deleteExpiredReports);
+		runSweep("spent refresh tokens", this::deleteSpentRefreshTokens);
 		runSweep("stale temp files", tempFiles::sweepStaleFiles);
 		runSweep("old stats", this::deleteOldStats);
+	}
+
+	/**
+	 * Deletes inactive accounts, daily.
+	 *
+	 * <p>Separate from {@link #run()} because it is the one sweep that does not need to be
+	 * timely: an account that has been untouched for 180 days will not mind being removed a
+	 * few hours later, and running it every fifteen minutes would scan {@code app_user} 96
+	 * times a day to find nothing (docs/dataflow.md section 9.2).
+	 *
+	 * <p>04:00 UTC: outside the hours when anyone is likely to be using a portfolio demo, so
+	 * the cascade's write load does not land on a live request.
+	 */
+	@Scheduled(cron = "0 0 4 * * *", zone = "UTC")
+	public void runDaily() {
+		runSweep("inactive accounts", this::deleteInactiveAccounts);
+	}
+
+	/**
+	 * Removes refresh tokens that are expired, and revoked ones once they are a day old.
+	 *
+	 * <p>Revoked tokens are kept for that day on purpose: they are what makes reuse
+	 * detectable. Delete one immediately and a stolen copy comes back as "unknown token"
+	 * rather than "someone is replaying this", and the family is never revoked.
+	 */
+	public int deleteSpentRefreshTokens() {
+		Instant now = Instant.now(clock);
+		int deleted = inTransaction(() -> refreshTokens.deleteExpiredAndStaleRevoked(now,
+				now.minus(REVOKED_GRACE)));
+
+		if (deleted > 0) {
+			// Counts only, never ids and certainly never hashes.
+			log.info("Retention: deleted {} spent refresh tokens", deleted);
+		}
+		return deleted;
+	}
+
+	/**
+	 * Deletes accounts with no sign-in for {@code INACTIVE_ACCOUNT_DAYS}.
+	 *
+	 * <p>One statement: the cascade from {@code app_user} takes their reports, report text,
+	 * biomarkers, summaries and refresh tokens with them (plan section 6).
+	 */
+	public int deleteInactiveAccounts() {
+		Instant cutoff = Instant.now(clock).minus(Duration.ofDays(inactiveAccountDays));
+		int deleted = inTransaction(() -> users.deleteInactiveSince(cutoff));
+
+		if (deleted > 0) {
+			log.info("Retention: deleted {} inactive accounts", deleted);
+		}
+		return deleted;
 	}
 
 	/**
