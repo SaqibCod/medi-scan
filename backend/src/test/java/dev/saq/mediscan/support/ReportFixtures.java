@@ -14,6 +14,7 @@ import dev.saq.mediscan.session.OwnerRef;
 import dev.saq.mediscan.session.Session;
 import dev.saq.mediscan.session.SessionRepository;
 import dev.saq.mediscan.session.SessionService;
+import dev.saq.mediscan.user.UserRepository;
 import dev.saq.mediscan.user.UserRole;
 import dev.saq.mediscan.user.UserUpsert;
 
@@ -31,14 +32,17 @@ public class ReportFixtures {
 	private final ReportRepository reports;
 	private final SessionService sessionService;
 	private final UserUpsert users;
+	private final UserRepository userRepository;
 	private final Clock clock;
 
 	public ReportFixtures(SessionRepository sessions, ReportRepository reports,
-			SessionService sessionService, UserUpsert users, Clock clock) {
+			SessionService sessionService, UserUpsert users, UserRepository userRepository,
+			Clock clock) {
 		this.sessions = sessions;
 		this.reports = reports;
 		this.sessionService = sessionService;
 		this.users = users;
+		this.userRepository = userRepository;
 		this.clock = clock;
 	}
 
@@ -120,9 +124,16 @@ public class ReportFixtures {
 		return id;
 	}
 
-	/** Deletes every session, and with it every report, via the cascade. */
+	/**
+	 * Deletes every session and every user, and with them every report, via the cascades.
+	 *
+	 * <p>Both owner kinds, necessarily: a report now cascades from {@code session} <em>or</em>
+	 * from {@code app_user}, so clearing only sessions would leave every user-owned report
+	 * behind - and the suite shares one database across test classes.
+	 */
 	public void clear() {
 		sessions.deleteAll();
+		userRepository.deleteAll();
 	}
 
 	/** 64 hex characters, unique per session, matching the column's length. */

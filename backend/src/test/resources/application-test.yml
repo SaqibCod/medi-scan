@@ -9,6 +9,10 @@ mediscan:
     # UploadRateLimitTest lower these for themselves.
     sessions-per-hour: 1000
     uploads-per-hour: 1000
+    # Same reason: the auth tests sign in dozens of times from 127.0.0.1 within a
+    # minute, and the real limit of 10 would fail whichever test happened to run
+    # eleventh. AuthRateLimitTest lowers it for itself.
+    auth-per-minute: 1000
   llm:
     # No test ever reaches a real provider. FakeLlmProvider is scripted per test
     # (backend/CLAUDE.md, "Testing").

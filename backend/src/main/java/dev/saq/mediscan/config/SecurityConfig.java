@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfigurationSource;
 
+import dev.saq.mediscan.auth.AuthRateLimitFilter;
 import dev.saq.mediscan.ratelimit.IpRateLimiter;
 import dev.saq.mediscan.ratelimit.UploadRateLimitFilter;
 import dev.saq.mediscan.session.GuestAuthFilter;
@@ -102,6 +103,12 @@ public class SecurityConfig {
 						.requestMatchers("/api/reports/**").authenticated()
 
 						.anyRequest().authenticated())
+
+				// Ten sign-ins and ten refreshes per minute per IP. Before the bearer filter
+				// because neither request carries an Authorization header, so a flood is
+				// refused before it reaches token verification or the database (LLD 9).
+				.addFilterBefore(new AuthRateLimitFilter(ipRateLimiter, jsonMapper, statsRecorder),
+						BearerTokenAuthenticationFilter.class)
 
 				// Bearer tokens: the app's own access tokens, validated by the single
 				// JwtDecoder bean. The entry point is passed here as well as to
