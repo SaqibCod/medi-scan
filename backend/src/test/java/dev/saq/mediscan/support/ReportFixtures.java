@@ -2,13 +2,19 @@ package dev.saq.mediscan.support;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
 
+import dev.saq.mediscan.config.ReportErrorCode;
+import dev.saq.mediscan.report.BiomarkerEntity;
+import dev.saq.mediscan.report.BiomarkerRepository;
+import dev.saq.mediscan.report.Flag;
 import dev.saq.mediscan.report.ReportEntity;
 import dev.saq.mediscan.report.ReportRepository;
+import dev.saq.mediscan.report.ReportStatusService;
 import dev.saq.mediscan.report.SourceType;
 import dev.saq.mediscan.session.OwnerRef;
 import dev.saq.mediscan.session.Session;
@@ -33,16 +39,20 @@ public class ReportFixtures {
 	private final SessionService sessionService;
 	private final UserUpsert users;
 	private final UserRepository userRepository;
+	private final ReportStatusService reportStatus;
+	private final BiomarkerRepository biomarkers;
 	private final Clock clock;
 
 	public ReportFixtures(SessionRepository sessions, ReportRepository reports,
 			SessionService sessionService, UserUpsert users, UserRepository userRepository,
-			Clock clock) {
+			ReportStatusService reportStatus, BiomarkerRepository biomarkers, Clock clock) {
 		this.sessions = sessions;
 		this.reports = reports;
 		this.sessionService = sessionService;
 		this.users = users;
 		this.userRepository = userRepository;
+		this.reportStatus = reportStatus;
+		this.biomarkers = biomarkers;
 		this.clock = clock;
 	}
 
@@ -121,6 +131,56 @@ public class ReportFixtures {
 		UUID id = UUID.randomUUID();
 		reports.save(new ReportEntity(id, new OwnerRef.Guest(sessionId), SourceType.SAMPLE,
 				now.minus(48, ChronoUnit.HOURS), now.minus(1, ChronoUnit.HOURS)));
+		return id;
+	}
+
+	/**
+	 * A {@code DONE} report owned by a guest session, moved there the same way the pipeline
+	 * does: {@code PENDING -> PROCESSING -> DONE} through {@link ReportStatusService}, never by
+	 * writing the status column directly. No biomarkers; use {@link #biomarker} to add some.
+	 */
+	public UUID doneReport(UUID sessionId, LocalDate collectedOn) {
+		UUID id = pendingReport(sessionId, SourceType.PDF);
+		reportStatus.markProcessing(id);
+		reportStatus.markDone(id, collectedOn);
+		return id;
+	}
+
+	/** The user-owned twin of {@link #doneReport}. */
+	public UUID doneUserReport(UUID userId, LocalDate collectedOn) {
+		UUID id = pendingUserReport(userId);
+		reportStatus.markProcessing(id);
+		reportStatus.markDone(id, collectedOn);
+		return id;
+	}
+
+	/** A {@code FAILED} report owned by a guest session. */
+	public UUID failedReport(UUID sessionId, ReportErrorCode code) {
+		UUID id = pendingReport(sessionId, SourceType.PDF);
+		reportStatus.markProcessing(id);
+		reportStatus.markFailed(id, code);
+		return id;
+	}
+
+	/** The user-owned twin of {@link #failedReport}. */
+	public UUID failedUserReport(UUID userId, ReportErrorCode code) {
+		UUID id = pendingUserReport(userId);
+		reportStatus.markProcessing(id);
+		reportStatus.markFailed(id, code);
+		return id;
+	}
+
+	/**
+	 * One validated lab value on {@code reportId}, inserted directly rather than through the
+	 * extraction pipeline - exactly what LLD section 9's test plan asks for.
+	 */
+	public UUID biomarker(UUID reportId, int position, String testName, String testNameNorm,
+			String biomarkerSlug, Double numericValue, String unit, Double refLow, Double refHigh,
+			Flag flag) {
+		UUID id = UUID.randomUUID();
+		biomarkers.save(new BiomarkerEntity(id, reportId, position, testName, testNameNorm,
+				biomarkerSlug, numericValue == null ? "Negative" : String.valueOf(numericValue),
+				numericValue, unit, null, refLow, refHigh, flag));
 		return id;
 	}
 
