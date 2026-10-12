@@ -28,7 +28,10 @@ public final class TestProperties {
 				new MediScanProperties.Llm("fake", "", "fake-model", Duration.ofSeconds(5),
 						1, 2, 500, 300, 1500, 20),
 				new MediScanProperties.Mask(false, "classpath:opennlp/en-ner-person.bin", 0.7, 3),
-				new MediScanProperties.Retention(900_000L, 90, 30, 180));
+				new MediScanProperties.Retention(900_000L, 90, 30, 180),
+				new MediScanProperties.History(20, 50),
+				new MediScanProperties.Trends(100, 2, 200),
+				new MediScanProperties.Admin(14, 90));
 	}
 
 	public static MediScanProperties withExtract(int minCharsPerPage, int minTotalChars, int maxPages) {
@@ -74,7 +77,7 @@ public final class TestProperties {
 				new MediScanProperties.Llm(llm.provider(), llm.apiKey(), llm.model(),
 						llm.timeout(), llm.maxInvalidRetries(), llm.maxTransientRetries(),
 						llm.dailyCap(), maxRows, llm.maxSummaryChars(), llm.maxHighlights()),
-				base.mask(), base.retention());
+				base.mask(), base.retention(), base.history(), base.trends(), base.admin());
 	}
 
 	public static MediScanProperties withLlmProvider(String provider, String apiKey) {
@@ -85,7 +88,7 @@ public final class TestProperties {
 				new MediScanProperties.Llm(provider, apiKey, llm.model(), llm.timeout(),
 						llm.maxInvalidRetries(), llm.maxTransientRetries(), llm.dailyCap(),
 						llm.maxRows(), llm.maxSummaryChars(), llm.maxHighlights()),
-				base.mask(), base.retention());
+				base.mask(), base.retention(), base.history(), base.trends(), base.admin());
 	}
 
 	public static MediScanProperties withJobs(int workers, int queueCapacity) {
@@ -93,7 +96,30 @@ public final class TestProperties {
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
 				base.upload(),
 				new MediScanProperties.Jobs(workers, queueCapacity, base.jobs().shutdownGrace()),
-				base.extract(), base.llm(), base.mask(), base.retention());
+				base.extract(), base.llm(), base.mask(), base.retention(),
+				base.history(), base.trends(), base.admin());
+	}
+
+	public static MediScanProperties withHistory(int defaultSize, int maxSize) {
+		MediScanProperties base = defaults();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(), base.jobs(), base.extract(), base.llm(), base.mask(), base.retention(),
+				new MediScanProperties.History(defaultSize, maxSize), base.trends(), base.admin());
+	}
+
+	public static MediScanProperties withTrends(int pointCap, int markerMinReports, int markerCap) {
+		MediScanProperties base = defaults();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(), base.jobs(), base.extract(), base.llm(), base.mask(), base.retention(),
+				base.history(), new MediScanProperties.Trends(pointCap, markerMinReports, markerCap),
+				base.admin());
+	}
+
+	public static MediScanProperties withAdmin(int defaultDays, int maxDays) {
+		MediScanProperties base = defaults();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(), base.jobs(), base.extract(), base.llm(), base.mask(), base.retention(),
+				base.history(), base.trends(), new MediScanProperties.Admin(defaultDays, maxDays));
 	}
 
 	public static MediScanProperties withOpenNlp(boolean enabled, double minProbability) {
@@ -118,6 +144,7 @@ public final class TestProperties {
 			MediScanProperties.Mask mask) {
 
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
-				upload, base.jobs(), extract, base.llm(), mask, base.retention());
+				upload, base.jobs(), extract, base.llm(), mask, base.retention(),
+				base.history(), base.trends(), base.admin());
 	}
 }

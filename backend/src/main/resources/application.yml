@@ -180,6 +180,22 @@ mediscan:
     # No sign-in for this long and the account is deleted, with everything it
     # owns (plan section 6).
     inactive-account-days: ${INACTIVE_ACCOUNT_DAYS:180}
+  history:
+    # Contract section 4.5. Not env vars: these are a response-shape limit, not
+    # something a deployment should tune.
+    default-size: 20
+    max-size: 50
+  trends:
+    # Each series keeps its latest 100 points, oldest first (LLD D2).
+    point-cap: 100
+    # A marker needs this many distinct DONE reports before it is charted or
+    # listed by the picker (LLD D7).
+    marker-min-reports: 2
+    marker-cap: 200
+  admin:
+    # Contract section 6.
+    default-days: 14
+    max-days: 90
 
 ---
 spring:
