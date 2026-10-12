@@ -2,7 +2,7 @@
 
 This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v3 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
 
-**Version:** 2.2 (adds the `DOCUMENT_TOO_LONG` failure code; images rejected until OCR ships)
+**Version:** 2.3 (implementation status only: the auth endpoints ship in Phase 6a; no request or response shape changed)
 
 ---
 
@@ -1110,6 +1110,12 @@ export interface ProblemDetail {
 ---
 
 ## 11. Changelog
+
+**2.3**
+- **No shape changes.** No endpoint, field, enum, error code, or SSE event changed. This entry records what is implemented, so the contract and the running API can be told apart.
+- **Auth endpoints implemented in Phase 6a:** `POST /api/auth/google` (2.3), `POST /api/auth/refresh` (2.4), `POST /api/auth/logout` (2.5), `GET /api/me` (2.6), and `DELETE /api/me` (2.7) behave as specified, including bearer tokens on the report endpoints, the `kid` header and key rotation (2.8), and the error codes `AUTH_REQUIRED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `GOOGLE_TOKEN_INVALID`, `REFRESH_TOKEN_INVALID`, and `FORBIDDEN` (8.1).
+- **Not available yet (Phase 6b):** `GET /api/reports` (4.5), `GET /api/trends` and `GET /api/trends/markers` (section 5), and `GET /api/admin/stats` (section 6). No handler is mapped for them yet, so a caller who passes the authorization rule gets `404` rather than the documented response. Their contract here is unchanged and no client should call them yet. `/api/admin/**` already requires role `ADMIN`, so the authorization rule is in place ahead of the endpoint.
+- **Still not available:** images on `POST /api/reports`, and `POST /api/reports/{id}/chat` (4.4), both unchanged from 2.2.
 
 **2.2**
 - **New report failure code `DOCUMENT_TOO_LONG`** (8.2): the extracted text is over the character or page limit. Previously these reports failed as `UNREADABLE`, which was misleading. `ReportError.code` is typed `string`, so `client/lib/api-types.ts` needs no change.

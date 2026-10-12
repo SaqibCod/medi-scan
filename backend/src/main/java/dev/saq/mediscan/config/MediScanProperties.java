@@ -49,9 +49,13 @@ public record MediScanProperties(
 
 	/**
 	 * @param sessionsPerHour session creations allowed per IP per hour (contract section 1.6)
-	 * @param uploadsPerHour report creations allowed per IP per hour (contract section 1.6)
+	 * @param uploadsPerHour report creations allowed per caller per hour. Keyed by user id
+	 *     when signed in and by client IP otherwise (contract section 1.6, LLD 8)
+	 * @param authPerMinute sign-in and refresh attempts allowed per IP per minute, each
+	 *     endpoint with its own bucket (LLD 9)
 	 */
-	public record RateLimit(@Positive int sessionsPerHour, @Positive int uploadsPerHour) {
+	public record RateLimit(@Positive int sessionsPerHour, @Positive int uploadsPerHour,
+			@Positive int authPerMinute) {
 	}
 
 	/**
@@ -154,7 +158,12 @@ public record MediScanProperties(
 	/**
 	 * @param intervalMs how often the cleanup job runs
 	 * @param statsDays how long aggregated stats rows are kept
+	 * @param userReportDays how long a signed-in user's reports live, from
+	 *     {@code USER_RETENTION_DAYS}. A guest's report expires with its session instead
+	 * @param inactiveAccountDays an account with no sign-in for this long is deleted, with
+	 *     everything it owns, from {@code INACTIVE_ACCOUNT_DAYS}
 	 */
-	public record Retention(@Positive long intervalMs, @Positive int statsDays) {
+	public record Retention(@Positive long intervalMs, @Positive int statsDays,
+			@Positive int userReportDays, @Positive int inactiveAccountDays) {
 	}
 }

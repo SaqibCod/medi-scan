@@ -31,4 +31,18 @@ public interface BiomarkerRepository extends JpaRepository<BiomarkerEntity, UUID
 	List<BiomarkerEntity> findOwnedBySession(@Param("reportId") UUID reportId,
 			@Param("sessionId") UUID sessionId,
 			@Param("now") Instant now);
+
+	/** The user-owned twin of {@link #findOwnedBySession}. */
+	@Query("""
+			select b from BiomarkerEntity b
+			where b.reportId = :reportId
+			  and exists (
+			      select 1 from ReportEntity r
+			      where r.id = :reportId and r.userId = :userId and r.expiresAt > :now
+			  )
+			order by b.position asc
+			""")
+	List<BiomarkerEntity> findOwnedByUser(@Param("reportId") UUID reportId,
+			@Param("userId") UUID userId,
+			@Param("now") Instant now);
 }

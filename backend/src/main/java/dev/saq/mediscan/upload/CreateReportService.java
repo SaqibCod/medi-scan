@@ -25,7 +25,7 @@ import dev.saq.mediscan.llm.DailyCapGuard;
 import dev.saq.mediscan.report.ReportEntity;
 import dev.saq.mediscan.report.ReportRepository;
 import dev.saq.mediscan.report.SourceType;
-import dev.saq.mediscan.session.Session;
+import dev.saq.mediscan.session.OwnerRef;
 import dev.saq.mediscan.session.SessionRepository;
 import dev.saq.mediscan.stats.StatsRecorder;
 
@@ -69,6 +69,7 @@ public class CreateReportService {
 	private final StatsRecorder stats;
 	private final Clock clock;
 	private final long maxBytes;
+	private final int userReportDays;
 
 	public CreateReportService(UploadValidator validator, TempFileStore tempFiles,
 			JobSubmitter jobs, DailyCapGuard capGuard, ReportRepository reports,
@@ -85,10 +86,11 @@ public class CreateReportService {
 		this.stats = stats;
 		this.clock = clock;
 		this.maxBytes = properties.upload().maxBytes();
+		this.userReportDays = properties.retention().userReportDays();
 	}
 
 	/** A file upload (contract section 4.1, option A). */
-	public ReportEntity createFromFile(UUID sessionId, MultipartFile file, String consent) {
+	public ReportEntity createFromFile(OwnerRef owner, MultipartFile file, String consent) {
 		validator.requireConsent(consent);
 		FileType declared = validator.validateDeclaredFile(file);
 
@@ -109,7 +111,7 @@ public class CreateReportService {
 			validator.validateSignature(header, declared);
 
 			tempFile = tempFiles.write(in, maxBytes);
-			return insertAndSubmit(sessionId, new JobSource.PdfFile(tempFile));
+			return insertAndSubmit(owner, new JobSource.PdfFile(tempFile));
 		}
 		catch (IOException ex) {
 			tempFiles.deleteQuietly(tempFile);
@@ -125,17 +127,17 @@ public class CreateReportService {
 	}
 
 	/** Pasted text or a sample (contract section 4.1, options B and C). */
-	public ReportEntity createFromJson(UUID sessionId, CreateReportRequest request) {
+	public ReportEntity createFromJson(OwnerRef owner, CreateReportRequest request) {
 		UploadValidator.ValidatedJsonRequest validated = validator.validateJson(request);
 
 		rejectIfCapReached();
 		rejectIfQueueFull();
 
-		return insertAndSubmit(sessionId, validated.source());
+		return insertAndSubmit(owner, validated.source());
 	}
 
-	private ReportEntity insertAndSubmit(UUID sessionId, JobSource source) {
-		ReportEntity report = insertReport(sessionId, source.sourceType());
+	private ReportEntity insertAndSubmit(OwnerRef owner, JobSource source) {
+		ReportEntity report = insertReport(owner, source.sourceType());
 
 		if (!jobs.submit(jobFactory.create(report.getId(), source))) {
 			// Lost a race for the last queue slot. Undo both the row and the file, so the
@@ -151,19 +153,30 @@ public class CreateReportService {
 		return report;
 	}
 
-	private ReportEntity insertReport(UUID sessionId, SourceType sourceType) {
-		// The report expires with the session that owns it, so the expiry is copied rather
-		// than recomputed - otherwise a report could outlive its owner and be unreachable but
-		// undeleted (LLD 4).
-		Session session = sessions.findById(sessionId)
-				.orElseThrow(() -> new ApiException(ErrorCode.SESSION_INVALID,
-						"Your session has expired. Start a new one."));
-
+	private ReportEntity insertReport(OwnerRef owner, SourceType sourceType) {
 		Instant now = Instant.now(clock);
-		ReportEntity report = new ReportEntity(UUID.randomUUID(), sessionId, sourceType, now,
-				session.getExpiresAt());
+		ReportEntity report = new ReportEntity(UUID.randomUUID(), owner, sourceType, now,
+				expiryFor(owner, now));
 
 		return reports.save(report);
+	}
+
+	/**
+	 * When this report stops being readable.
+	 *
+	 * <p>A guest's report expires with the session that owns it, so the expiry is copied
+	 * rather than recomputed - otherwise a report could outlive its owner and be unreachable
+	 * but undeleted (LLD 4). A signed-in user has no such parent row, so their reports get
+	 * their own {@code USER_RETENTION_DAYS} window instead (LLD 8).
+	 */
+	private Instant expiryFor(OwnerRef owner, Instant now) {
+		return switch (owner) {
+			case OwnerRef.Guest guest -> sessions.findById(guest.id())
+					.orElseThrow(() -> new ApiException(ErrorCode.SESSION_INVALID,
+							"Your session has expired. Start a new one."))
+					.getExpiresAt();
+			case OwnerRef.User ignored -> now.plus(Duration.ofDays(userReportDays));
+		};
 	}
 
 	private void rejectIfCapReached() {

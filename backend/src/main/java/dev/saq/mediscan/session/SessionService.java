@@ -1,13 +1,7 @@
 package dev.saq.mediscan.session;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,13 +24,8 @@ public class SessionService {
 
 	private static final Logger log = LoggerFactory.getLogger(SessionService.class);
 
-	/** 32 bytes, which is 43 characters once base64url encoded without padding. */
-	private static final int TOKEN_BYTES = 32;
-
 	private final SessionRepository repository;
 	private final Duration ttl;
-	private final SecureRandom random = new SecureRandom();
-	private final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
 
 	public SessionService(SessionRepository repository, MediScanProperties properties) {
 		this.repository = repository;
@@ -48,14 +37,12 @@ public class SessionService {
 	 */
 	@Transactional
 	public SessionResponse create() {
-		byte[] tokenBytes = new byte[TOKEN_BYTES];
-		random.nextBytes(tokenBytes);
-		String token = encoder.encodeToString(tokenBytes);
+		String token = SecureTokens.newToken();
 
 		Instant now = Instant.now();
 		Instant expiresAt = now.plus(ttl);
 
-		Session session = new Session(UUID.randomUUID(), hash(token), now, expiresAt);
+		Session session = new Session(UUID.randomUUID(), SecureTokens.hash(token), now, expiresAt);
 		repository.save(session);
 
 		log.debug("Created session {} expiring at {}", session.getId(), expiresAt);
@@ -74,24 +61,6 @@ public class SessionService {
 		if (token == null || token.isBlank()) {
 			return Optional.empty();
 		}
-		return repository.findActiveByTokenHash(hash(token), Instant.now());
-	}
-
-	/**
-	 * SHA-256, hex encoded.
-	 *
-	 * <p>A plain hash rather than a password hash on purpose: the token is 32 bytes of
-	 * {@link SecureRandom} output, so there is no dictionary to attack and nothing for a slow
-	 * KDF to protect. Hashing is only here so a leaked database cannot be replayed.
-	 */
-	private String hash(String token) {
-		try {
-			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
-		}
-		catch (NoSuchAlgorithmException ex) {
-			// SHA-256 is required of every JVM, so this cannot happen.
-			throw new IllegalStateException("SHA-256 not available", ex);
-		}
+		return repository.findActiveByTokenHash(SecureTokens.hash(token), Instant.now());
 	}
 }

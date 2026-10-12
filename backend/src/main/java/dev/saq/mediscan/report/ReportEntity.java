@@ -31,8 +31,16 @@ public class ReportEntity {
 	@Column(name = "id", nullable = false, updatable = false)
 	private UUID id;
 
-	@Column(name = "session_id", nullable = false, updatable = false)
+	// Exactly one of sessionId and userId is set, enforced by the
+	// report_exactly_one_owner check constraint in V3 (CLAUDE.md rule 7).
+	//
+	// Both are updatable because claiming a guest's reports at sign-in moves a report from
+	// one owner to the other (LLD 7.1). Nothing else ever writes them.
+	@Column(name = "session_id")
 	private UUID sessionId;
+
+	@Column(name = "user_id")
+	private UUID userId;
 
 	// STRING, not ORDINAL: the column is text with a check constraint, and an ordinal would
 	// silently remap every stored row if anyone reordered the enum.
@@ -68,9 +76,20 @@ public class ReportEntity {
 	}
 
 	/** A freshly accepted report: {@code PENDING}, with no timings and no results yet. */
-	public ReportEntity(UUID id, UUID sessionId, SourceType sourceType, Instant createdAt, Instant expiresAt) {
+	/**
+	 * A new {@code PENDING} report owned by {@code owner}.
+	 *
+	 * <p>Takes an {@link OwnerRef} rather than a bare id so the caller cannot accidentally
+	 * create a report with two owners, or with the wrong column set: the switch below is
+	 * exhaustive over the sealed type, so a third kind of owner would stop compiling here.
+	 */
+	public ReportEntity(UUID id, OwnerRef owner, SourceType sourceType, Instant createdAt,
+			Instant expiresAt) {
 		this.id = id;
-		this.sessionId = sessionId;
+		switch (owner) {
+			case OwnerRef.Guest guest -> this.sessionId = guest.id();
+			case OwnerRef.User user -> this.userId = user.id();
+		}
 		this.sourceType = sourceType;
 		this.status = ReportStatus.PENDING;
 		this.createdAt = createdAt;
@@ -83,6 +102,15 @@ public class ReportEntity {
 
 	public UUID getSessionId() {
 		return sessionId;
+	}
+
+	public UUID getUserId() {
+		return userId;
+	}
+
+	/** Who owns this report. Exactly one of the two columns is set. */
+	public OwnerRef getOwner() {
+		return userId != null ? new OwnerRef.User(userId) : new OwnerRef.Guest(sessionId);
 	}
 
 	public SourceType getSourceType() {

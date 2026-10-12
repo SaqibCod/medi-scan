@@ -93,8 +93,40 @@ mediscan:
   ratelimit:
     # Session creations per IP per hour (contract section 1.6).
     sessions-per-hour: ${RATE_LIMIT_SESSIONS_PER_HOUR:20}
-    # Report creations per IP per hour (contract section 1.6).
+    # Report creations per caller per hour: keyed by user id when signed in,
+    # by client IP otherwise (contract section 1.6).
     uploads-per-hour: ${RATE_LIMIT_UPLOADS_PER_HOUR:10}
+    # Sign-in and refresh attempts per IP per minute (contract section 1.6).
+    # Not an env var: this one protects the auth endpoints and is not something
+    # a deployment should be loosening.
+    auth-per-minute: 10
+  auth:
+    google:
+      # Public, not a secret - it ships in the frontend bundle. Blank disables
+      # Google sign-in, which is allowed locally and refused at startup in prod
+      # (LLD 5). No default value: a typo'd variable should disable sign-in
+      # loudly rather than silently point at someone else's client.
+      client-id: ${GOOGLE_CLIENT_ID:}
+      jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
+    jwt:
+      # kid:base64key pairs, comma separated. Generate each with
+      # `openssl rand -base64 32`, and never share one between environments.
+      signing-keys: ${JWT_SIGNING_KEYS:}
+      current-kid: ${JWT_CURRENT_KID:}
+      issuer: ${JWT_ISSUER:medi-scan}
+      # The `aud` claim the resource server requires (contract 2.3).
+      audience: ${JWT_AUDIENCE:medi-scan-api}
+      access-ttl: ${ACCESS_TOKEN_TTL_MINUTES:15}m
+      # Applied to exp and nbf. Small on purpose: these tokens live 15 minutes.
+      clock-skew: 30s
+    refresh:
+      ttl: ${REFRESH_TOKEN_TTL_DAYS:7}d
+      # A family cannot outlive this from the original sign-in, however often
+      # it is refreshed (plan section 4.9).
+      family-max-age: ${REFRESH_FAMILY_MAX_DAYS:30}d
+    # Comma-separated Google `sub` ids. The only way to grant ADMIN
+    # (CLAUDE.md rule 17).
+    admin-subjects: ${ADMIN_GOOGLE_SUBS:}
   upload:
     # 10 MB, matching contract section 4.1 and the multipart limits below.
     max-bytes: 10485760
@@ -142,6 +174,12 @@ mediscan:
     interval-ms: 900000
     # Aggregated counters are kept for 90 days (plan section 7).
     stats-days: 90
+    # A signed-in user's reports live this long. A guest's expire with their
+    # session (mediscan.session.ttl-hours) instead.
+    user-report-days: ${USER_RETENTION_DAYS:30}
+    # No sign-in for this long and the account is deleted, with everything it
+    # owns (plan section 6).
+    inactive-account-days: ${INACTIVE_ACCOUNT_DAYS:180}
 
 ---
 spring:

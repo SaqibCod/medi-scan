@@ -6,6 +6,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import dev.saq.mediscan.config.ErrorCode;
@@ -66,7 +69,7 @@ public class UploadRateLimitFilter extends OncePerRequestFilter {
 			FilterChain chain) throws ServletException, IOException {
 
 		try {
-			rateLimiter.checkUpload(request);
+			rateLimiter.checkUpload(request, bucketKey(request));
 		}
 		catch (RateLimitExceededException ex) {
 			// Counted so the dashboard can distinguish "quiet day" from "being hammered".
@@ -75,6 +78,24 @@ public class UploadRateLimitFilter extends OncePerRequestFilter {
 			return;
 		}
 		chain.doFilter(request, response);
+	}
+
+	/**
+	 * {@code user:<id>} for a signed-in caller, {@code ip:<address>} otherwise (LLD 8).
+	 *
+	 * <p>Readable from the security context because this filter runs after both the bearer
+	 * filter and the guest filter, so whoever is calling has already been established.
+	 *
+	 * <p>Guests key on IP rather than on their session token: a caller can mint new session
+	 * tokens freely, so a session-keyed bucket would be no limit at all.
+	 */
+	private String bucketKey(HttpServletRequest request) {
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+		if (authentication instanceof JwtAuthenticationToken bearer) {
+			return "user:" + bearer.getToken().getSubject();
+		}
+		return rateLimiter.ipBucketKey(request);
 	}
 
 	private void writeRateLimited(HttpServletResponse response, long retryAfterSeconds)

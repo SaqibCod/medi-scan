@@ -21,14 +21,14 @@ public final class TestProperties {
 		return new MediScanProperties(
 				"http://localhost:3000",
 				new MediScanProperties.Session(24),
-				new MediScanProperties.RateLimit(1000, 1000),
+				new MediScanProperties.RateLimit(1000, 1000, 1000),
 				new MediScanProperties.Upload(10_485_760L, 50_000, 20, null, Duration.ofMinutes(10)),
 				new MediScanProperties.Jobs(2, 20, Duration.ofSeconds(10)),
 				new MediScanProperties.Extract(50, 100, 50),
 				new MediScanProperties.Llm("fake", "", "fake-model", Duration.ofSeconds(5),
 						1, 2, 500, 300, 1500, 20),
 				new MediScanProperties.Mask(false, "classpath:opennlp/en-ner-person.bin", 0.7, 3),
-				new MediScanProperties.Retention(900_000L, 90));
+				new MediScanProperties.Retention(900_000L, 90, 30, 180));
 	}
 
 	public static MediScanProperties withExtract(int minCharsPerPage, int minTotalChars, int maxPages) {

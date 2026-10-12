@@ -6,7 +6,6 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,10 +18,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import dev.saq.mediscan.config.CurrentOwner;
 import dev.saq.mediscan.report.ReportEntity;
 import dev.saq.mediscan.report.ReportResponse;
 import dev.saq.mediscan.report.ReportViewService;
-import dev.saq.mediscan.session.GuestPrincipal;
+import dev.saq.mediscan.session.OwnerRef;
 
 /**
  * {@code POST /api/reports} (contract section 4.1).
@@ -32,9 +32,13 @@ import dev.saq.mediscan.session.GuestPrincipal;
  * sample id. One handler taking both would have to hand-parse the content type and then
  * branch, which is the same decision made worse.
  *
- * <p>Thin, per {@code backend/CLAUDE.md}: take the principal, call one service method, map the
+ * <p>Thin, per {@code backend/CLAUDE.md}: take the owner, call one service method, map the
  * result. Validation lives in {@link UploadValidator} and ordering in
  * {@link CreateReportService}, both of which are unit-testable without a request.
+ *
+ * <p>Every handler takes a {@code @CurrentOwner OwnerRef} and nothing else about the caller.
+ * That is what lets one controller serve both a guest and a signed-in user without a branch:
+ * whose report it is has already been decided by the time the method runs.
  */
 @RestController
 @RequestMapping("/api/reports")
@@ -51,24 +55,24 @@ public class ReportController {
 	/** Option A: a PDF, PNG or JPEG upload. Images are refused until phase 4. */
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ResponseEntity<CreateReportResponse> createFromFile(
-			@AuthenticationPrincipal GuestPrincipal principal,
+			@CurrentOwner OwnerRef owner,
 			@RequestPart("file") MultipartFile file,
 			// Not @RequestPart: a plain form field has no content type, and @RequestPart
 			// would try to convert it as one. Required is false so a missing consent reaches
 			// the validator and becomes a field error rather than a bare 400.
 			@RequestParam(name = "consent", required = false) String consent) {
 
-		ReportEntity report = createReport.createFromFile(principal.sessionId(), file, consent);
+		ReportEntity report = createReport.createFromFile(owner, file, consent);
 		return accepted(report);
 	}
 
 	/** Options B and C: pasted text, or a sample id. */
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<CreateReportResponse> createFromJson(
-			@AuthenticationPrincipal GuestPrincipal principal,
+			@CurrentOwner OwnerRef owner,
 			@RequestBody CreateReportRequest request) {
 
-		ReportEntity report = createReport.createFromJson(principal.sessionId(), request);
+		ReportEntity report = createReport.createFromJson(owner, request);
 		return accepted(report);
 	}
 
@@ -79,10 +83,10 @@ public class ReportController {
 	 * {@code 200} with an {@code error} object: the request succeeded, the processing did not.
 	 */
 	@GetMapping("/{id}")
-	public ReportResponse find(@AuthenticationPrincipal GuestPrincipal principal,
+	public ReportResponse find(@CurrentOwner OwnerRef owner,
 			@PathVariable UUID id) {
 
-		return reportView.find(id, principal.toOwnerRef());
+		return reportView.find(id, owner);
 	}
 
 	/**
@@ -93,10 +97,10 @@ public class ReportController {
 	 */
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void delete(@AuthenticationPrincipal GuestPrincipal principal,
+	public void delete(@CurrentOwner OwnerRef owner,
 			@PathVariable UUID id) {
 
-		reportView.delete(id, principal.toOwnerRef());
+		reportView.delete(id, owner);
 	}
 
 	/**

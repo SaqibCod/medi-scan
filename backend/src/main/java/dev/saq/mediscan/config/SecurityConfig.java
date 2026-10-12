@@ -3,12 +3,16 @@ package dev.saq.mediscan.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
+import dev.saq.mediscan.auth.AuthRateLimitFilter;
 import dev.saq.mediscan.ratelimit.IpRateLimiter;
 import dev.saq.mediscan.ratelimit.UploadRateLimitFilter;
 import dev.saq.mediscan.session.GuestAuthFilter;
@@ -22,8 +26,14 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>One chain, not several, so the full set of authorization rules can be read in a single
  * place. Everything is stateless: no HTTP session is ever created, and credentials arrive in
  * headers on every request.
+ *
+ * <p>{@code @EnableMethodSecurity} is load-bearing, not decoration. Spring Boot 4.1 ships no
+ * method-security autoconfiguration, so without it every {@code @PreAuthorize} in the
+ * codebase is silently inert - the annotation would be there, the check would not happen, and
+ * nothing would fail (LLD 6.4, D8). {@code AdminRouteTest} asserts that it actually denies.
  */
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
 	@Bean
@@ -34,7 +44,9 @@ public class SecurityConfig {
 			ProblemAccessDeniedHandler accessDeniedHandler,
 			IpRateLimiter ipRateLimiter,
 			JsonMapper jsonMapper,
-			StatsRecorder statsRecorder) throws Exception {
+			StatsRecorder statsRecorder,
+			JwtDecoder accessTokenDecoder,
+			JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
 
 		http
 				.cors(cors -> cors.configurationSource(corsConfigurationSource))
@@ -74,54 +86,72 @@ public class SecurityConfig {
 
 						// Admin needs the role in the chain as well as @PreAuthorize on the
 						// controller, so a new admin endpoint is protected even if someone
-						// forgets the annotation. Phase 6 adds the endpoints.
+						// forgets the annotation. Phase 6b adds the endpoints.
 						.requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-						// Reports accept either owner type: a guest session now, a bearer
-						// token from phase 6. Which reports a caller may see is an ownership
-						// question, enforced in the repository by OwnerRef, not here.
+						// Signed-in only, and deliberately not `.authenticated()`: guests are
+						// authenticated too - GuestAuthFilter gives them ROLE_GUEST - so
+						// `.authenticated()` would let a guest through to a handler that has
+						// no user to work with. Requiring a role denies them at the
+						// authorization filter, and ProblemAccessDeniedHandler turns a guest
+						// denial into 401 AUTH_REQUIRED (LLD 6.4, D6).
+						.requestMatchers("/api/me/**", "/api/trends/**").hasAnyRole("USER", "ADMIN")
+
+						// Reports accept either owner type: a guest session or a bearer
+						// token. Which reports a caller may see is an ownership question,
+						// enforced in the repository by OwnerRef, not here.
 						.requestMatchers("/api/reports/**").authenticated()
 
 						.anyRequest().authenticated())
 
+				// Ten sign-ins and ten refreshes per minute per IP. Before the bearer filter
+				// because neither request carries an Authorization header, so a flood is
+				// refused before it reaches token verification or the database (LLD 9).
+				.addFilterBefore(new AuthRateLimitFilter(ipRateLimiter, jsonMapper, statsRecorder),
+						BearerTokenAuthenticationFilter.class)
+
+				// Bearer tokens: the app's own access tokens, validated by the single
+				// JwtDecoder bean. The entry point is passed here as well as to
+				// exceptionHandling below, because OAuth2ResourceServerConfigurer sets its
+				// own on the bearer filter - defaulting to BearerTokenAuthenticationEntryPoint,
+				// which answers with no `code` field and an error_description header this API
+				// does not want to emit (LLD 6.4, D7).
+				.oauth2ResourceServer(oauth2 -> oauth2
+						.jwt(jwt -> jwt
+								.decoder(accessTokenDecoder)
+								.jwtAuthenticationConverter(jwtAuthenticationConverter))
+						.authenticationEntryPoint(authenticationEntryPoint))
+
 				// Both render RFC 9457 Problem Details. Without them Spring Security returns
-				// an empty body and the client has no `code` to switch on.
+				// an empty body and the client has no `code` to switch on. Setting them
+				// explicitly also wins over the resource server's own registration, which
+				// targets a matcher broad enough to cover guest requests too.
 				.exceptionHandling(exceptions -> exceptions
 						.authenticationEntryPoint(authenticationEntryPoint)
 						.accessDeniedHandler(accessDeniedHandler))
 
-				// Resolves X-Session-Token into a guest principal. Placed where the standard
-				// authentication filter would sit, so it runs before authorization.
-				.addFilterBefore(new GuestAuthFilter(sessionService),
-						UsernamePasswordAuthenticationFilter.class)
+				// Resolves X-Session-Token into a guest principal, and runs *after* the
+				// bearer filter.
+				//
+				// Anchored on BearerTokenAuthenticationFilter rather than
+				// UsernamePasswordAuthenticationFilter: FilterOrderRegistration sorts the
+				// bearer filter after the username/password one, so the phase 1 anchor would
+				// put the guest filter first - the opposite of what rule 16 needs (D5).
+				//
+				// A request carrying Authorization never reaches this filter anyway: the
+				// bearer filter either authenticates it or calls the entry point and returns
+				// without continuing the chain. GuestAuthFilter's own guard is the third
+				// layer of the same guarantee.
+				.addFilterAfter(new GuestAuthFilter(sessionService),
+						BearerTokenAuthenticationFilter.class)
 
-				// The per-IP upload limit, after the guest filter so an unauthenticated
+				// The per-caller upload limit, after the guest filter so an unauthenticated
 				// request is refused before it can spend a token (LLD 6.1). It has to run
 				// before the controller, because a multipart body is up to 10 MB and letting
 				// Spring spool that to disk before rejecting the request is most of what the
 				// limit exists to prevent.
 				.addFilterAfter(new UploadRateLimitFilter(ipRateLimiter, jsonMapper, statsRecorder),
 						GuestAuthFilter.class);
-
-		// ---------------------------------------------------------------------
-		// PHASE 6: bearer tokens go here.
-		//
-		// Add spring-boot-starter-oauth2-resource-server, then:
-		//
-		//     .oauth2ResourceServer(oauth2 -> oauth2
-		//             .jwt(jwt -> jwt.decoder(jwtDecoder))
-		//             .authenticationEntryPoint(authenticationEntryPoint))
-		//
-		// The decoder is a NimbusJwtDecoder over a JWKSource holding one
-		// OctetSequenceKey per entry in JWT_SIGNING_KEYS, selected by the token's
-		// `kid`, and validating issuer and audience. No hand-written parsing or
-		// signature checks (CLAUDE.md, "Auth library code").
-		//
-		// It must run *before* GuestAuthFilter in the chain, and GuestAuthFilter
-		// already declines to act when an Authorization header is present, so a bad
-		// bearer token fails outright instead of degrading to guest access
-		// (CLAUDE.md rule 16).
-		// ---------------------------------------------------------------------
 
 		return http.build();
 	}

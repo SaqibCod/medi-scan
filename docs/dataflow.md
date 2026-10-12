@@ -152,7 +152,7 @@ sequenceDiagram
 - **In-flight reports:** reports that are still `PENDING` or `PROCESSING` are claimed too. The background job writes by report id, so it doesn't matter who owns the report when the job finishes.
 - **ID token handling:** the Google ID token is discarded after verification. It is never stored or logged.
 - **Stored identity:** only `sub` and the display name are copied from the token. The email and photo claims are ignored.
-- **Admin role:** set on every sign-in from config. Removing a `sub` from `ADMIN_GOOGLE_SUBS` downgrades that user on their next sign-in. Their current access token keeps its role for up to 15 minutes.
+- **Admin role:** recomputed from `ADMIN_GOOGLE_SUBS` on every sign-in **and on every refresh** (3.4), and written back to `app_user` when it has changed. A config change therefore applies within one access token lifetime (15 minutes) without the user signing in again: adding a `sub` promotes them on their next refresh, removing one demotes them. The access token they already hold keeps its old role until it expires.
 
 ### 3.3 New tabs and returning visits (auto sign-in)
 
@@ -278,17 +278,20 @@ flowchart TD
     AD -->|"User without ADMIN"| F403["403 FORBIDDEN"]
     AD -->|"Guest or Anonymous"| F401a["401 AUTH_REQUIRED"]
     RT -->|"/api/me/**, /api/trends/**"| U1{"User?"}
-    U1 -->|"yes"| OK
+    U1 -->|"yes"| UX{"Bearer: user row<br/>still exists?"}
     U1 -->|"no"| F401a
     RT -->|"/api/reports/**"| U2{"User or Guest?"}
-    U2 -->|"yes"| OK
+    U2 -->|"yes"| UX
     U2 -->|"no"| F401b["401 SESSION_INVALID"]
+    UX -->|"yes, or caller is a guest"| OK
+    UX -->|"no: account deleted"| F401a
     RT -->|"public routes"| OK
 ```
 
 **Details**
-- **Bearer validation:** done by Spring Security's OAuth2 resource server, with no database lookup. The signing key is picked by the token's `kid` (3.7).
-- **Guest tokens:** handled by a custom filter placed before it.
+- **Bearer validation:** done by Spring Security's OAuth2 resource server. Signature, issuer, audience, and expiry are checked with no database lookup, and the signing key is picked by the token's `kid` (3.7).
+- **User-existence check:** resolving a bearer principal into an `OwnerRef` adds one primary-key lookup on `app_user`. If the row is gone, the request fails with `401 AUTH_REQUIRED` instead of being handled for a user who no longer exists. This is what makes account deletion take effect immediately rather than after the access token expires (8.1), and it stops an upload from hitting a foreign-key error. It is the only database read the bearer path performs, it is not a token lookup, and it applies to bearer callers only — a guest `OwnerRef` needs no extra check, because the session lookup in the guest filter already proved the session exists.
+- **Guest tokens:** handled by a custom filter placed after the bearer filter, which declines to act when an `Authorization` header is present.
 - **No fallback:** a bad bearer token fails the request immediately. The server never falls back to the guest token.
 - **Owner reference:** handlers receive an `OwnerRef`, either `USER(userId)` or `GUEST(sessionId)`. Every report repository method takes it, so report queries can't be written without an owner filter:
   - **User:** `WHERE id = ? AND user_id = ? AND expires_at > now()`
@@ -591,7 +594,7 @@ sequenceDiagram
 ```
 
 - **In-flight jobs:** jobs for deleted reports stop on their next save, because the row is gone (4.2, step 9).
-- **Access token:** it would still pass signature checks for up to 15 minutes. Every user-scoped query finds nothing, and `/api/me` returns `401 AUTH_REQUIRED` once the user row is gone.
+- **Access token:** it still passes signature checks for up to 15 minutes, but it stops working immediately. Every authenticated bearer request checks that the user row still exists before it resolves an `OwnerRef` (3.6), so a deleted account gets `401 AUTH_REQUIRED` on every endpoint, not an empty result. That check costs one primary-key lookup, and it also stops an upload from failing on a foreign key to a user that no longer exists.
 
 ### 8.2 Admin stats
 

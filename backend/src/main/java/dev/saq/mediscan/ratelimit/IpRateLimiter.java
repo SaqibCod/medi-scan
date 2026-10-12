@@ -28,12 +28,20 @@ public class IpRateLimiter {
 
 	private final Map<String, Bucket> sessionBuckets = new ConcurrentHashMap<>();
 	private final Map<String, Bucket> uploadBuckets = new ConcurrentHashMap<>();
+
+	// Separate maps, not one keyed by endpoint, so a burst of auto sign-ins in new tabs
+	// cannot use up the allowance a reload needs for its refresh (LLD 9).
+	private final Map<String, Bucket> signInBuckets = new ConcurrentHashMap<>();
+	private final Map<String, Bucket> refreshBuckets = new ConcurrentHashMap<>();
+
 	private final int sessionsPerHour;
 	private final int uploadsPerHour;
+	private final int authPerMinute;
 
 	public IpRateLimiter(MediScanProperties properties) {
 		this.sessionsPerHour = properties.ratelimit().sessionsPerHour();
 		this.uploadsPerHour = properties.ratelimit().uploadsPerHour();
+		this.authPerMinute = properties.ratelimit().authPerMinute();
 	}
 
 	/**
@@ -61,14 +69,55 @@ public class IpRateLimiter {
 	 *
 	 * @throws RateLimitExceededException with the seconds to wait, when the bucket is empty
 	 */
-	public void checkUpload(HttpServletRequest request) {
-		String ip = clientIp(request);
-		Bucket bucket = uploadBuckets.computeIfAbsent(ip, key -> newUploadBucket());
+	/**
+	 * Uploads, keyed by whoever is calling.
+	 *
+	 * <p>The key is {@code user:<id>} for a signed-in caller and {@code ip:<address>}
+	 * otherwise (LLD 8). Keying by user matters for shared addresses: two people behind one
+	 * office NAT, or one household, each get their own ten uploads instead of competing for a
+	 * single allowance. An IP key remains for guests, who have no stable identity to key on -
+	 * a guest session token would be no use, because a caller can mint fresh ones freely.
+	 */
+	public void checkUpload(HttpServletRequest request, String bucketKey) {
+		Bucket bucket = uploadBuckets.computeIfAbsent(bucketKey, key -> newUploadBucket());
 
 		ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 		if (!probe.isConsumed()) {
 			throw new RateLimitExceededException(retryAfterSeconds(probe));
 		}
+	}
+
+	/** The IP-keyed bucket name, for callers with no account. */
+	public String ipBucketKey(HttpServletRequest request) {
+		return "ip:" + clientIp(request);
+	}
+
+	/** Ten Google sign-in attempts per minute per IP (contract section 1.6). */
+	public void checkGoogleSignIn(HttpServletRequest request) {
+		consumeAuth(signInBuckets, request);
+	}
+
+	/** Ten token refreshes per minute per IP, in a bucket of their own. */
+	public void checkTokenRefresh(HttpServletRequest request) {
+		consumeAuth(refreshBuckets, request);
+	}
+
+	private void consumeAuth(Map<String, Bucket> buckets, HttpServletRequest request) {
+		String ip = clientIp(request);
+		Bucket bucket = buckets.computeIfAbsent(ip, key -> newAuthBucket());
+
+		ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+		if (!probe.isConsumed()) {
+			throw new RateLimitExceededException(retryAfterSeconds(probe));
+		}
+	}
+
+	private Bucket newAuthBucket() {
+		return Bucket.builder()
+				.addLimit(limit -> limit
+						.capacity(authPerMinute)
+						.refillGreedy(authPerMinute, Duration.ofMinutes(1)))
+				.build();
 	}
 
 	private Bucket newUploadBucket() {
