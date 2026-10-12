@@ -242,13 +242,111 @@ Edit what is in the repo now. The repo copies may differ from this list.
 
 ## 11. Manual check
 
-With the `local` profile and Postgres running:
-1. Upload two sample reports as a guest. `GET /api/reports` shows both, and nothing else.
-2. A second guest sees an empty list.
-3. With a test-minted user token (the same helper as Phase 6a, not an endpoint): trends return `200`. Upload samples so one marker appears twice.
-4. With a guest token on `/api/trends/markers` → `AUTH_REQUIRED`.
-5. With a USER token on `/api/admin/stats` → `FORBIDDEN`. With an ADMIN token → numbers that match the DB.
-6. Search the application log: no marker names, values, or dates.
+Run from `backend/`, against the dev Postgres from `docker compose up -d` (port 5433, database `mediscan`).
+
+**Running the app without a real LLM key.** `spring-boot:run`'s default classpath is main-only, so `mediscan.llm.provider=fake` fails at startup (`FakeLlmProvider` lives in `src/test/java`). `-Dspring-boot.run.useTestClasspath=true` did not pick it up either in this environment; running the jar directly with both class directories on the classpath did:
+
+```bash
+./mvnw -o -q test-compile
+./mvnw -o -q dependency:build-classpath -Dmdep.outputFile=cp.txt
+
+export LLM_PROVIDER=fake
+export JWT_SIGNING_KEYS="k2026a:$(openssl rand -base64 32)"
+export JWT_CURRENT_KID=k2026a
+export JWT_ISSUER=medi-scan
+export JWT_AUDIENCE=medi-scan-api
+export DATABASE_URL="jdbc:postgresql://localhost:5433/mediscan"
+export DATABASE_USER=postgres
+export DATABASE_PASSWORD=postgres
+export SPRING_PROFILES_ACTIVE=local
+
+java -cp "target/test-classes;target/classes;$(cat cp.txt)" dev.saq.mediscan.BackendApplication
+```
+
+**1-2. History, two guests.**
+
+```bash
+TOKEN1=$(curl -s -X POST localhost:8080/api/sessions | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+curl -s -X POST localhost:8080/api/reports -H "X-Session-Token: $TOKEN1" \
+  -H "Content-Type: application/json" -d '{"sampleId":"lipid-panel","consent":true}'
+curl -s -X POST localhost:8080/api/reports -H "X-Session-Token: $TOKEN1" \
+  -H "Content-Type: application/json" -d '{"sampleId":"thyroid-panel","consent":true}'
+# wait for both to reach DONE, then:
+curl -s localhost:8080/api/reports -H "X-Session-Token: $TOKEN1"   # both reports, newest first
+
+TOKEN2=$(curl -s -X POST localhost:8080/api/sessions | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+curl -s localhost:8080/api/reports -H "X-Session-Token: $TOKEN2"   # {"items":[],...,"totalItems":0}
+```
+
+Result: guest 1 saw exactly its own 2 reports; guest 2 saw an empty page with `totalPages: 0`.
+
+**3. Trends, with a test-minted user token.** Google sign-in is disabled locally, so there is no HTTP way to create an `app_user` row - one was inserted directly (never through an endpoint) and a token minted for it with the same `MintAccessToken` helper Phase 6a uses, extended here with an `admin` mode (commit `test(support): add an admin mode to MintAccessToken`):
+
+```bash
+USER_ID=$(uuidgen)   # or: powershell -command "[guid]::NewGuid().ToString()"
+docker exec medi-scan-postgres psql -U postgres -d mediscan -c \
+  "INSERT INTO app_user (id, google_sub, display_name, role, created_at, last_login_at) \
+   VALUES ('$USER_ID', 'manual-test-sub', 'Manual Test User', 'USER', now(), now());"
+
+USER_TOKEN=$(java -cp "target/test-classes;target/classes;$(cat cp.txt)" \
+  dev.saq.mediscan.support.MintAccessToken valid "$USER_ID" 2>/dev/null)
+
+curl -s -X POST localhost:8080/api/reports -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" -d '{"sampleId":"lipid-panel","consent":true}'
+curl -s -X POST localhost:8080/api/reports -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" -d '{"sampleId":"lipid-panel","consent":true}'
+# wait for both to reach DONE, then:
+curl -s localhost:8080/api/trends/markers -H "Authorization: Bearer $USER_TOKEN"
+curl -s "localhost:8080/api/trends?marker=ldl-cholesterol" -H "Authorization: Bearer $USER_TOKEN"
+```
+
+Result: the markers list showed all five lipid-panel markers at `reportCount: 2`; the trend returned one `mg/dL` series with both points, `dateSource: COLLECTED`, oldest first.
+
+**4. A guest on `/api/trends/markers`.**
+
+```bash
+curl -s localhost:8080/api/trends/markers -H "X-Session-Token: $TOKEN2"
+# {"code":"AUTH_REQUIRED", ...}, HTTP 401
+```
+
+**5. A USER, then an ADMIN, on `/api/admin/stats`.**
+
+```bash
+curl -s localhost:8080/api/admin/stats -H "Authorization: Bearer $USER_TOKEN"
+# {"code":"FORBIDDEN", ...}, HTTP 403
+
+ADMIN_ID=$(uuidgen)
+docker exec medi-scan-postgres psql -U postgres -d mediscan -c \
+  "INSERT INTO app_user (id, google_sub, display_name, role, created_at, last_login_at) \
+   VALUES ('$ADMIN_ID', 'manual-test-admin', 'Manual Test Admin', 'ADMIN', now(), now());"
+ADMIN_TOKEN=$(java -cp "target/test-classes;target/classes;$(cat cp.txt)" \
+  dev.saq.mediscan.support.MintAccessToken admin "$ADMIN_ID" 2>/dev/null)
+
+curl -s "localhost:8080/api/admin/stats?days=1" -H "Authorization: Bearer $ADMIN_TOKEN"
+docker exec medi-scan-postgres psql -U postgres -d mediscan -c "SELECT count(*) FROM app_user;"
+docker exec medi-scan-postgres psql -U postgres -d mediscan -c \
+  "SELECT count(*) FILTER (WHERE session_id IS NOT NULL) guest, \
+          count(*) FILTER (WHERE user_id IS NOT NULL) user \
+     FROM report WHERE expires_at > now();"
+```
+
+Result: `users.total` and `activeReports.{guest,user}` matched the two queries above exactly (`4` and `2`/`2` in the run that produced these numbers).
+
+**6. Log search.**
+
+```bash
+grep -n "172.0\|LDL\|HDL\|Cholesterol\|Triglycerides\|ldl-cholesterol\|hdl-cholesterol" app.log
+grep -n "manual-test-sub\|manual-test-admin\|Manual Test" app.log
+```
+
+Both greps matched nothing.
+
+**Cleanup.** The manually inserted rows are not fixtures - delete them after:
+
+```bash
+docker exec medi-scan-postgres psql -U postgres -d mediscan -c \
+  "DELETE FROM app_user WHERE google_sub IN ('manual-test-sub', 'manual-test-admin');"
+```
 
 ---
 
