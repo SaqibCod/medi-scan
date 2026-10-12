@@ -19,10 +19,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import org.springframework.http.HttpHeaders;
+
 import dev.saq.mediscan.config.ErrorCode;
 import dev.saq.mediscan.config.ReportErrorCode;
+import dev.saq.mediscan.report.Flag;
 import dev.saq.mediscan.support.PostgresTestBase;
 import dev.saq.mediscan.support.ReportFixtures;
+import dev.saq.mediscan.support.TestTokens;
+import dev.saq.mediscan.user.UserRole;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -102,6 +107,101 @@ class ApiContractTest extends PostgresTestBase {
 		// Contract section 3. No report text, which is the point of the separate DTO.
 		assertThat(fieldsOf(first))
 				.containsExactlyInAnyOrder("id", "title", "description", "markerCount");
+	}
+
+	@Test
+	@DisplayName("GET /api/reports has exactly the documented fields")
+	void historyResponseFields() throws Exception {
+		UUID doneReportId = fixtures.doneReport(sessionId, java.time.LocalDate.of(2026, 1, 1));
+		fixtures.biomarker(doneReportId, 0, "LDL", "ldl", "ldl-cholesterol", 140.0, "mg/dL",
+				0.0, 100.0, Flag.HIGH);
+
+		String body = mockMvc.perform(get("/api/reports").header("X-Session-Token", token))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		// Contract section 4.5: the generic Page<T> envelope...
+		assertThat(fieldsOf(body))
+				.containsExactlyInAnyOrder("items", "page", "size", "totalItems", "totalPages");
+
+		JsonNode item = JSON.readTree(body).get("items").get(0);
+		assertThat(fieldsOf(item)).containsExactlyInAnyOrder(
+				"id", "status", "sourceType", "createdAt", "expiresAt", "collectedOn",
+				"counts", "errorCode");
+		assertThat(fieldsOf(item.get("counts")))
+				.containsExactlyInAnyOrder("total", "low", "normal", "high", "unknown");
+	}
+
+	@Test
+	@DisplayName("GET /api/trends has exactly the documented fields")
+	void trendResponseFields() throws Exception {
+		UUID userId = fixtures.user();
+		UUID reportId = fixtures.doneUserReport(userId, java.time.LocalDate.of(2026, 1, 1));
+		fixtures.biomarker(reportId, 0, "LDL Cholesterol", "ldl cholesterol", "ldl-cholesterol",
+				140.0, "mg/dL", 0.0, 100.0, Flag.HIGH);
+		String bearer = "Bearer " + TestTokens.signingWithCurrentKey().validFor(userId, UserRole.USER);
+
+		String body = mockMvc.perform(get("/api/trends").param("marker", "ldl-cholesterol")
+				.header(HttpHeaders.AUTHORIZATION, bearer))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		// Contract section 5.
+		assertThat(fieldsOf(body)).containsExactlyInAnyOrder("marker", "displayName", "series");
+
+		JsonNode series = JSON.readTree(body).get("series").get(0);
+		assertThat(fieldsOf(series)).containsExactlyInAnyOrder("unit", "points");
+
+		JsonNode point = series.get("points").get(0);
+		assertThat(fieldsOf(point)).containsExactlyInAnyOrder(
+				"reportId", "date", "dateSource", "value", "refLow", "refHigh", "flag");
+	}
+
+	@Test
+	@DisplayName("GET /api/trends/markers has exactly the documented fields")
+	void trendMarkersResponseFields() throws Exception {
+		UUID userId = fixtures.user();
+		UUID r1 = fixtures.doneUserReport(userId, java.time.LocalDate.of(2026, 1, 1));
+		fixtures.biomarker(r1, 0, "TSH", "tsh", "tsh", 2.0, "mIU/L", 0.4, 4.0, Flag.NORMAL);
+		UUID r2 = fixtures.doneUserReport(userId, java.time.LocalDate.of(2026, 2, 1));
+		fixtures.biomarker(r2, 0, "TSH", "tsh", "tsh", 2.2, "mIU/L", 0.4, 4.0, Flag.NORMAL);
+		String bearer = "Bearer " + TestTokens.signingWithCurrentKey().validFor(userId, UserRole.USER);
+
+		String body = mockMvc.perform(get("/api/trends/markers")
+				.header(HttpHeaders.AUTHORIZATION, bearer))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		// Contract section 5: a bare array, not wrapped in an envelope.
+		JsonNode first = JSON.readTree(body).get(0);
+		assertThat(fieldsOf(first)).containsExactlyInAnyOrder("marker", "displayName", "reportCount");
+	}
+
+	@Test
+	@DisplayName("GET /api/admin/stats has exactly the documented fields")
+	void adminStatsResponseFields() throws Exception {
+		UUID adminId = fixtures.adminUser();
+		String bearer = "Bearer " + TestTokens.signingWithCurrentKey().validFor(adminId, UserRole.ADMIN);
+
+		String body = mockMvc.perform(get("/api/admin/stats")
+				.header(HttpHeaders.AUTHORIZATION, bearer))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		// Contract section 6.
+		assertThat(fieldsOf(body)).containsExactlyInAnyOrder(
+				"from", "to", "dailyLlmCap", "days", "failuresByCode", "avgProcessingMsBySource",
+				"users", "activeReports");
+
+		JsonNode day = JSON.readTree(body).get("days").get(0);
+		assertThat(fieldsOf(day)).containsExactlyInAnyOrder(
+				"date", "llmCalls", "inputTokens", "outputTokens", "reportsCreated",
+				"reportsFailed", "rateLimitRejections", "maskingConflicts");
+
+		assertThat(fieldsOf(JSON.readTree(body).get("users")))
+				.containsExactlyInAnyOrder("total", "activeLast7Days");
+		assertThat(fieldsOf(JSON.readTree(body).get("activeReports")))
+				.containsExactlyInAnyOrder("guest", "user");
 	}
 
 	@Test
@@ -208,13 +308,19 @@ class ApiContractTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("the contract version was bumped for the 2.3 changes")
+	@DisplayName("the contract version was bumped for the 2.4 changes")
 	void contractVersionIsCurrent() throws Exception {
 		String contract = readContract();
 
-		// Phase 6a changed no shapes, so 2.3 is a status entry: it records which endpoints
-		// are implemented, so the contract and the running API can be told apart.
-		assertThat(contract).contains("**Version:** 2.3");
+		// Phase 6b documents behavior only - the point cap, the null-unit series, the
+		// empty-page rule, and the IMAGE-absent note - no field was renamed or retyped.
+		assertThat(contract).contains("**Version:** 2.4");
+		assertThat(section(contract, "**2.4**", "**2.3**"))
+				.contains("100 most recent points")
+				.contains("empty `items` list")
+				.contains("IMAGE");
+
+		// Phase 6a's entry is still there, one level further down.
 		assertThat(section(contract, "**2.3**", "**2.2**"))
 				.contains("Phase 6a")
 				.contains("No shape changes");
