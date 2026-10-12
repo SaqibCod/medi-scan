@@ -95,12 +95,28 @@ public class SecurityConfig {
 						// no user to work with. Requiring a role denies them at the
 						// authorization filter, and ProblemAccessDeniedHandler turns a guest
 						// denial into 401 AUTH_REQUIRED (LLD 6.4, D6).
-						.requestMatchers("/api/me/**", "/api/trends/**").hasAnyRole("USER", "ADMIN")
+						//
+						// "/api/trends" is listed alongside "/api/trends/**" for the same
+						// PathPatternRequestMatcher reason as "/api/reports" below: GET
+						// /api/trends (phase 6b) is a bare path the wildcard alone would not
+						// cover. TrendsService.requireUser() would still refuse a guest even
+						// without this - it is the same belt-and-braces reasoning as the
+						// admin route - but the rule should say so, not rely on it.
+						.requestMatchers("/api/me/**", "/api/trends", "/api/trends/**")
+						.hasAnyRole("USER", "ADMIN")
 
 						// Reports accept either owner type: a guest session or a bearer
 						// token. Which reports a caller may see is an ownership question,
 						// enforced in the repository by OwnerRef, not here.
-						.requestMatchers("/api/reports/**").authenticated()
+						//
+						// The bare path is listed alongside the wildcard, same as
+						// /api/samples above: PathPatternRequestMatcher does not treat
+						// "/api/reports/**" as covering "/api/reports" itself, so GET
+						// /api/reports (the history list, phase 6b) and the upload POST
+						// would otherwise fall through to anyRequest() below. Both rules
+						// require the same thing today, so this is about making the intent
+						// explicit, not changing behaviour (LLD 8).
+						.requestMatchers("/api/reports", "/api/reports/**").authenticated()
 
 						.anyRequest().authenticated())
 

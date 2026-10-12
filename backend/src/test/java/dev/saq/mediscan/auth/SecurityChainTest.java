@@ -249,6 +249,47 @@ class SecurityChainTest extends PostgresTestBase {
 		mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
 	}
 
+	// --- the bare /api/reports path (LLD 8) ----------------------------------
+
+	@Test
+	@DisplayName("a guest reaches the bare GET /api/reports path, not just /api/reports/**")
+	void guestReachesBareReportsPath() throws Exception {
+		// PathPatternRequestMatcher does not treat "/api/reports/**" as covering
+		// "/api/reports" itself - same reason /api/samples lists both forms. Before the fix
+		// this endpoint only worked by falling through to anyRequest().authenticated(), which
+		// happens to require the same thing; this test pins the explicit rule instead of the
+		// coincidence.
+		String token = fixtures.sessionToken();
+
+		mockMvc.perform(get("/api/reports").header(GuestAuthFilter.HEADER, token))
+				.andExpect(status().isOk());
+	}
+
+	@Test
+	@DisplayName("no credential on the bare /api/reports path is SESSION_INVALID, not a fall-through 200")
+	void bareReportsPathStillRequiresACredential() throws Exception {
+		mockMvc.perform(get("/api/reports"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("SESSION_INVALID"));
+	}
+
+	// --- the bare /api/trends path (same gap, LLD 6/8) -----------------------
+
+	@Test
+	@DisplayName("a guest on the bare GET /api/trends path is AUTH_REQUIRED, never 200")
+	void guestOnBareTrendsPathIsAuthRequired() throws Exception {
+		// Same PathPatternRequestMatcher gap as /api/reports: "/api/trends/**" alone does not
+		// cover "/api/trends" itself, which is exactly the path GET /api/trends?marker=... uses
+		// (phase 6b). Without the explicit bare-path rule this falls through to
+		// anyRequest().authenticated(), which a guest's ROLE_GUEST would satisfy.
+		String token = fixtures.sessionToken();
+
+		mockMvc.perform(get("/api/trends").param("marker", "tsh")
+				.header(GuestAuthFilter.HEADER, token))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+	}
+
 	private List<Class<?>> filterClasses() {
 		FilterChainProxy proxy = context.getBean(FilterChainProxy.class);
 		List<SecurityFilterChain> chains = proxy.getFilterChains();
