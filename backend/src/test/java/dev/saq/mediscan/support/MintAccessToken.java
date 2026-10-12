@@ -39,7 +39,7 @@ import dev.saq.mediscan.user.UserRole;
  *      dev.saq.mediscan.support.MintAccessToken valid &lt;userId&gt;
  * </pre>
  *
- * <p>Modes: {@code valid}, {@code expired}, {@code unknown-kid}.
+ * <p>Modes: {@code valid}, {@code admin}, {@code expired}, {@code unknown-kid}.
  */
 public final class MintAccessToken {
 
@@ -48,7 +48,7 @@ public final class MintAccessToken {
 
 	public static void main(String[] args) {
 		if (args.length < 1) {
-			System.err.println("usage: MintAccessToken <valid|expired|unknown-kid> [userId]");
+			System.err.println("usage: MintAccessToken <valid|admin|expired|unknown-kid> [userId]");
 			System.exit(2);
 		}
 
@@ -68,7 +68,8 @@ public final class MintAccessToken {
 				"");
 
 		System.out.println(switch (mode) {
-			case "valid" -> valid(properties, userId);
+			case "valid" -> valid(properties, userId, UserRole.USER);
+			case "admin" -> valid(properties, userId, UserRole.ADMIN);
 			case "expired" -> expired(properties, userId);
 			case "unknown-kid" -> unknownKid(properties, userId);
 			default -> {
@@ -79,10 +80,17 @@ public final class MintAccessToken {
 		});
 	}
 
-	/** Signed by the production issuer, with the production clock. */
-	private static String valid(AuthProperties properties, UUID userId) {
+	/**
+	 * Signed by the production issuer, with the production clock.
+	 *
+	 * <p>{@code role} is whatever the caller asks for - this tool signs tokens for manual
+	 * testing, not through {@code ADMIN_GOOGLE_SUBS}, so an {@code admin} token here does not
+	 * require the user id to be on that list. Matches how {@code TestTokens} does it in the
+	 * automated suite.
+	 */
+	private static String valid(AuthProperties properties, UUID userId, UserRole role) {
 		return new AccessTokenIssuer(new SigningKeyRing(properties), properties, Clock.systemUTC())
-				.issue(userId, UserRole.USER)
+				.issue(userId, role)
 				.token();
 	}
 
