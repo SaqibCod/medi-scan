@@ -571,7 +571,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
    - Step-1 extraction, validation, and flag recomputation.
    - Step-2 summary.
    - Sample reports.
-3. **Accounts, backend only (Phase 6a):**
+3. **Accounts, backend only (Phase 6a) — done:**
    - Spring Security filter chain for guest and bearer callers.
    - Google sign-in, JWT issue with `kid`, and refresh rotation.
    - Users, and reports owned by a user.
@@ -589,7 +589,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
    - Prompt-injection defenses.
    - Rate limits and the Postgres daily cap.
    - Caching and token logging.
-7. **History, trends, and admin stats (Phase 6b):**
+7. **History, trends, and admin stats (Phase 6b) — current phase:**
    - `GET /api/reports` (history list).
    - `GET /api/trends` and `GET /api/trends/markers`.
    - `GET /api/admin/stats`.
