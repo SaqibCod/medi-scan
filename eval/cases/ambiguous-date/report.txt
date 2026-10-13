@@ -1,0 +1,18 @@
+Lakeside Health Clinic
+789 Clinic Ct, Laketown, ST 00000
+
+Patient Name: Oscar Reyes
+Patient ID: PT-55820
+DOB: 03/04/1978
+Phone: (555) 773-2201
+
+Ordered by: Dr. Sana Khalil
+Collected: 03/04/2026
+Reported: 03/06/2026
+
+COMPREHENSIVE PANEL
+
+Hemoglobin A1c: 5.4 % (4.8-5.6)
+Fasting Glucose: 102 mg/dL (70-99)
+
+End of report.

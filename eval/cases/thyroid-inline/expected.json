@@ -1,0 +1,43 @@
+{
+  "collectedOn": "2026-09-20",
+  "biomarkers": [
+    {
+      "testName": "TSH",
+      "rawValue": "6.8",
+      "unit": "mIU/L",
+      "referenceRangeText": "0.40-4.50",
+      "numericValue": 6.8,
+      "refLow": 0.40,
+      "refHigh": 4.50,
+      "flag": "HIGH"
+    },
+    {
+      "testName": "Free T4",
+      "rawValue": "1.1",
+      "unit": "ng/dL",
+      "referenceRangeText": "0.8-1.8",
+      "numericValue": 1.1,
+      "refLow": 0.8,
+      "refHigh": 1.8,
+      "flag": "NORMAL"
+    },
+    {
+      "testName": "Free T3",
+      "rawValue": "3.0",
+      "unit": "pg/mL",
+      "referenceRangeText": "2.3-4.2",
+      "numericValue": 3.0,
+      "refLow": 2.3,
+      "refHigh": 4.2,
+      "flag": "NORMAL"
+    }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Grace Tanaka" },
+    { "type": "NAME", "text": "Linda Osei" },
+    { "type": "ID", "text": "MR-77410" },
+    { "type": "DOB", "text": "11/02/1979" },
+    { "type": "PHONE", "text": "555-291-4470" }
+  ],
+  "injection": null
+}

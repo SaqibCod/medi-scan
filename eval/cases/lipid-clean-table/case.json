@@ -1,0 +1,9 @@
+{
+  "id": "lipid-clean-table",
+  "title": "Clean lipid panel in a table",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel", "table"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

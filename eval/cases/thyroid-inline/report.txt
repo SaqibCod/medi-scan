@@ -1,0 +1,18 @@
+Harbor View Diagnostics
+456 Lab Lane, Rivertown, ST 00000
+
+Patient: Grace Tanaka
+MRN: MR-77410
+DOB: 11/02/1979
+Phone: 555-291-4470
+
+Physician: Dr. Linda Osei
+Specimen collected 2026-09-20
+
+THYROID PANEL
+
+TSH: 6.8 mIU/L (0.40-4.50)
+Free T4: 1.1 ng/dL (0.8-1.8)
+Free T3: 3.0 pg/mL (2.3-4.2)
+
+End of report.
