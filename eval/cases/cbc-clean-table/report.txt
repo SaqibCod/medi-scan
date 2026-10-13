@@ -7,16 +7,28 @@ Phone: (555) 440-2217
 Ordered by: Dr. Keith Marlowe
 Collected: 2026-08-02
 
-COMPLETE BLOOD COUNT
+COMPLETE BLOOD COUNT WITH DIFFERENTIAL
 
-Test                  Result    Units       Reference Range
-WBC                     11.8    x10^3/uL    4.0-11.0
-RBC                     4.2     x10^6/uL    4.2-5.4
-Hemoglobin              13.9    g/dL        13.5-17.5
-Hematocrit              41.0    %           41-53
-Platelets               410     x10^3/uL    150-400
-MCV                     91      fL          80-100
-Neutrophils             68      %           40-70
-Lymphocytes             24      %           20-40
+Test                     Result    Units       Reference Range
+WBC                      11.8      x10^3/uL    4.0-11.0
+RBC                      4.2       x10^6/uL    4.2-5.4
+Hemoglobin               13.9      g/dL        13.5-17.5
+Hematocrit               41.0      %           41-53
+MCV                      91        fL          80-100
+MCH                      29.5      pg          27-33
+MCHC                     34.0      g/dL        32-36
+RDW                      13.2      %           11.5-14.5
+Platelets                410       x10^3/uL    150-400
+MPV                      10.1      fL          7.5-11.5
+Neutrophils              68        %           40-70
+Lymphocytes              24        %           20-40
+Monocytes                6.0       %           2-8
+Eosinophils              5.0       %           1-4
+Basophils                1.0       %           0.0-2.0
+Neutrophils Absolute     7.9       x10^3/uL    1.8-7.7
+Lymphocytes Absolute     2.8       x10^3/uL    1.0-4.8
+Monocytes Absolute       0.7       x10^3/uL    0.2-0.95
+Eosinophils Absolute     0.6       x10^3/uL    0.0-0.5
+Basophils Absolute       0.12      x10^3/uL    0.0-0.2
 
 End of report.

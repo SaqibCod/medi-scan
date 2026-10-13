@@ -3,9 +3,17 @@
   "biomarkers": [
     { "testName": "Creatinine", "rawValue": "1.5", "unit": "mg/dL", "referenceRangeText": "0.6-1.3", "numericValue": 1.5, "refLow": 0.6, "refHigh": 1.3, "flag": "HIGH" },
     { "testName": "BUN", "rawValue": "26", "unit": "mg/dL", "referenceRangeText": "7-20", "numericValue": 26, "refLow": 7, "refHigh": 20, "flag": "HIGH" },
+    { "testName": "BUN/Creatinine Ratio", "rawValue": "17.3", "unit": null, "referenceRangeText": "10-20", "numericValue": 17.3, "refLow": 10, "refHigh": 20, "flag": "NORMAL" },
     { "testName": "eGFR", "rawValue": "52", "unit": "mL/min/1.73m2", "referenceRangeText": ">60", "numericValue": 52, "refLow": 60, "refHigh": null, "flag": "LOW" },
     { "testName": "Sodium", "rawValue": "141", "unit": "mmol/L", "referenceRangeText": "136-145", "numericValue": 141, "refLow": 136, "refHigh": 145, "flag": "NORMAL" },
-    { "testName": "Potassium", "rawValue": "5.4", "unit": "mmol/L", "referenceRangeText": "3.5-5.1", "numericValue": 5.4, "refLow": 3.5, "refHigh": 5.1, "flag": "HIGH" }
+    { "testName": "Potassium", "rawValue": "5.4", "unit": "mmol/L", "referenceRangeText": "3.5-5.1", "numericValue": 5.4, "refLow": 3.5, "refHigh": 5.1, "flag": "HIGH" },
+    { "testName": "Chloride", "rawValue": "103", "unit": "mmol/L", "referenceRangeText": "98-107", "numericValue": 103, "refLow": 98, "refHigh": 107, "flag": "NORMAL" },
+    { "testName": "CO2", "rawValue": "20.0", "unit": "mmol/L", "referenceRangeText": "22-29", "numericValue": 20.0, "refLow": 22, "refHigh": 29, "flag": "LOW" },
+    { "testName": "Calcium", "rawValue": "8.3", "unit": "mg/dL", "referenceRangeText": "8.6-10.2", "numericValue": 8.3, "refLow": 8.6, "refHigh": 10.2, "flag": "LOW" },
+    { "testName": "Phosphorus", "rawValue": "5.2", "unit": "mg/dL", "referenceRangeText": "2.5-4.5", "numericValue": 5.2, "refLow": 2.5, "refHigh": 4.5, "flag": "HIGH" },
+    { "testName": "Albumin", "rawValue": "3.8", "unit": "g/dL", "referenceRangeText": "3.5-5.0", "numericValue": 3.8, "refLow": 3.5, "refHigh": 5.0, "flag": "NORMAL" },
+    { "testName": "Uric Acid", "rawValue": "7.8", "unit": "mg/dL", "referenceRangeText": "3.5-7.2", "numericValue": 7.8, "refLow": 3.5, "refHigh": 7.2, "flag": "HIGH" },
+    { "testName": "PTH", "rawValue": "95.0", "unit": "pg/mL", "referenceRangeText": "10-65", "numericValue": 95.0, "refLow": 10, "refHigh": 65, "flag": "HIGH" }
   ],
   "pii": [
     { "type": "NAME", "text": "Rosa Delgado" },

@@ -1,36 +1,13 @@
 {
   "collectedOn": "2026-09-20",
   "biomarkers": [
-    {
-      "testName": "TSH",
-      "rawValue": "6.8",
-      "unit": "mIU/L",
-      "referenceRangeText": "0.40-4.50",
-      "numericValue": 6.8,
-      "refLow": 0.40,
-      "refHigh": 4.50,
-      "flag": "HIGH"
-    },
-    {
-      "testName": "Free T4",
-      "rawValue": "1.1",
-      "unit": "ng/dL",
-      "referenceRangeText": "0.8-1.8",
-      "numericValue": 1.1,
-      "refLow": 0.8,
-      "refHigh": 1.8,
-      "flag": "NORMAL"
-    },
-    {
-      "testName": "Free T3",
-      "rawValue": "3.0",
-      "unit": "pg/mL",
-      "referenceRangeText": "2.3-4.2",
-      "numericValue": 3.0,
-      "refLow": 2.3,
-      "refHigh": 4.2,
-      "flag": "NORMAL"
-    }
+    { "testName": "TSH", "rawValue": "6.8", "unit": "mIU/L", "referenceRangeText": "0.40-4.50", "numericValue": 6.8, "refLow": 0.40, "refHigh": 4.50, "flag": "HIGH" },
+    { "testName": "Free T4", "rawValue": "1.1", "unit": "ng/dL", "referenceRangeText": "0.8-1.8", "numericValue": 1.1, "refLow": 0.8, "refHigh": 1.8, "flag": "NORMAL" },
+    { "testName": "Free T3", "rawValue": "3.0", "unit": "pg/mL", "referenceRangeText": "2.3-4.2", "numericValue": 3.0, "refLow": 2.3, "refHigh": 4.2, "flag": "NORMAL" },
+    { "testName": "TPOAb", "rawValue": "2.0", "unit": "IU/mL", "referenceRangeText": "<9", "numericValue": 2.0, "refLow": null, "refHigh": 9, "flag": "NORMAL" },
+    { "testName": "TgAb", "rawValue": "1.5", "unit": "IU/mL", "referenceRangeText": "<4", "numericValue": 1.5, "refLow": null, "refHigh": 4, "flag": "NORMAL" },
+    { "testName": "T3 Uptake", "rawValue": "30.0", "unit": "%", "referenceRangeText": "24-39", "numericValue": 30.0, "refLow": 24, "refHigh": 39, "flag": "NORMAL" },
+    { "testName": "Reverse T3", "rawValue": "28.0", "unit": "ng/dL", "referenceRangeText": "9.2-24.1", "numericValue": 28.0, "refLow": 9.2, "refHigh": 24.1, "flag": "HIGH" }
   ],
   "pii": [
     { "type": "NAME", "text": "Grace Tanaka" },

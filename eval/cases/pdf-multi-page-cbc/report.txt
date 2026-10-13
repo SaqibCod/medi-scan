@@ -13,12 +13,25 @@ WBC            9.1     x10^3/uL    4.0-11.0
 RBC            4.6     x10^6/uL    4.2-5.4
 Hemoglobin     14.0    g/dL        13.5-17.5
 Hematocrit     43.0    %           41-53
+MCV            89      fL          80-100
+MCH            30.5    pg          27-33
+MCHC           32.8    g/dL        32-36
+RDW            15.1    %           11.5-14.5
 
 [PAGE BREAK]
 
 COMPLETE BLOOD COUNT - PAGE 2 OF 2
 
-Platelets      265     x10^3/uL    150-400
-MCV            89      fL          80-100
-Neutrophils    58      %           40-70
-Lymphocytes    33      %           20-40
+Platelets                265     x10^3/uL    150-400
+MPV                      11.8    fL          7.5-11.5
+Neutrophils               58     %           40-70
+Lymphocytes               33     %           20-40
+Monocytes                7.0     %           2-8
+Eosinophils               2.0     %          1-4
+Basophils                 0.5     %          0-2
+Reticulocyte Count        1.2     %          0.5-2.5
+Neutrophils Absolute     5.3     x10^3/uL    1.8-7.7
+Lymphocytes Absolute     3.0     x10^3/uL    1.0-4.8
+Monocytes Absolute       0.64    x10^3/uL    0.2-0.95
+Eosinophils Absolute     0.18    x10^3/uL    0.0-0.5
+Basophils Absolute       0.05    x10^3/uL    0.0-0.2

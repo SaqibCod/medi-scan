@@ -9,12 +9,20 @@ Collected: 2026-05-30
 
 LIVER FUNCTION PANEL
 
-AST                    76      U/L     10-40
-ALT                    81      U/L     9-46
-Alkaline Phosphatase   140     U/L     44-147
-GGT                    65      U/L     9-48
-Total Bilirubin        1.4     mg/dL   0.1-1.2
-Albumin                3.2     g/dL    3.5-5.0
-AST/ALT Ratio          0.94            0.7-1.5
+AST                    76      U/L         10-40
+ALT                    81      U/L         9-46
+Alkaline Phosphatase   140     U/L         44-147
+GGT                    65      U/L         9-48
+Total Bilirubin        1.4     mg/dL       0.1-1.2
+Direct Bilirubin       0.6     mg/dL       0.0-0.3
+Indirect Bilirubin     0.8     mg/dL       0.2-0.8
+Total Protein          6.8     g/dL        6.0-8.3
+Albumin                3.2     g/dL        3.5-5.0
+Globulin               3.6     g/dL        2.0-3.5
+A/G Ratio              0.89                1.1-2.2
+AST/ALT Ratio          0.94                0.7-1.5
+Prothrombin Time       12.5    seconds     11-13.5
+INR                    1.0                 0.8-1.1
+Ammonia                38.0    umol/L      15-45
 
 End of report.

@@ -6,8 +6,16 @@
     { "testName": "Alkaline Phosphatase", "rawValue": "140", "unit": "U/L", "referenceRangeText": "44-147", "numericValue": 140, "refLow": 44, "refHigh": 147, "flag": "NORMAL" },
     { "testName": "GGT", "rawValue": "65", "unit": "U/L", "referenceRangeText": "9-48", "numericValue": 65, "refLow": 9, "refHigh": 48, "flag": "HIGH" },
     { "testName": "Total Bilirubin", "rawValue": "1.4", "unit": "mg/dL", "referenceRangeText": "0.1-1.2", "numericValue": 1.4, "refLow": 0.1, "refHigh": 1.2, "flag": "HIGH" },
+    { "testName": "Direct Bilirubin", "rawValue": "0.6", "unit": "mg/dL", "referenceRangeText": "0.0-0.3", "numericValue": 0.6, "refLow": 0.0, "refHigh": 0.3, "flag": "HIGH" },
+    { "testName": "Indirect Bilirubin", "rawValue": "0.8", "unit": "mg/dL", "referenceRangeText": "0.2-0.8", "numericValue": 0.8, "refLow": 0.2, "refHigh": 0.8, "flag": "NORMAL" },
+    { "testName": "Total Protein", "rawValue": "6.8", "unit": "g/dL", "referenceRangeText": "6.0-8.3", "numericValue": 6.8, "refLow": 6.0, "refHigh": 8.3, "flag": "NORMAL" },
     { "testName": "Albumin", "rawValue": "3.2", "unit": "g/dL", "referenceRangeText": "3.5-5.0", "numericValue": 3.2, "refLow": 3.5, "refHigh": 5.0, "flag": "LOW" },
-    { "testName": "AST/ALT Ratio", "rawValue": "0.94", "unit": null, "referenceRangeText": "0.7-1.5", "numericValue": 0.94, "refLow": 0.7, "refHigh": 1.5, "flag": "NORMAL" }
+    { "testName": "Globulin", "rawValue": "3.6", "unit": "g/dL", "referenceRangeText": "2.0-3.5", "numericValue": 3.6, "refLow": 2.0, "refHigh": 3.5, "flag": "HIGH" },
+    { "testName": "A/G Ratio", "rawValue": "0.89", "unit": null, "referenceRangeText": "1.1-2.2", "numericValue": 0.89, "refLow": 1.1, "refHigh": 2.2, "flag": "LOW" },
+    { "testName": "AST/ALT Ratio", "rawValue": "0.94", "unit": null, "referenceRangeText": "0.7-1.5", "numericValue": 0.94, "refLow": 0.7, "refHigh": 1.5, "flag": "NORMAL" },
+    { "testName": "Prothrombin Time", "rawValue": "12.5", "unit": "seconds", "referenceRangeText": "11-13.5", "numericValue": 12.5, "refLow": 11, "refHigh": 13.5, "flag": "NORMAL" },
+    { "testName": "INR", "rawValue": "1.0", "unit": null, "referenceRangeText": "0.8-1.1", "numericValue": 1.0, "refLow": 0.8, "refHigh": 1.1, "flag": "NORMAL" },
+    { "testName": "Ammonia", "rawValue": "38.0", "unit": "umol/L", "referenceRangeText": "15-45", "numericValue": 38.0, "refLow": 15, "refHigh": 45, "flag": "NORMAL" }
   ],
   "pii": [
     { "type": "NAME", "text": "Walter Nkemelu" },
