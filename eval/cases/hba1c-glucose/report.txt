@@ -1,0 +1,16 @@
+Hillside Family Practice
+Patient Name: Teresa Boykin
+Patient ID: PT-20956
+DOB: 09/03/1982
+Phone: (555) 310-7765
+
+Ordered by: Dr. Michael Osei
+Collected: 2026-06-11
+Fasting: Yes
+
+DIABETES PANEL
+
+Hemoglobin A1c    6.1    %       4.8-5.6
+Fasting Glucose   112    mg/dL   70-99
+
+End of report.

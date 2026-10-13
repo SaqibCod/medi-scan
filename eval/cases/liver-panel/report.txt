@@ -1,0 +1,20 @@
+Copper Ridge Laboratory
+Patient Name: Walter Nkemelu
+Patient ID: PT-48890
+DOB: 04/22/1969
+Phone: (555) 209-6634
+
+Ordered by: Dr. Fiona Castillo
+Collected: 2026-05-30
+
+LIVER FUNCTION PANEL
+
+AST                    76      U/L     10-40
+ALT                    81      U/L     9-46
+Alkaline Phosphatase   140     U/L     44-147
+GGT                    65      U/L     9-48
+Total Bilirubin        1.4     mg/dL   0.1-1.2
+Albumin                3.2     g/dL    3.5-5.0
+AST/ALT Ratio          0.94            0.7-1.5
+
+End of report.

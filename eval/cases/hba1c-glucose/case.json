@@ -1,0 +1,9 @@
+{
+  "id": "hba1c-glucose",
+  "title": "Small diabetes panel with a percent unit and a fasting label",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

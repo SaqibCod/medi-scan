@@ -1,0 +1,19 @@
+{
+  "collectedOn": "2026-03-29",
+  "biomarkers": [
+    { "testName": "Iron", "rawValue": "45", "unit": "ug/dL", "referenceRangeText": "60-170", "numericValue": 45, "refLow": 60, "refHigh": 170, "flag": "LOW" },
+    { "testName": "Ferritin", "rawValue": "15", "unit": "ng/mL", "referenceRangeText": "20-250", "numericValue": 15, "refLow": 20, "refHigh": 250, "flag": "LOW" },
+    { "testName": "TIBC", "rawValue": "410", "unit": "ug/dL", "referenceRangeText": "250-450", "numericValue": 410, "refLow": 250, "refHigh": 450, "flag": "NORMAL" },
+    { "testName": "Vitamin B12", "rawValue": "180", "unit": "pg/mL", "referenceRangeText": "200-900", "numericValue": 180, "refLow": 200, "refHigh": 900, "flag": "LOW" },
+    { "testName": "Vitamin D", "rawValue": "22", "unit": "ng/mL", "referenceRangeText": "30-100", "numericValue": 22, "refLow": 30, "refHigh": 100, "flag": "LOW" },
+    { "testName": "Folate", "rawValue": "8.1", "unit": "ng/mL", "referenceRangeText": "2.7-17.0", "numericValue": 8.1, "refLow": 2.7, "refHigh": 17.0, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Natalie Fournier" },
+    { "type": "NAME", "text": "Derek Huang" },
+    { "type": "ID", "text": "PT-59012" },
+    { "type": "DOB", "text": "06/27/1991" },
+    { "type": "PHONE", "text": "(555) 147-3390" }
+  ],
+  "injection": null
+}

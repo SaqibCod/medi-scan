@@ -1,0 +1,28 @@
+{
+  "collectedOn": "2026-07-21",
+  "biomarkers": [
+    { "testName": "Glucose", "rawValue": "98", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 98, "refLow": 70, "refHigh": 99, "flag": "NORMAL" },
+    { "testName": "BUN", "rawValue": "18", "unit": "mg/dL", "referenceRangeText": "7-20", "numericValue": 18, "refLow": 7, "refHigh": 20, "flag": "NORMAL" },
+    { "testName": "Creatinine", "rawValue": "1.0", "unit": "mg/dL", "referenceRangeText": "0.6-1.3", "numericValue": 1.0, "refLow": 0.6, "refHigh": 1.3, "flag": "NORMAL" },
+    { "testName": "Sodium", "rawValue": "139", "unit": "mmol/L", "referenceRangeText": "136-145", "numericValue": 139, "refLow": 136, "refHigh": 145, "flag": "NORMAL" },
+    { "testName": "Potassium", "rawValue": "4.3", "unit": "mmol/L", "referenceRangeText": "3.5-5.1", "numericValue": 4.3, "refLow": 3.5, "refHigh": 5.1, "flag": "NORMAL" },
+    { "testName": "Chloride", "rawValue": "101", "unit": "mmol/L", "referenceRangeText": "98-107", "numericValue": 101, "refLow": 98, "refHigh": 107, "flag": "NORMAL" },
+    { "testName": "CO2", "rawValue": "24", "unit": "mmol/L", "referenceRangeText": "22-29", "numericValue": 24, "refLow": 22, "refHigh": 29, "flag": "NORMAL" },
+    { "testName": "Calcium", "rawValue": "9.4", "unit": "mg/dL", "referenceRangeText": "8.6-10.2", "numericValue": 9.4, "refLow": 8.6, "refHigh": 10.2, "flag": "NORMAL" },
+    { "testName": "Total Protein", "rawValue": "7.0", "unit": "g/dL", "referenceRangeText": "6.0-8.3", "numericValue": 7.0, "refLow": 6.0, "refHigh": 8.3, "flag": "NORMAL" },
+    { "testName": "Albumin", "rawValue": "4.1", "unit": "g/dL", "referenceRangeText": "3.5-5.0", "numericValue": 4.1, "refLow": 3.5, "refHigh": 5.0, "flag": "NORMAL" },
+    { "testName": "Total Bilirubin", "rawValue": "0.9", "unit": "mg/dL", "referenceRangeText": "0.1-1.2", "numericValue": 0.9, "refLow": 0.1, "refHigh": 1.2, "flag": "NORMAL" },
+    { "testName": "Alkaline Phosphatase", "rawValue": "95", "unit": "U/L", "referenceRangeText": "44-147", "numericValue": 95, "refLow": 44, "refHigh": 147, "flag": "NORMAL" },
+    { "testName": "AST", "rawValue": "62", "unit": "U/L", "referenceRangeText": "10-40", "numericValue": 62, "refLow": 10, "refHigh": 40, "flag": "HIGH" },
+    { "testName": "ALT", "rawValue": "54", "unit": "U/L", "referenceRangeText": "9-46", "numericValue": 54, "refLow": 9, "refHigh": 46, "flag": "HIGH" },
+    { "testName": "Total Cholesterol", "rawValue": "175", "unit": "mg/dL", "referenceRangeText": "<200", "numericValue": 175, "refLow": null, "refHigh": 200, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Felix Navarro" },
+    { "type": "NAME", "text": "Yvonne Castellano" },
+    { "type": "ID", "text": "PT-33871" },
+    { "type": "DOB", "text": "01/09/1975" },
+    { "type": "PHONE", "text": "(555) 582-1140" }
+  ],
+  "injection": null
+}

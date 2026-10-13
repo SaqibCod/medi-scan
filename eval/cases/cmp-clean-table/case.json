@@ -1,0 +1,9 @@
+{
+  "id": "cmp-clean-table",
+  "title": "15-row comprehensive metabolic panel with mixed units",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel", "table"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}
