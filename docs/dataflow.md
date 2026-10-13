@@ -571,6 +571,7 @@ flowchart TD
 - **Normalized test name:** lowercase, with punctuation and repeated spaces removed. It is computed in code at save time and stored in `biomarker.test_name_norm`, so trend queries can use an index.
 - **Units:** values are never converted between units. Each unit becomes its own chart series.
 - **Marker picker:** `GET /api/trends/markers` runs one grouped query: markers present in at least two `DONE` reports for this user.
+- **Point cap:** each series returns at most the 100 most recent points, still sorted oldest first.
 - **Expired reports:** trend points disappear when their report expires after 30 days. The UI says "History is kept for 30 days".
 
 ---

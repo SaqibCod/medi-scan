@@ -2,7 +2,7 @@
 
 This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v3 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
 
-**Version:** 2.3 (implementation status only: the auth endpoints ship in Phase 6a; no request or response shape changed)
+**Version:** 2.4 (history, trends, and admin stats clarifications; no breaking change)
 
 ---
 
@@ -682,6 +682,8 @@ Lists the caller's reports, newest first. For a guest, these are the current ses
 
 List items are summaries. `counts` and `collectedOn` are `null` unless the report is `DONE`. Use `GET /api/reports/{id}` for the full result.
 
+A page past the last page returns `200` with an empty `items` list, not an error.
+
 **Errors:** `400 VALIDATION_ERROR`, `401 SESSION_INVALID`
 
 ---
@@ -703,7 +705,7 @@ Returns one biomarker's values across the signed-in user's reports, for a line c
 **Matching rules**
 - **Matching:** biomarkers match by `biomarkerSlug` when present. Otherwise they match by normalized test name (lowercase, punctuation and extra spaces removed).
 - **Numeric only:** only `DONE` reports and numeric values are included. Qualitative values such as `Negative` are left out.
-- **Grouping by unit:** points are grouped by unit, and each group is drawn as its own chart. Values are never converted between units.
+- **Grouping by unit:** points are grouped by unit, and each group is drawn as its own chart. Values are never converted between units. A biomarker with no unit forms its own series with `unit: null` — values are never merged across units, including the lack of one.
 - **Dates:** each point is dated by `collectedOn`, or by the upload date when that is missing. `dateSource` says which.
 
 **Response `200 OK`**
@@ -740,7 +742,7 @@ Returns one biomarker's values across the signed-in user's reports, for a line c
 }
 ```
 
-Points are sorted by date, oldest first. If nothing matches, `series` is an empty array, not an error.
+Points are sorted by date, oldest first. If nothing matches, `series` is an empty array, not an error. Each series is capped at the 100 most recent points, still sorted oldest first.
 
 ### `GET /api/trends/markers`
 
@@ -797,11 +799,13 @@ Returns aggregated usage numbers for the admin dashboard. It contains counts onl
     }
   ],
   "failuresByCode": { "UNREADABLE": 3, "EXTRACTION_FAILED": 1, "NO_RESULTS_FOUND": 1 },
-  "avgProcessingMsBySource": { "PDF": 6200, "IMAGE": 14800, "TEXT": 4100, "SAMPLE": 3900 },
+  "avgProcessingMsBySource": { "PDF": 6200, "TEXT": 4100, "SAMPLE": 3900 },
   "users": { "total": 37, "activeLast7Days": 12 },
   "activeReports": { "guest": 18, "user": 95 }
 }
 ```
+
+`avgProcessingMsBySource` only has a key for source types with at least one processed report in range; `IMAGE` won't appear until Phase 4 ships OCR.
 
 **Errors:**
 - `401 AUTH_REQUIRED`, `401 TOKEN_EXPIRED`, `401 TOKEN_INVALID`.
@@ -1110,6 +1114,12 @@ export interface ProblemDetail {
 ---
 
 ## 11. Changelog
+
+**2.4**
+- **No shape changes.** The `TrendResponse` series `unit` field was already typed `string | null`; this entry only documents behavior, it doesn't change a type.
+- **Trends (5):** each series is capped at the 100 most recent points, still sorted oldest first. A biomarker with no unit returns its own series with `unit: null`, never merged with a unit's series.
+- **History (4.5):** a page past the last page returns `200` with an empty `items` list, not an error.
+- **Admin stats (6):** `avgProcessingMsBySource` only includes source types with data in range; `IMAGE` is absent until Phase 4 ships OCR. The example response no longer shows a placeholder `IMAGE` value.
 
 **2.3**
 - **No shape changes.** No endpoint, field, enum, error code, or SSE event changed. This entry records what is implemented, so the contract and the running API can be told apart.

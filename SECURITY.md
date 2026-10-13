@@ -150,6 +150,9 @@ timings.
   sent too — otherwise a client with an expired token would silently keep
   working as a guest and see an empty report list instead of being told to
   refresh.
+- **History and trends are owner-scoped on every query**, and the admin stats
+  endpoint returns aggregate counts only, never report content or user
+  identifiers.
 
 ### What an account actually is
 

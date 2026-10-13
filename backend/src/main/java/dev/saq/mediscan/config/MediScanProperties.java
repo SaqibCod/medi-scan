@@ -39,7 +39,10 @@ public record MediScanProperties(
 		@Valid @NotNull Extract extract,
 		@Valid @NotNull Llm llm,
 		@Valid @NotNull Mask mask,
-		@Valid @NotNull Retention retention) {
+		@Valid @NotNull Retention retention,
+		@Valid @NotNull History history,
+		@Valid @NotNull Trends trends,
+		@Valid @NotNull Admin admin) {
 
 	/**
 	 * @param ttlHours how long a guest session, and the reports it owns, live for
@@ -165,5 +168,35 @@ public record MediScanProperties(
 	 */
 	public record Retention(@Positive long intervalMs, @Positive int statsDays,
 			@Positive int userReportDays, @Positive int inactiveAccountDays) {
+	}
+
+	/**
+	 * {@code GET /api/reports} paging (contract section 4.5).
+	 *
+	 * @param defaultSize page size when {@code size} is not given
+	 * @param maxSize largest accepted {@code size}; over this is {@code 400 VALIDATION_ERROR}
+	 */
+	public record History(@Positive int defaultSize, @Positive int maxSize) {
+	}
+
+	/**
+	 * {@code GET /api/trends} and {@code GET /api/trends/markers} (contract section 5).
+	 *
+	 * @param pointCap points kept per series; the latest this many, oldest first (LLD D2)
+	 * @param markerMinReports a marker must appear in at least this many distinct reports to
+	 *     be listed or charted (LLD D7)
+	 * @param markerCap markers returned by the picker, at most
+	 */
+	public record Trends(@Positive int pointCap, @Positive int markerMinReports,
+			@Positive int markerCap) {
+	}
+
+	/**
+	 * {@code GET /api/admin/stats} (contract section 6).
+	 *
+	 * @param defaultDays range when {@code days} is not given
+	 * @param maxDays largest accepted {@code days}; over this is {@code 400 VALIDATION_ERROR}
+	 */
+	public record Admin(@Positive int defaultDays, @Positive int maxDays) {
 	}
 }
