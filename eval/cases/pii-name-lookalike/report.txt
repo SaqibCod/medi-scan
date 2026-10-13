@@ -1,0 +1,15 @@
+Fernwood Health Partners
+Patient Name: Grace Ferritin
+Patient ID: PT-67142
+DOB: 05/05/1991
+Phone: (555) 710-2298
+
+Ordered by: Dr. Victor Ferrante
+Collected: 2026-10-20
+
+BASIC PANEL
+
+Calcium    9.5    mg/dL    8.6-10.2
+Glucose    88     mg/dL    70-99
+
+End of report.
