@@ -40,6 +40,10 @@ client/next-env.d.ts
 Thumbs.db
 desktop.ini
 
+# --- Eval ---
+eval/results/
+eval/.cache/
+
 # --- Temp ---
 /tmp/medi-scan/*
 *.log

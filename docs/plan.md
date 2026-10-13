@@ -507,12 +507,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 ## 12. Testing and Evaluation
 
-**Extraction test set:** 15–20 synthetic reports with expected JSON. They cover:
-- text-based PDFs, scanned PDFs, and photos
-- qualitative values and odd ranges
-- reports in different layouts
-
-**Metrics:** a script reports precision and recall on biomarkers, the share of exact value matches, flag accuracy, and the masking leak rate. The README shows the numbers.
+**Evaluation:** Phase 3 builds a synthetic dataset of about 30 lab reports with hand-written answer keys, and a runner that sends them through the real pipeline with the real model to measure extraction accuracy, flag correctness, masking leaks, and summary safety. The method, metric definitions, and the committed baseline live in `docs/evaluation.md`; the dataset and runner live in `eval/` and `backend/src/test/java/<base>/eval/`.
 
 **Masking tests:** check that personal data is removed and that every lab value and reference range survives.
 
@@ -581,7 +576,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
    - Authorization tests.
 
    Built here, before the pipeline work that follows, because every later phase reads or writes reports through the owner model. Chat in particular would otherwise be built against guest-only ownership and rewritten. No frontend work: the sign-in UI ships with phase 7.
-4. **Evaluation (Phase 3):** build the synthetic test set and scoring script now, before adding OCR, so every later change is measured.
+4. **Evaluation (Phase 3) — current phase:** build the synthetic test set and scoring script now, before adding OCR, so every later change is measured.
 5. **OCR (Phase 4):** Tess4J for images and the scanned-PDF fallback, feeding the same pipeline.
 6. **Chat (Phase 5):**
    - Curated biomarker content and embeddings.
@@ -589,7 +584,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
    - Prompt-injection defenses.
    - Rate limits and the Postgres daily cap.
    - Caching and token logging.
-7. **History, trends, and admin stats (Phase 6b) — current phase:**
+7. **History, trends, and admin stats (Phase 6b) — done:**
    - `GET /api/reports` (history list).
    - `GET /api/trends` and `GET /api/trends/markers`.
    - `GET /api/admin/stats`.
