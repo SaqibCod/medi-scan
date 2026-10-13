@@ -1,0 +1,4 @@
+This case has no extractable text. The eval runner renders it as an
+image-only PDF with TestPdfs.imageOnly(), simulating a scanned report
+with no text layer, which must fail UNREADABLE until OCR arrives in
+Phase 4.

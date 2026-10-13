@@ -1,0 +1,17 @@
+{
+  "collectedOn": "2026-05-19",
+  "biomarkers": [
+    { "testName": "Total Cholesterol", "rawValue": "245", "unit": "mg/dL", "referenceRangeText": "<200", "numericValue": 245, "refLow": null, "refHigh": 200, "flag": "HIGH" },
+    { "testName": "HDL Cholesterol", "rawValue": "35", "unit": "mg/dL", "referenceRangeText": ">40", "numericValue": 35, "refLow": 40, "refHigh": null, "flag": "LOW" },
+    { "testName": "LDL Cholesterol", "rawValue": "168", "unit": "mg/dL", "referenceRangeText": "<100", "numericValue": 168, "refLow": null, "refHigh": 100, "flag": "HIGH" },
+    { "testName": "Triglycerides", "rawValue": "155", "unit": "mg/dL", "referenceRangeText": "<150", "numericValue": 155, "refLow": null, "refHigh": 150, "flag": "HIGH" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Doreen Castellanos" },
+    { "type": "NAME", "text": "Gerald Okafor" },
+    { "type": "ID", "text": "PT-71028" },
+    { "type": "DOB", "text": "01/23/1981" },
+    { "type": "PHONE", "text": "(555) 360-7729" }
+  ],
+  "injection": null
+}

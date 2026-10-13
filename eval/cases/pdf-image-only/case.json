@@ -1,0 +1,9 @@
+{
+  "id": "pdf-image-only",
+  "title": "A scanned-style PDF with no text layer",
+  "synthetic": true,
+  "format": "PDF",
+  "tags": ["pdf"],
+  "expectedStatus": "FAILED",
+  "expectedErrorCode": "UNREADABLE"
+}
