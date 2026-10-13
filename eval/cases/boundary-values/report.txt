@@ -1,0 +1,17 @@
+Thornfield Medical Group
+Patient Name: Marcus Webb
+Patient ID: PT-47763
+DOB: 09/25/1965
+Phone: (555) 835-1162
+
+Ordered by: Dr. Alina Kowalski
+Collected: 2026-04-07
+
+CHEMISTRY PANEL
+
+Sodium               136    mmol/L   136-145
+Glucose              99     mg/dL    70-99
+Total Cholesterol    200    mg/dL    <200
+HDL Cholesterol      40     mg/dL    >40
+
+End of report.

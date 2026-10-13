@@ -1,0 +1,17 @@
+Grandview Community Hospital
+Patient Name: Isla Fontaine
+Patient ID: PT-68219
+DOB: 02/11/1992
+Phone: (555) 472-9930
+
+Ordered by: Dr. Terrence Abbott
+Collected: 2026-05-12
+
+ELECTROLYTE PANEL
+
+Potassium    6.2    mmol/L    3.5-5.1
+Potassium    4.6    mmol/L    3.5-5.1
+
+Note: Potassium repeated due to possible hemolysis in the first specimen.
+
+End of report.

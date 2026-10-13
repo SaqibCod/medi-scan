@@ -1,0 +1,15 @@
+{
+  "collectedOn": "2026-05-12",
+  "biomarkers": [
+    { "testName": "Potassium", "rawValue": "6.2", "unit": "mmol/L", "referenceRangeText": "3.5-5.1", "numericValue": 6.2, "refLow": 3.5, "refHigh": 5.1, "flag": "HIGH" },
+    { "testName": "Potassium", "rawValue": "4.6", "unit": "mmol/L", "referenceRangeText": "3.5-5.1", "numericValue": 4.6, "refLow": 3.5, "refHigh": 5.1, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Isla Fontaine" },
+    { "type": "NAME", "text": "Terrence Abbott" },
+    { "type": "ID", "text": "PT-68219" },
+    { "type": "DOB", "text": "02/11/1992" },
+    { "type": "PHONE", "text": "(555) 472-9930" }
+  ],
+  "injection": null
+}

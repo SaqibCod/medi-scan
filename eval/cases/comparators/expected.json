@@ -1,0 +1,17 @@
+{
+  "collectedOn": "2026-01-22",
+  "biomarkers": [
+    { "testName": "TSH", "rawValue": "<0.01", "unit": "mIU/L", "referenceRangeText": "0.40-4.50", "numericValue": null, "refLow": 0.40, "refHigh": 4.50, "flag": "LOW" },
+    { "testName": "hs-CRP", "rawValue": ">200", "unit": "mg/L", "referenceRangeText": "<3.0", "numericValue": null, "refLow": null, "refHigh": 3.0, "flag": "HIGH" },
+    { "testName": "Troponin I", "rawValue": "≤0.02", "unit": "ng/mL", "referenceRangeText": "<0.04", "numericValue": null, "refLow": null, "refHigh": 0.04, "flag": "UNKNOWN" },
+    { "testName": "D-Dimer", "rawValue": "≥5.0", "unit": "mg/L", "referenceRangeText": "<0.50", "numericValue": null, "refLow": null, "refHigh": 0.50, "flag": "HIGH" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Ingrid Solberg" },
+    { "type": "NAME", "text": "Marcus Delaney" },
+    { "type": "ID", "text": "PT-60281" },
+    { "type": "DOB", "text": "05/14/1988" },
+    { "type": "PHONE", "text": "(555) 773-4091" }
+  ],
+  "injection": null
+}
