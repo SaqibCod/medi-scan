@@ -1,0 +1,9 @@
+{
+  "id": "no-collection-date",
+  "title": "A DOB and a report date, but no printed collection date",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["dates"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}
