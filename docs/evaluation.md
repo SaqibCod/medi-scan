@@ -55,6 +55,22 @@ the exact list and what each one targets:
 Every case plants some personal data, not only the `pii-*` group, so the
 masking numbers are meaningful across the whole set.
 
+**Dataset size: 31 cases, 177 expected biomarker rows, short of the ~300-row
+target in LLD section 4.2 rule 8.** The panel cases (`cbc-clean-table`,
+`cmp-clean-table`, `liver-panel`, `kidney-panel`, `iron-vitamins`,
+`thyroid-inline`, `pdf-lipid-table`, `pdf-multi-page-cbc`) were extended to the
+full composition a genuine version of that panel carries — a CBC with a
+complete differential, an extended metabolic panel, hepatic synthetic-function
+and bilirubin fractions, a CKD-mineral-bone-disease workup, and so on — with
+values kept clinically consistent within each case rather than arbitrary. That
+realistic ceiling tops out at 177, not 300: 20 of the 31 cases
+(layout/values/ranges/dates/pii/adversarial) are intentionally narrow, 2 to 6
+rows each, because each tests one specific parsing or masking behavior rather
+than panel breadth, and widening them would mean testing something other than
+what the case exists to test. The flag mix still lands close to the 55/20/15/10
+target — NORMAL 58.2%, HIGH 27.7%, LOW 9.0%, UNKNOWN 5.1% — all within the
+±15-point band `DatasetConsistencyTest` checks.
+
 ## Thresholds
 
 First goals, fixed as `eval/thresholds.json` only after the first real run and
