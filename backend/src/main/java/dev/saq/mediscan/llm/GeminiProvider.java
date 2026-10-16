@@ -12,6 +12,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.ai.converter.MarkdownCodeBlockCleaner;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -31,7 +32,16 @@ import dev.saq.mediscan.config.MediScanProperties;
  * {@link BeanOutputConverter} that produced the schema. The native schema makes malformed
  * output rare; the converter is what notices when it happens anyway. Relying on the schema
  * alone would mean trusting the provider to be perfect, and relying on the converter alone
- * would mean paying for prose responses that have to be retried.
+ * would mean paying for prose responses that have to be retried. The converter also runs a
+ * {@link MarkdownCodeBlockCleaner} before parsing, as cheap insurance against a markdown-fenced
+ * reply - though the one real failure traced so far (Phase 3 eval, 2026-10-16: every summary
+ * call for {@code boundary-values}, {@code cbc-clean-table}, {@code cmp-clean-table},
+ * {@code comparators}, {@code iron-vitamins} failing {@code EXTRACTION_FAILED}) turned out to be
+ * {@code finishReason=MAX_TOKENS} truncating valid, unfenced JSON mid-object: {@code
+ * gemini-2.5-flash} (what {@code gemini-flash-latest} resolved to) is a thinking model whose
+ * invisible reasoning tokens were eating the 1024-token budget before the visible answer could
+ * finish. {@code thinkingBudget(0)} below addresses that directly; the cleaner stays as a
+ * second line of defence for a cause that has not actually been observed yet.
  *
  * <p>A thin adapter on purpose. It builds a request, parses a response, and sorts its failures
  * into the three {@link LlmException} kinds. The daily cap, retries and usage logging all
@@ -63,13 +73,23 @@ public class GeminiProvider implements LlmProvider {
 
 	@Override
 	public <T> LlmResult<T> structured(LlmRequest request, Class<T> outputType) {
-		BeanOutputConverter<T> converter = new BeanOutputConverter<>(outputType);
+		// Defensive against a markdown-fenced reply, though the traced failure (see class
+		// javadoc) was unfenced JSON truncated by MAX_TOKENS, not fencing.
+		BeanOutputConverter<T> converter =
+				new BeanOutputConverter<>(outputType, null, new MarkdownCodeBlockCleaner());
 
 		GoogleGenAiChatOptions options = (GoogleGenAiChatOptions) GoogleGenAiChatOptions.builder()
 				.responseMimeType(JSON_MIME_TYPE)
 				.responseSchema(converter.getJsonSchema())
 				.maxOutputTokens(request.maxOutputTokens())
 				.temperature(request.temperature())
+				// gemini-2.5-flash spends output-token budget on invisible reasoning before
+				// the visible answer (confirmed: a 1024-token call returned only 106 characters
+				// of real JSON before finishReason=MAX_TOKENS). Neither extraction nor summary
+				// benefits from that reasoning - both are transcription/templating from fixed
+				// input, not problems that need working through - so it is turned off entirely
+				// rather than raising maxOutputTokens to make room for it.
+				.thinkingBudget(0)
 				.build();
 
 		List<Message> messages = List.of(
@@ -143,10 +163,21 @@ public class GeminiProvider implements LlmProvider {
 		String text = output != null ? output.getText() : null;
 		if (text == null || text.isBlank()) {
 			// A blank response is usually a safety filter or a token limit. Invalid rather
-			// than transient: retrying the identical prompt will do the same thing.
-			throw new LlmException.InvalidLlmOutputException("provider returned empty content");
+			// than transient: retrying the identical prompt will do the same thing. The finish
+			// reason - a short, fixed token from the provider ("SAFETY", "MAX_TOKENS", "STOP",
+			// ...), never response content - says which, so it is safe to carry in the message
+			// (LlmException's own contract: "a fixed description, never the response body").
+			throw new LlmException.InvalidLlmOutputException(
+					"provider returned empty content (finishReason=" + finishReasonOf(generation) + ")");
 		}
 		return text;
+	}
+
+	/** @return the provider's finish reason, or {@code "unknown"} when none is available. */
+	private static String finishReasonOf(Generation generation) {
+		var metadata = generation.getMetadata();
+		String reason = metadata != null ? metadata.getFinishReason() : null;
+		return reason == null || reason.isBlank() ? "unknown" : reason;
 	}
 
 	private static <T> T parse(BeanOutputConverter<T> converter, String text) {

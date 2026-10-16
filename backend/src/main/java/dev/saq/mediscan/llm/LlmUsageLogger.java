@@ -34,17 +34,28 @@ public class LlmUsageLogger {
 	/**
 	 * A failed attempt.
 	 *
-	 * <p>The exception's class, never its message. A provider error body can quote the prompt
-	 * back, and the prompt is the masked report ({@code backend/CLAUDE.md}, "Exception
-	 * logging").
+	 * <p>The exception's class, never its message - with one narrow exception:
+	 * {@link LlmException.InvalidLlmOutputException}'s message is appended, because
+	 * {@link dev.saq.mediscan.llm.GeminiProvider} builds that one specific message from a
+	 * short, fixed provider token (the finish reason - {@code SAFETY}, {@code MAX_TOKENS},
+	 * {@code STOP}, ...) and never from response content. Every other exception's message is
+	 * still withheld: a provider error body can quote the prompt back, and the prompt is the
+	 * masked report ({@code backend/CLAUDE.md}, "Exception logging").
 	 */
 	public void recordFailure(LlmPurpose purpose, String provider, String model,
 			String promptVersion, int attempt, long latencyMs, Throwable failure) {
 
 		log.warn("llm call purpose={} provider={} model={} prompt={} attempt={} ms={} "
-				+ "outcome=failed error={}",
+				+ "outcome=failed error={}{}",
 				purpose.label(), provider, model, promptVersion, attempt, latencyMs,
-				failure.getClass().getSimpleName());
+				failure.getClass().getSimpleName(), safeDetailOf(failure));
+	}
+
+	private static String safeDetailOf(Throwable failure) {
+		if (failure instanceof LlmException.InvalidLlmOutputException && failure.getMessage() != null) {
+			return " detail=\"" + failure.getMessage() + "\"";
+		}
+		return "";
 	}
 
 	/** An attempt that never happened because the daily cap was reached. */
