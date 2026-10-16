@@ -1,0 +1,36 @@
+# The eval profile. Active alongside "test" (EvalRunner extends PostgresTestBase, which sets
+# "test", and adds "eval" itself) - Spring Boot's last-wins rule for multiple active profiles
+# means every key here overrides application-test.yml's fake-provider defaults, while anything
+# not restated here (max-invalid-retries, max-transient-retries, max-rows, ...) still comes from
+# the base application.yml, unchanged from production.
+#
+# LlmProviderGuard (production code, unmodified) already refuses to start with
+# mediscan.llm.provider=gemini and a blank GEMINI_API_KEY, so EvalRunner needs no separate
+# "refuse to run without a key" check of its own.
+mediscan:
+  llm:
+    provider: gemini
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
+    # Comfortably above eval.max-llm-calls (default 120, LLD 5.2) so the real cap guard is
+    # never the thing that stops a run - that's eval.max-llm-calls's job, not this one's.
+    daily-cap: 2000
+
+# eval.* properties, read directly with @Value in EvalRunner - these are test-only knobs, not
+# part of the production configuration surface MediScanProperties covers.
+eval:
+  # LLD 5.2. The runner counts real (non-cached) calls and stops cleanly at this many.
+  #
+  # This account's free tier (checked at aistudio.google.com/rate-limit, approval point 2,
+  # item 4) caps the Gemini Flash family at 20 requests/day - well under the ~56+ calls a full
+  # 31-case run needs. 16 leaves a margin below that daily wall for calls already spent earlier
+  # the same day; the disk cache means a run that stops here picks back up for free once the
+  # quota resets, so completing the dataset is a multi-day exercise on this tier, not a bug to
+  # work around.
+  max-llm-calls: 16
+  # LLD 5.1. The same account page gives 5 requests/minute for the Gemini Flash family - the
+  # earlier 6000ms guess (10 RPM) was double that and is almost certainly why calls were failing
+  # with increasingly severe errors. 13000ms paces at a little under 5/minute, with margin.
+  delay-between-calls-ms: 13000
+  # LLD 5.3. False ignores nothing; set true to force every case to call the model again.
+  refresh-cache: false

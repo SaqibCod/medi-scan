@@ -238,7 +238,59 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!--
+			  Excludes the @Tag("eval") runner from the default build. Surefire has
+			  supported JUnit 5 tag-based excludedGroups/groups since 2.22.0, well
+			  below the 3.5.6 this project's Boot 4.1.1 parent resolves, so no
+			  version needs pinning here - only the configuration.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludedGroups>eval</excludedGroups>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!--
+		  Runs only the @Tag("eval") class against the real Gemini model:
+		  ./mvnw test -Peval. Needs GEMINI_API_KEY (backend/CLAUDE.md).
+		-->
+		<profile>
+			<id>eval</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<!--
+						  combine.self="override": Maven merges a profile's plugin
+						  <configuration> with the main build's block for the same
+						  plugin key-by-key rather than replacing it, so an empty
+						  <excludedGroups> here was being merged away and the
+						  inherited "eval" from the main build stayed in effect -
+						  self-contradicting with <groups>eval</groups> below and
+						  silently matching zero tests. This forces a clean replace.
+						-->
+						<configuration combine.self="override">
+							<groups>eval</groups>
+							<!--
+							  EvalRunner doesn't match Surefire's default name-based
+							  include patterns (*Test, Test*, *Tests, *TestCase), so
+							  without this it is filtered out before @Tag is even
+							  checked and the profile silently runs zero tests.
+							-->
+							<includes>
+								<include>**/EvalRunner.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 
 </project>
