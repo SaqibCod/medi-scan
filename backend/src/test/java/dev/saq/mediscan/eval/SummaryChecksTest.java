@@ -53,6 +53,43 @@ class SummaryChecksTest {
 	}
 
 	@Test
+	void aDigitInsideAUnitExpressionIsNotInvented() {
+		// The "3" in "x10^3/uL" is part of the unit, not a value the summary wrote out - a real
+		// regression found in the first eval run (cbc-clean-table's summary). 6.4 is the row's
+		// own rawValue, already a legitimate number in its own right.
+		var wbcRow = List.of(new ValidatedBiomarker(0, "WBC", "wbc", "wbc", "6.4", 6.4,
+				"x10^3/uL", "4.0-11.0", 4.0, 11.0, Flag.NORMAL));
+		var invented = SummaryChecks.findInventedNumbers(
+				"Your WBC result is 6.4 x10^3/uL, which is normal.", List.of(), wbcRow, List.of());
+
+		assertThat(invented).isEmpty();
+	}
+
+	@Test
+	void aDigitInsideATestNameAbbreviationIsNotInvented() {
+		// The "1" in "A1c" is part of the test name - a real regression found in the first eval
+		// run (hba1c-glucose's summary). 6.1 is the row's own rawValue.
+		var a1cRow = List.of(new ValidatedBiomarker(0, "Hemoglobin A1c", "hemoglobin a1c", "hba1c",
+				"6.1", 6.1, "%", "4.8-5.6", 4.8, 5.6, Flag.HIGH));
+		var invented = SummaryChecks.findInventedNumbers(
+				"Your Hemoglobin A1c result is 6.1%, which is high.", List.of(), a1cRow, List.of());
+
+		assertThat(invented).isEmpty();
+	}
+
+	@Test
+	void aRealInventedNumberNextToAUnitIsStillCaught() {
+		// Confirms the word-embedding check does not over-exclude: 999 is a real candidate when
+		// it is written the way a summary actually writes a value - set off by a space, the way
+		// every real case in the dataset prints "162 mg/dL" rather than "162mg/dL".
+		var invented = SummaryChecks.findInventedNumbers("Your result was 999 mg/dL.", List.of(),
+				ROWS, List.of());
+
+		assertThat(invented).hasSize(1);
+		assertThat(invented.get(0).text()).isEqualTo("999");
+	}
+
+	@Test
 	void checksHighlightsSeparatelyFromTheSummary() {
 		var invented = SummaryChecks.findInventedNumbers("All within range.",
 				List.of("Cholesterol is 999, far above normal."), ROWS, List.of());

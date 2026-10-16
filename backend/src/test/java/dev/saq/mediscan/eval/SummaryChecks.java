@@ -115,11 +115,49 @@ public final class SummaryChecks {
 		}
 		Matcher matcher = NUMBER.matcher(text);
 		while (matcher.find()) {
+			if (isEmbeddedInWord(text, matcher.start(), matcher.end())) {
+				// A digit run that is part of a larger letters-and-digits token - "A1c",
+				// "x10^3/uL" - is a test-name abbreviation or a unit, not a value the summary
+				// wrote out, so it is never a candidate "invented" number in the first place.
+				continue;
+			}
 			Double value = parse(matcher.group());
 			if (value != null && !allowed.contains(value)) {
 				into.add(new InventedNumber(context, matcher.group()));
 			}
 		}
+	}
+
+	/**
+	 * Whether the digits at {@code [start, end)} sit inside a longer identifier rather than
+	 * standing alone as a value.
+	 *
+	 * <p>Scans outward through contiguous letter/digit/{@code ^} characters (the {@code ^} so
+	 * {@code x10^3} reads as one token even though the digit run on either side of it is
+	 * separated): if a letter turns up before the run ends, the digits are part of that word,
+	 * not a number on their own. A bare "70" between spaces never has a letter next to it in an
+	 * unbroken run and is left alone.
+	 */
+	private static boolean isEmbeddedInWord(String text, int start, int end) {
+		int left = start - 1;
+		while (left >= 0 && isWordChar(text.charAt(left))) {
+			if (Character.isLetter(text.charAt(left))) {
+				return true;
+			}
+			left--;
+		}
+		int right = end;
+		while (right < text.length() && isWordChar(text.charAt(right))) {
+			if (Character.isLetter(text.charAt(right))) {
+				return true;
+			}
+			right++;
+		}
+		return false;
+	}
+
+	private static boolean isWordChar(char c) {
+		return Character.isLetterOrDigit(c) || c == '^';
 	}
 
 	private static void collectNumbers(String text, Set<Double> into) {
