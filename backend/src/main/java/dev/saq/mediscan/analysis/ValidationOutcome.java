@@ -14,11 +14,19 @@ import java.util.Map;
  * @param biomarkers the rows that survived, in report order
  * @param collectedOn the collection date, or null
  * @param dropsByReason how many rows each reason removed, for logging as numbers only
+ * @param rangeTextDiscarded how many kept rows had their {@code referenceRangeText} cleared
+ *     because it failed the support check or contained a control character - distinct from
+ *     {@code dropsByReason}, because the row itself survives, just without a range. A report
+ *     where this is non-zero looks identical to one with ordinary qualitative ranges unless
+ *     this is counted separately (traced 2026-10-18, Phase 3 eval: Gemini occasionally
+ *     corrupts a printed en dash or comparator into a stray control character while
+ *     transcribing a reference range)
  */
 public record ValidationOutcome(
 		List<ValidatedBiomarker> biomarkers,
 		LocalDate collectedOn,
-		Map<DropReason, Integer> dropsByReason) {
+		Map<DropReason, Integer> dropsByReason,
+		int rangeTextDiscarded) {
 
 	public ValidationOutcome {
 		biomarkers = List.copyOf(biomarkers);
@@ -58,6 +66,7 @@ public record ValidationOutcome(
 	@Override
 	public String toString() {
 		return "ValidationOutcome[kept=" + biomarkers.size() + ", dropped=" + dropsByReason
+				+ ", rangeTextDiscarded=" + rangeTextDiscarded
 				+ ", hasCollectedOn=" + (collectedOn != null) + "]";
 	}
 }
