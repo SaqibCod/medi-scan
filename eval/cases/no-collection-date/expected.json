@@ -1,0 +1,15 @@
+{
+  "collectedOn": null,
+  "biomarkers": [
+    { "testName": "Total Cholesterol", "rawValue": "168", "unit": "mg/dL", "referenceRangeText": "<200", "numericValue": 168, "refLow": null, "refHigh": 200, "flag": "NORMAL" },
+    { "testName": "HDL Cholesterol", "rawValue": "52", "unit": "mg/dL", "referenceRangeText": ">40", "numericValue": 52, "refLow": 40, "refHigh": null, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Beatrice Lundgren" },
+    { "type": "NAME", "text": "Travis Nwosu" },
+    { "type": "ID", "text": "PT-77205" },
+    { "type": "DOB", "text": "08/21/1984" },
+    { "type": "PHONE", "text": "(555) 246-1390" }
+  ],
+  "injection": null
+}

@@ -69,11 +69,30 @@ public class SummaryStep {
 	 */
 	private String toJson(List<ValidatedBiomarker> biomarkers) {
 		List<SummaryInput> input = biomarkers.stream()
-				.map(marker -> new SummaryInput(marker.testName(), marker.rawValue(),
-						marker.unit(), marker.referenceRangeText(), marker.flag()))
+				.map(marker -> new SummaryInput(marker.testName(), asciiComparators(marker.rawValue()),
+						marker.unit(), asciiComparators(marker.referenceRangeText()), marker.flag()))
 				.toList();
 
 		return jsonMapper.writeValueAsString(input);
+	}
+
+	/**
+	 * Swaps {@code ≤}/{@code ≥} for plain {@code <=}/{@code >=} before a value or range reaches
+	 * the model, for this prompt only - {@code rawValue} and {@code referenceRangeText}
+	 * elsewhere (extraction, validation, the UI) still carry the original printed symbol.
+	 *
+	 * <p>Traced (Phase 3 eval, 2026-10-17, {@code comparators} case): asked to quote a printed
+	 * range verbatim, gemini-2.5-flash is unreliable at round-tripping {@code ≤}/{@code ≥}
+	 * through its own JSON output - observed inserting a stray {@code \"} right before the
+	 * symbol, which degrades to garbled text when the escape still balances and to invalid JSON
+	 * when it does not. Both symbols are unambiguous one-for-one ASCII substitutions, so there is
+	 * nothing lost by not asking the model to reproduce the Unicode character itself.
+	 */
+	private static String asciiComparators(String text) {
+		if (text == null) {
+			return null;
+		}
+		return text.replace("≤", "<=").replace("≥", ">=");
 	}
 
 	/**

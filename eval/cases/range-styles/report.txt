@@ -1,0 +1,18 @@
+Westbrook Clinical Labs
+Patient Name: Samuel Okonjo
+Patient ID: PT-55102
+DOB: 07/07/1986
+Phone: (555) 319-7704
+
+Ordered by: Dr. Rebecca Hahn
+Collected: 2026-09-01
+
+PANEL
+
+Calcium               9.6     mg/dL            8.5-10.5
+Magnesium             1.9     mg/dL            1.7 – 2.2
+Phosphorus            3.4     mg/dL            2.5 to 4.5
+Total Cholesterol     185     mg/dL            <200
+eGFR                  75      mL/min/1.73m2    ≥60
+
+End of report.

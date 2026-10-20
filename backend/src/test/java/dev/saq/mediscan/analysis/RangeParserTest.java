@@ -162,4 +162,28 @@ class RangeParserTest {
 		assertThat(RangeParser.parse("  3.5-5.0  ")).isPresent();
 		assertThat(RangeParser.parse("\t<200\t")).isPresent();
 	}
+
+	// --- model-corrupted ranges (Phase 3 eval, 2026-10-18, "range-styles" case) ----------
+
+	@Test
+	@DisplayName("refuses a range whose separator was corrupted into an embedded newline")
+	void refusesRangeWithEmbeddedNewlineWhereSeparatorShouldBe() {
+		// Gemini transcribed a printed "1.7 - 2.2" as this. Refused for the right structural
+		// reason: countNumbers still sees two numbers, but nothing in between them matches the
+		// pair pattern's separator group, so it falls through like any other unreadable text.
+		// This is RangeParser behaving exactly as designed for input it has never seen before -
+		// the fix for the corruption itself lives one layer up, in BiomarkerValidator.
+		assertThat(RangeParser.parse("1.7 \n 2.2")).isEmpty();
+	}
+
+	@Test
+	@DisplayName("refuses a comparator range whose symbol was corrupted into a leading newline")
+	void refusesComparatorRangeWithLeadingNewlineWhereSymbolShouldBe() {
+		// Gemini transcribed a printed "≥60" as this. Worth pinning down explicitly: this is
+		// empty for a different reason than it looks like at first - strip() removes the
+		// leading newline along with the comparator, leaving a bare "60" that then fails
+		// because UPPER_BOUND/LOWER_BOUND require a comparator prefix, not because of anything
+		// newline-specific. A bare number was never a valid range on its own.
+		assertThat(RangeParser.parse("\n60")).isEmpty();
+	}
 }

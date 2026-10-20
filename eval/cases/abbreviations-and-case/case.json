@@ -1,0 +1,9 @@
+{
+  "id": "abbreviations-and-case",
+  "title": "Abbreviated and mixed-case test names (hgb, WBC, alt, AST)",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["layout"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

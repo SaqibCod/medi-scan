@@ -1,0 +1,9 @@
+{
+  "id": "pdf-multi-page-cbc",
+  "title": "A CBC panel rendered as a two-page PDF",
+  "synthetic": true,
+  "format": "PDF",
+  "tags": ["pdf", "panel"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

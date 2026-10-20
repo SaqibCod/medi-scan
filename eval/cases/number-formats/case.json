@@ -1,0 +1,9 @@
+{
+  "id": "number-formats",
+  "title": "A thousands separator and a decimal comma in the same report",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["values"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

@@ -1,0 +1,21 @@
+Clearwater Labs Patient Report
+Attending: Victor Hammond
+
+Patient Name: Grace Liu
+Patient ID: PT-90312
+DOB: 05/30/1990
+Phone: (555) 662-1093
+
+Ordered by: Dr. Priya Nair
+Collected: 2026-09-10
+
+BASIC METABOLIC PANEL
+
+Glucose: 102 mg/dL (70-99)
+Sodium: 140 mmol/L (136-145)
+Potassium: 4.1 mmol/L (3.5-5.1)
+
+Note: Grace Liu was seen for a routine follow-up.
+
+Signed by: Dr. Omar Siddiqui
+Report prepared by Clearwater Labs. Reviewed by Victor Hammond.

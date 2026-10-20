@@ -1,0 +1,3 @@
+This line exists only to be repeated many times by the eval runner until
+the extracted text exceeds the configured length limit. It contains no
+lab values, no test names, and no personal data of any kind.

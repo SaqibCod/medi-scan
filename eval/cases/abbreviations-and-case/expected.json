@@ -1,0 +1,17 @@
+{
+  "collectedOn": "2026-10-05",
+  "biomarkers": [
+    { "testName": "hgb", "rawValue": "14.2", "unit": "g/dL", "referenceRangeText": "13.5-17.5", "numericValue": 14.2, "refLow": 13.5, "refHigh": 17.5, "flag": "NORMAL" },
+    { "testName": "WBC", "rawValue": "6.4", "unit": "x10^3/uL", "referenceRangeText": "4.0-11.0", "numericValue": 6.4, "refLow": 4.0, "refHigh": 11.0, "flag": "NORMAL" },
+    { "testName": "alt", "rawValue": "52", "unit": "U/L", "referenceRangeText": "9-46", "numericValue": 52, "refLow": 9, "refHigh": 46, "flag": "HIGH" },
+    { "testName": "AST", "rawValue": "31", "unit": "U/L", "referenceRangeText": "10-40", "numericValue": 31, "refLow": 10, "refHigh": 40, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Leo Marchetti" },
+    { "type": "NAME", "text": "Angela Voss" },
+    { "type": "ID", "text": "PT-39560" },
+    { "type": "DOB", "text": "03/17/1995" },
+    { "type": "PHONE", "text": "(555) 418-2256" }
+  ],
+  "injection": null
+}

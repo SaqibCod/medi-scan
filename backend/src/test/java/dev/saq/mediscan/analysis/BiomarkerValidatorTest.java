@@ -188,6 +188,106 @@ class BiomarkerValidatorTest {
 		assertThat(outcome.biomarkers()).isEmpty();
 	}
 
+	// --- the reference-range support check -----------------------------------
+
+	@Test
+	@DisplayName("discards a range corrupted into an embedded control character, keeping the row")
+	void discardsRangeCorruptedWithEmbeddedControlCharacter() {
+		// Traced 2026-10-18: Gemini transcribed a printed "1.7 - 2.2" as "1.7 \n 2.2", losing
+		// the dash. The row and its value are still good, so only the range is discarded.
+		String text = "Magnesium 1.9 mg/dL 1.7 - 2.2";
+
+		ValidationOutcome outcome = validator.validate(new ModelExtraction(
+				List.of(row("Magnesium", "1.9", "mg/dL", "1.7 \n 2.2")), null), text);
+
+		assertThat(outcome.biomarkers()).hasSize(1);
+		ValidatedBiomarker marker = outcome.biomarkers().get(0);
+		assertThat(marker.rawValue()).isEqualTo("1.9");
+		assertThat(marker.referenceRangeText()).isNull();
+		assertThat(marker.flag()).isEqualTo(Flag.UNKNOWN);
+		assertThat(outcome.rangeTextDiscarded()).isEqualTo(1);
+		// The row was kept, so this is not a row drop.
+		assertThat(outcome.dropsByReason()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("discards a comparator range corrupted into a leading control character")
+	void discardsComparatorRangeCorruptedToControlCharacter() {
+		// Traced 2026-10-18: a printed "≥60" came back as a bare "\n60" - String.strip() would
+		// erase the leading control character along with the evidence, which is why this check
+		// runs on the model's raw answer before any trimming happens.
+		String text = "eGFR 75 mL/min/1.73m2 >=60";
+
+		ValidationOutcome outcome = validator.validate(new ModelExtraction(
+				List.of(row("eGFR", "75", "mL/min/1.73m2", "\n60")), null), text);
+
+		assertThat(outcome.biomarkers()).hasSize(1);
+		ValidatedBiomarker marker = outcome.biomarkers().get(0);
+		assertThat(marker.referenceRangeText()).isNull();
+		assertThat(marker.flag()).isEqualTo(Flag.UNKNOWN);
+		assertThat(outcome.rangeTextDiscarded()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("discards a range that does not appear in the source, keeping the row")
+	void discardsUnsupportedRangeText() {
+		// No control character this time - the model's range simply does not match what was
+		// printed. Same risk as an invented rawValue, just for the range.
+		String text = "Glucose 99 mg/dL 70-100";
+
+		ValidationOutcome outcome = validator.validate(new ModelExtraction(
+				List.of(row("Glucose", "99", "mg/dL", "70-99")), null), text);
+
+		assertThat(outcome.biomarkers()).hasSize(1);
+		assertThat(outcome.biomarkers().get(0).referenceRangeText()).isNull();
+		assertThat(outcome.rangeTextDiscarded()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("keeps a clean range that uses an en dash or a comparator symbol")
+	void keepsCleanUnicodeRangeText() {
+		// The same symbols as the corrupted cases above, but transcribed correctly - the new
+		// check must not start rejecting ranges the model got right.
+		String text = "Magnesium 1.9 mg/dL 1.7 – 2.2\neGFR 75 mL/min/1.73m2 ≥60";
+
+		ValidationOutcome outcome = validator.validate(new ModelExtraction(List.of(
+				row("Magnesium", "1.9", "mg/dL", "1.7 – 2.2"),
+				row("eGFR", "75", "mL/min/1.73m2", "≥60")), null), text);
+
+		assertThat(outcome.biomarkers()).hasSize(2);
+		assertThat(outcome.biomarkers().get(0).referenceRangeText()).isEqualTo("1.7 – 2.2");
+		assertThat(outcome.biomarkers().get(0).flag()).isEqualTo(Flag.NORMAL);
+		assertThat(outcome.biomarkers().get(1).referenceRangeText()).isEqualTo("≥60");
+		assertThat(outcome.biomarkers().get(1).flag()).isEqualTo(Flag.NORMAL);
+		assertThat(outcome.rangeTextDiscarded()).isZero();
+	}
+
+	@Test
+	@DisplayName("keeps a genuinely qualitative range such as 'See comment'")
+	void keepsQualitativeRangeText() {
+		String text = "Hepatitis C Antibody Negative See comment";
+
+		ValidationOutcome outcome = validator.validate(new ModelExtraction(
+				List.of(row("Hepatitis C Antibody", "Negative", null, "See comment")), null), text);
+
+		assertThat(outcome.biomarkers()).hasSize(1);
+		ValidatedBiomarker marker = outcome.biomarkers().get(0);
+		// Genuinely printed, so it survives - RangeParser's own refusal is what makes this
+		// UNKNOWN, not the new check.
+		assertThat(marker.referenceRangeText()).isEqualTo("See comment");
+		assertThat(marker.flag()).isEqualTo(Flag.UNKNOWN);
+		assertThat(outcome.rangeTextDiscarded()).isZero();
+	}
+
+	@Test
+	@DisplayName("a missing reference range stays null")
+	void missingRangeTextStaysNull() {
+		ValidationOutcome outcome = validate(row("Total Cholesterol", "238", "mg/dL", null));
+
+		assertThat(outcome.biomarkers().get(0).referenceRangeText()).isNull();
+		assertThat(outcome.rangeTextDiscarded()).isZero();
+	}
+
 	// --- malformed and duplicate rows ----------------------------------------
 
 	@Test

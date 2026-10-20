@@ -1,0 +1,20 @@
+{
+  "collectedOn": "2026-08-19",
+  "biomarkers": [
+    { "testName": "Glucose", "rawValue": "93", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 93, "refLow": 70, "refHigh": 99, "flag": "NORMAL" },
+    { "testName": "Sodium", "rawValue": "139", "unit": "mmol/L", "referenceRangeText": "136-145", "numericValue": 139, "refLow": 136, "refHigh": 145, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Oliver Kincaid" },
+    { "type": "NAME", "text": "Priscilla Nombe" },
+    { "type": "ID", "text": "MRN-204477" },
+    { "type": "ID", "text": "ACC-99201" },
+    { "type": "ID", "text": "SPEC-558812" },
+    { "type": "SSN", "text": "555-12-3456" },
+    { "type": "EMAIL", "text": "oliver.kincaid@example-mail.test" },
+    { "type": "DOB", "text": "04/04/1990" },
+    { "type": "PHONE", "text": "555.812.0043" },
+    { "type": "PHONE", "text": "555-203-9981" }
+  ],
+  "injection": null
+}

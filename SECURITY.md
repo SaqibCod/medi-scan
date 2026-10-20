@@ -90,18 +90,53 @@ it also adds no value on them, so the label rules are what the project relies on
 
 ### Known limits
 
+These are measured, not estimated. The numbers come from the Phase 3 evaluation
+set — 31 synthetic reports with every planted identifier written down in advance,
+then checked against the masked text, the model prompts, and every text column in
+the database. Method and full results: `docs/evaluation.md`.
+
+**What the measurement found** (2026-10-20, 31 cases):
+
+| Type | Result |
+|---|---|
+| `ID`, `PHONE`, `EMAIL`, `SSN`, `DOB` | no leaks |
+| `NAME` | 2 leaks, both the "no label, no honorific" case below |
+| `ADDRESS` | **not masked at all** — no address rule exists |
+
+No lab value, unit or reference range was damaged by masking in any case, so the
+rules are not buying their coverage by over-masking the results.
+
 Masking will miss:
 
-- **names in a column layout with no colon** — the labelled-name rule requires
-  `Label: Name`, which is how lab reports punctuate headers, but a
-  space-aligned `Patient Name    Jane Roe` is missed
-- names with no label and no honorific anywhere near them — in a logo, a footer,
-  or a scanned signature
+- **addresses, entirely.** There is no address rule, so a street address in a
+  header or footer reaches the model and the database. This is the largest known
+  gap and the one to close first.
+- **a second mention of a name in free text** — `Note: Jane Roe was seen for a
+  routine follow-up.` The labelled occurrence in the header is masked; a later
+  mention in prose has no label to key on. Confirmed in the evaluation.
+- **names behind a label the list does not know, or with no colon** — the
+  labelled-name rule requires `Label: Name`, which is how lab reports punctuate
+  headers. `Reviewed by Victor Hammond.` is missed on both counts. Confirmed in
+  the evaluation.
+- **names in a column layout with no colon** — a space-aligned
+  `Patient Name    Jane Roe` is missed, for the same reason.
 - names it cannot recognise as names: unusual spellings, non-Latin scripts, names
   that are also common words
-- personal details written into free-text comment fields and physician notes
+- personal details written into other free-text comment fields and physician notes
 - identifiers in formats the label list does not anticipate
 - text that OCR mangled badly enough to break the patterns
+
+The statistical person-name finder (OpenNLP) that could catch free-text names is
+present but **off by default**: on the samples tested it added no value the label
+rules did not already cover, and a name finder trained on news text carries its
+own risk of masking a lab term. The figures above therefore describe the label
+rules alone.
+
+**Read these numbers for what they are.** 31 invented reports are not a claim
+about real lab paperwork, which brings layouts, abbreviations and identifier
+shapes this set does not contain. Masking is best-effort, and the limits above
+are the reason the advice at the top of this file — do not upload a real report
+you would not want to lose control of — is not boilerplate.
 
 The test suite checks masking in **both** directions — that personal data is
 removed, *and* that every lab value and reference range survives byte for byte,

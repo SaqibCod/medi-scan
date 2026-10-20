@@ -1,0 +1,16 @@
+{
+  "collectedOn": "2026-01-30",
+  "biomarkers": [
+    { "testName": "Glucose", "rawValue": "96", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 96, "refLow": 70, "refHigh": 99, "flag": "NORMAL" },
+    { "testName": "Sodium", "rawValue": "142", "unit": "mmol/L", "referenceRangeText": "136-145", "numericValue": 142, "refLow": 136, "refHigh": 145, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Harriet Doyle" },
+    { "type": "NAME", "text": "Caleb Strand" },
+    { "type": "ID", "text": "PT-83390" },
+    { "type": "DOB", "text": "09/09/1987" },
+    { "type": "PHONE", "text": "(555) 662-0147" },
+    { "type": "ADDRESS", "text": "719 Larkspur Court, Millbrook, ST 00000" }
+  ],
+  "injection": null
+}

@@ -87,8 +87,9 @@ public class ReportJob {
 		ModelExtraction extracted = extractionStep.run(maskedText);
 		ValidationOutcome validated = validator.validate(extracted, maskedText);
 
-		log.info("validate done id={} kept={} dropped={}",
-				reportId, validated.biomarkers().size(), validated.dropsByReason());
+		log.info("validate done id={} kept={} dropped={} rangeTextDiscarded={}",
+				reportId, validated.biomarkers().size(), validated.dropsByReason(),
+				validated.rangeTextDiscarded());
 
 		if (validated.isEmpty()) {
 			// A readable document with nothing in it that survived checking. Distinct from

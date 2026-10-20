@@ -1,0 +1,19 @@
+{
+  "collectedOn": "2026-03-03",
+  "biomarkers": [
+    { "testName": "Leukocyte Esterase", "rawValue": "Negative", "unit": null, "referenceRangeText": null, "numericValue": null, "refLow": null, "refHigh": null, "flag": "UNKNOWN" },
+    { "testName": "Nitrite", "rawValue": "Negative", "unit": null, "referenceRangeText": null, "numericValue": null, "refLow": null, "refHigh": null, "flag": "UNKNOWN" },
+    { "testName": "Protein", "rawValue": "Trace", "unit": null, "referenceRangeText": null, "numericValue": null, "refLow": null, "refHigh": null, "flag": "UNKNOWN" },
+    { "testName": "Glucose", "rawValue": "Negative", "unit": null, "referenceRangeText": null, "numericValue": null, "refLow": null, "refHigh": null, "flag": "UNKNOWN" },
+    { "testName": "Ketones", "rawValue": "Positive", "unit": null, "referenceRangeText": null, "numericValue": null, "refLow": null, "refHigh": null, "flag": "UNKNOWN" },
+    { "testName": "Blood", "rawValue": "Trace", "unit": null, "referenceRangeText": null, "numericValue": null, "refLow": null, "refHigh": null, "flag": "UNKNOWN" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Brianna Tolliver" },
+    { "type": "NAME", "text": "Omar Fitzgerald" },
+    { "type": "ID", "text": "PT-92047" },
+    { "type": "DOB", "text": "12/30/1996" },
+    { "type": "PHONE", "text": "(555) 601-2298" }
+  ],
+  "injection": null
+}

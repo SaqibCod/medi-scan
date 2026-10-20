@@ -1,0 +1,9 @@
+{
+  "id": "range-styles",
+  "title": "Every accepted range notation in one report",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["ranges"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

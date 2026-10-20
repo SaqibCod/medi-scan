@@ -1,0 +1,17 @@
+Crestview Health Labs
+Patient Name: Leo Marchetti
+Patient ID: PT-39560
+DOB: 03/17/1995
+Phone: (555) 418-2256
+
+Ordered by: Dr. Angela Voss
+Collected: 2026-10-05
+
+CBC AND LIVER PANEL
+
+hgb      14.2   g/dL       13.5-17.5
+WBC      6.4    x10^3/uL   4.0-11.0
+alt      52     U/L        9-46
+AST      31     U/L        10-40
+
+End of report.

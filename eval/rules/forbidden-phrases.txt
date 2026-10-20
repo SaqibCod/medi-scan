@@ -1,0 +1,53 @@
+# One phrase per line, case-insensitive substring match against the summary and highlights.
+# A hit is not an automatic failure - a phrase can be harmless in context (docs/phase-3-lld.md
+# section 6.5) - so SummaryChecks lists every hit for a human to judge rather than scoring it.
+#
+# Diagnosis language
+you have
+you are diagnosed
+diagnosed with
+diagnosis of
+indicates
+suggests
+consistent with
+this means you have
+it looks like you have
+#
+# Disease and condition names (common ones a summary should never need)
+diabetes
+cancer
+kidney disease
+kidney failure
+liver disease
+liver failure
+heart disease
+heart failure
+anemia
+hepatitis
+cirrhosis
+thyroid disease
+hypothyroidism
+hyperthyroidism
+infection
+sepsis
+#
+# Treatment and medication language
+you should take
+you need to take
+start taking
+stop taking
+medication
+prescription
+dosage
+treatment for
+#
+# Alarm language
+dangerous
+emergency
+life-threatening
+life threatening
+urgent
+immediately see
+go to the er
+call 911
+critical condition

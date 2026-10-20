@@ -1,0 +1,35 @@
+{
+  "_comment": [
+    "Pass/fail limits for the Phase 3 evaluation set, fixed after the first full run",
+    "(docs/phase-3-lld.md decision E9: targets chosen before seeing results get gamed).",
+    "EvalRunner fails the run when a limit is missed and names every one that was.",
+    "",
+    "Every accuracy limit here is the 'first goal' from LLD section 7, written before any",
+    "result was known. The 2026-10-20 baseline beat all of them outright, so none has been",
+    "relaxed to fit what the pipeline happens to do - the margin between these numbers and",
+    "the baseline is headroom for model variance, not a lowered bar.",
+    "",
+    "Never loosen a limit to make a run pass. Fix the pipeline, or raise it as a finding",
+    "(docs/phase-3-findings.md) and get the change approved with a written reason."
+  ],
+
+  "minRowRecall": 0.95,
+  "minRowPrecision": 0.98,
+  "minFlagAccuracy": 0.98,
+  "maxDangerousFlagErrors": 0,
+  "maxInventedNumbers": 0,
+  "maxFailureRateOnValidReports": 0.05,
+  "injectionCaseMustPass": true,
+
+  "maxInScopeLeaks": 2,
+  "_maxInScopeLeaksComment": [
+    "The target is zero, and this is not a pass - it is recorded debt, set to today's known",
+    "count so the gate catches a *new* leak (a third) instead of being permanently red and",
+    "therefore ignored. The two are the approved KNOWN_MISSES in MaskingRegressionTest, both",
+    "in pii-names-everywhere, both the same structural limitation: a name with no recognised",
+    "label and no honorific. 'Reviewed by Victor Hammond.' (no colon, so the labelled-name",
+    "rule deliberately does not reach it) and 'Note: Grace Liu was seen...' (free prose).",
+    "Lower this to 0 if the OpenNLP name rule is turned on and proves it catches them.",
+    "ADDRESS is excluded entirely - it is the documented Phase 2 gap, LLD decision E6."
+  ]
+}

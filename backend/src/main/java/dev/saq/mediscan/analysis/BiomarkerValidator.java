@@ -36,6 +36,16 @@ public class BiomarkerValidator {
 	/** Longer than any real test name or value; past this the model has returned prose. */
 	private static final int MAX_FIELD_LENGTH = 200;
 
+	/**
+	 * A reference range is one printed field; it should never legitimately contain one of
+	 * these. Traced 2026-10-18 (Phase 3 eval, {@code range-styles} case): Gemini occasionally
+	 * replaces a printed en dash or comparator ({@code –}, {@code ≥}) with a literal embedded
+	 * newline while transcribing a range, which {@link RangeParser} then correctly refuses to
+	 * read as a number - but without this check, the corrupted text itself (not just the
+	 * flag) would still reach the biomarker and be shown to the reader as if it were printed.
+	 */
+	private static final Pattern RANGE_CONTROL_CHARACTER = Pattern.compile("\\p{Cntrl}");
+
 	private final BiomarkerCatalog catalog;
 	private final CollectedDateParser dateParser;
 	private final int maxRows;
@@ -60,6 +70,7 @@ public class BiomarkerValidator {
 
 		List<ValidatedBiomarker> kept = new ArrayList<>();
 		Set<String> seen = new HashSet<>();
+		int[] rangeTextDiscarded = { 0 };
 
 		for (ModelExtraction.ModelRow row : extraction.biomarkers()) {
 			if (kept.size() >= maxRows) {
@@ -69,18 +80,18 @@ public class BiomarkerValidator {
 			}
 
 			Optional<ValidatedBiomarker> validated =
-					validateRow(row, maskedText, kept.size(), seen, drops);
+					validateRow(row, maskedText, kept.size(), seen, drops, rangeTextDiscarded);
 			validated.ifPresent(kept::add);
 		}
 
 		LocalDate collectedOn = dateParser.parse(extraction.collectedOn(), maskedText).orElse(null);
 
-		return new ValidationOutcome(kept, collectedOn, drops);
+		return new ValidationOutcome(kept, collectedOn, drops, rangeTextDiscarded[0]);
 	}
 
 	private Optional<ValidatedBiomarker> validateRow(ModelExtraction.ModelRow row,
 			String maskedText, int position, Set<String> seen,
-			Map<ValidationOutcome.DropReason, Integer> drops) {
+			Map<ValidationOutcome.DropReason, Integer> drops, int[] rangeTextDiscarded) {
 
 		String testName = trimToNull(row.testName());
 		String rawValue = trimToNull(row.rawValue());
@@ -99,7 +110,11 @@ public class BiomarkerValidator {
 		}
 
 		String unit = trimToNull(row.unit());
-		String referenceRangeText = trimToNull(row.referenceRangeText());
+		String referenceRangeText = sanitizeReferenceRange(row.referenceRangeText(), maskedText);
+		if (referenceRangeText == null && row.referenceRangeText() != null
+				&& !row.referenceRangeText().isBlank()) {
+			rangeTextDiscarded[0]++;
+		}
 		String testNameNorm = TestNameNormalizer.normalize(testName);
 
 		// Same test, same value, same unit: the model listed one row twice, which happens
@@ -156,6 +171,44 @@ public class BiomarkerValidator {
 
 		String haystack = maskedText.replaceAll("[ \\t]+", " ");
 		return wholeToken.matcher(haystack).find();
+	}
+
+	/**
+	 * Clears a reference range that looks corrupted rather than storing or parsing it.
+	 *
+	 * <p>Two checks, same reasoning as {@link #appearsInText}: dropping is always preferred to
+	 * showing a reader something the report did not actually print.
+	 *
+	 * <p>The control-character check runs on the model's raw answer, before any trimming -
+	 * {@link String#strip()} removes a <em>leading</em> control character along with ordinary
+	 * whitespace, which would erase the one piece of evidence that the field was corrupted
+	 * (observed: a printed {@code ≥60} transcribed as a bare {@code "\n60"}, where {@code .strip()}
+	 * alone would leave a plausible-looking {@code "60"} with no comparator - wrong, but no
+	 * longer visibly wrong). The support check then catches the other shape of the same bug,
+	 * where the corruption lands in the middle rather than at an edge (a printed {@code 1.7 – 2.2}
+	 * transcribed as {@code "1.7 \n 2.2"}: no control character survives trimming here either,
+	 * but the collapsed text no longer matches the source as a whole token, because the dash is
+	 * simply gone).
+	 *
+	 * <p>Genuinely qualitative range text ({@code "Negative"}, {@code "See comment"}, a
+	 * sex-dependent range with a colon and a slash) is untouched: it is real, it was printed, and
+	 * it passes the support check exactly as {@code rawValue} does. This only discards text that
+	 * either could not have come from the report as printed, or demonstrably did not.
+	 */
+	private static String sanitizeReferenceRange(String rawRangeText, String maskedText) {
+		if (rawRangeText == null) {
+			return null;
+		}
+		if (RANGE_CONTROL_CHARACTER.matcher(rawRangeText).find()) {
+			return null;
+		}
+
+		String trimmed = trimToNull(rawRangeText);
+		if (trimmed == null) {
+			return null;
+		}
+
+		return appearsInText(trimmed, maskedText) ? trimmed : null;
 	}
 
 	private static String trimToNull(String value) {
