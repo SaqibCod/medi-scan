@@ -7,7 +7,10 @@ findings go to a ranked list for a separate decision, except for small, clear
 bug fixes with a regression test.
 
 Full design: `docs/phase-3-lld.md`. This file is the method summary and the
-committed baseline for a portfolio reader.
+committed baseline for a portfolio reader. Two companions: `docs/phase-3-report.md`
+closes the phase (headline numbers, every leak with the rule that should have
+caught it, cost, and the ranked findings list), and `docs/phase-3-findings.md`
+traces the bugs the evaluation surfaced.
 
 ## Method
 
