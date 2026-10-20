@@ -38,14 +38,23 @@ class MaskingRegressionTest {
 	/**
 	 * Approved, explained exceptions to "every planted string of an in-scope type must be
 	 * absent from the masked text". Both entries were reviewed and approved after the first run
-	 * of this test found them; neither is a new bug - both are the documented
-	 * "no label, no honorific" limitation in {@code SECURITY.md}'s known-limits section.
+	 * of this test found them, and neither is a new bug: both are limitations recorded in
+	 * {@code SECURITY.md}'s known-limits section, though not the same one. {@code Grace Liu}
+	 * is the "no label, no honorific" case (free prose); {@code Victor Hammond} is a known
+	 * label list plus the deliberate colon requirement. Each entry's own reason says which.
 	 */
 	private static final Set<KnownMiss> KNOWN_MISSES = Set.of(
+			// Reason corrected 2026-10-20, checked against the real masked output rather than
+			// read off the rule: the header occurrence IS masked ("attending" is in
+			// LABELLED_NAME's label list), so the original claim that neither label was known
+			// was wrong. The footer is the whole of this miss, and the colon requirement is
+			// half of why - see docs/phase-3-report.md, finding 3.
 			new KnownMiss("pii-names-everywhere", "Victor Hammond",
-					"appears only after \"Attending:\" (header) and \"Reviewed by\" (footer), "
-							+ "neither of which is in LabeledNameRule's label list",
-					"SECURITY.md known limit: names with no recognized label"),
+					"the header occurrence (\"Attending:\") is masked correctly; the footer's "
+							+ "\"Reviewed by Victor Hammond.\" survives on two counts - "
+							+ "\"reviewed by\" is not in LABELLED_NAME's label list, and the "
+							+ "line carries no colon, which that rule requires on purpose",
+					"SECURITY.md known limit: names behind an unknown label, or with no colon"),
 			new KnownMiss("pii-names-everywhere", "Grace Liu",
 					"the labelled occurrence (\"Patient Name:\") is masked correctly; a second, "
 							+ "unlabelled mid-text mention (\"Note: Grace Liu was seen...\") survives",

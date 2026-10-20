@@ -150,8 +150,35 @@ data.
 |---|---|---|---|---|
 | 1 | Addresses are not masked at all | **High** - a street address reaches the model and the database | Add an address rule, or enable and validate a broader PII pass | Moderate; address formats vary and over-masking a lab line is a real risk |
 | 2 | Names in free text, or behind an unknown label, survive masking | **High** - two confirmed leaks | Run the OpenNLP experiment above. Separately, consider adding `reviewed by` to the label list - but note the colon requirement is deliberate, so relaxing it needs its own evidence | Small to try; the colon change needs care |
-| 3 | `MaskingRegressionTest`'s `Victor Hammond` known-miss reason is factually wrong: it claims `Attending:` is not a known label, but it is, and that occurrence masks correctly | Low - documentation only, but it misdirects the next reader of a privacy record | Correct the reason to name the footer and the colon requirement. Left unedited on purpose: it is an approved record and the call is the maintainer's | One line |
+| 3 | ~~`MaskingRegressionTest`'s `Victor Hammond` known-miss reason is factually wrong: it claims `Attending:` is not a known label, but it is, and that occurrence masks correctly~~ | ~~Low - documentation only, but it misdirects the next reader of a privacy record~~ | **Fixed 2026-10-20.** The reason now names the footer and both causes (unknown label *and* the deliberate colon requirement), and the surrounding javadoc no longer claims both entries are the same limitation. Documentation only - the exemption is matched on case id and text, so what is masked and what is exempted are unchanged, and the leak count is still 2 | Done |
 | 4 | Production `mediscan.llm.timeout` is 30s, but a real PDF extract measured 21.4s | Medium - a thin margin means intermittent `LLM_UNAVAILABLE` on slow calls | Raise production to about 60s once a wider latency spread is observed; the eval profile is already 60s | One line, plus judgement |
 | 5 | Only 42.9% of summaries land in the prompt's 3-to-5-sentence range | Low - style, not safety; reading grade is 4.1, well inside target | Prompt wording. Deliberately ungated and unchanged: a prompt edit needs approval and a re-baseline | Small change, non-trivial re-verification |
 | 6 | `you have` fires as a forbidden phrase on `repeated-test`'s plainly descriptive "You have two results for Potassium" | Low - one false positive, surfaced for human judgement by design | Narrow the phrase, or allow a descriptive context | Small |
 | 7 | The run header records neither total tokens nor wall-clock time, both of which LLD section 8 asks for | Low - observability | Add both to `RunInfo` | Small |
+
+## Merge readiness
+
+**Verification, on the final tree:** `./mvnw verify` - **1040 tests, 0 failures, 0 errors,
+BUILD SUCCESS**. `MaskingRegressionTest` and `DatasetConsistencyTest` both ran and passed, which
+matters here because they are the two that police the dataset and the privacy exemptions.
+`EvalRunner` is `@Tag("eval")` and excluded from `verify` by design; it was exercised separately
+and is the source of the baseline above.
+
+**The phase is complete and the work is self-consistent,** with two things to settle before this
+branch merges. Neither is a regression introduced here.
+
+1. **`docs/phase-2-lld.md` and `docs/phase-3-lld.md` are untracked, and they are not
+   gitignored** - so they are simply not committed yet. Four tracked files point at
+   `phase-3-lld.md` (`docs/evaluation.md`, `docs/phase-3-findings.md`, this report, and
+   `eval/README.md`), which means on a fresh clone those references dangle. Either commit the
+   two LLDs or drop the references; the files are design documents, so which one is the
+   author's call, not a decision to make silently on the way past.
+2. **Findings 1 and 2 are open privacy gaps** - addresses unmasked, and names in free text or
+   behind an unknown label surviving. They are Phase 2 limitations that this phase *measured*
+   rather than introduced, they are recorded in `SECURITY.md` and bounded by
+   `eval/thresholds.json`, and the zero-leak target is explicitly not met. Merging is reasonable
+   on the understanding that the gaps are known, visible and gated against getting worse - not
+   on the understanding that they are solved.
+
+Also uncommitted and deliberately left alone: a whitespace-only change in
+`TextNormalizer.java` that predates this phase.
