@@ -320,7 +320,14 @@ class EvalRunner extends PostgresTestBase {
 		 * ({@code CollectedDateParserTest}, which builds its own fixed {@code Clock} directly
 		 * and never touches this bean) are both unaffected.
 		 */
+		// @Primary is load-bearing, and its absence was silent (found 2026-10-20 by
+		// header-footer-noise scoring a date miss on a real call). ClockConfig's bean is
+		// @ConditionalOnMissingBean but is processed first, so both beans end up registered;
+		// with two candidates and no @Primary, Spring falls back to matching the injection
+		// point's parameter name - CollectedDateParser's is `clock`, which is ClockConfig's
+		// bean name, not this one. The override registered and was never injected anywhere.
 		@Bean
+		@Primary
 		Clock fixedEvalClock() {
 			Instant referenceDate = Instant.parse("2027-01-01T00:00:00Z");
 			return Clock.offset(Clock.systemUTC(), Duration.between(Instant.now(), referenceDate));
