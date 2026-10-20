@@ -11,10 +11,23 @@ mediscan:
   llm:
     provider: gemini
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
+    # Cosmetic only: this is what LlmUsageLogger prints, not what the model call actually
+    # uses. The real model comes from spring.ai.google.genai.chat.options.model in the base
+    # application.yml, which this profile does not restate, so it inherits unchanged
+    # (confirmed 2026-10-18 the hard way: overriding mediscan.llm.model alone silently did
+    # nothing to the real request). Keep this in step with that value by hand.
+    model: ${GEMINI_CHAT_MODEL:gemini-3.8-flash}
     # Comfortably above eval.max-llm-calls (default 120, LLD 5.2) so the real cap guard is
     # never the thing that stops a run - that's eval.max-llm-calls's job, not this one's.
     daily-cap: 2000
+    # Raised from the base application.yml's 30s (2026-10-19, eval profile only - production
+    # stays at 30s). Originally added while chasing what turned out to be a different problem
+    # (docs/phase-3-findings.md item 1: the timeouts were gemini-2.5-flash, which was silently
+    # the model actually in use). Kept anyway, because the margin is genuinely thin once the
+    # configured model is really the one being called: a pdf-lipid-table extract measured
+    # 21.4s against gemini-3.8-flash, which leaves production's 30s only ~9s of headroom.
+    # Worth revisiting for production on the strength of a full run's latency spread.
+    timeout: 60s
 
 spring:
   ai:
@@ -24,12 +37,25 @@ spring:
       # 2s x5 per attempt) and is completely invisible to LlmGateway and this eval's own
       # pacing/budget accounting - a single "attempt" logged by LlmUsageLogger can silently be
       # several real HTTP requests to Gemini, several multiples of what eval.delay-between-calls-ms
-      # and eval.max-llm-calls think they are spending. Traced here (2026-10-17) via 27-60s
-      # latencies on summary calls for both a large case (cmp-clean-table) and a small one
-      # (comparators) - size-independent, which is the signature of a hidden retry loop rather
-      # than slow generation. Setting this to 1 makes LlmGateway's own already-reviewed retry
-      # and backoff (mediscan.llm.max-transient-retries) the only retry layer in effect.
-      max-attempts: 1
+      # and eval.max-llm-calls think they are spending. Traced on gemini-2.5-flash (2026-10-17)
+      # via 27-60s latencies on summary calls for both a large case (cmp-clean-table) and a
+      # small one (comparators) - size-independent, which was the signature of a hidden retry
+      # loop rather than slow generation. Setting this to 1 made LlmGateway's own
+      # already-reviewed retry and backoff (mediscan.llm.max-transient-retries) the only retry
+      # layer in effect.
+      #
+      # Then raised to 3 (2026-10-18) on the theory that 1 was too aggressive for the new
+      # model. That theory was wrong, and the evidence for it was an artefact: the cases this
+      # was meant to rescue were failing on a misconfiguration (docs/phase-3-findings.md item
+      # 1), and the "direct calls succeed" comparison that seemed to implicate this setting
+      # was really down to those scratch tests overriding the model per request. With the
+      # root cause fixed, both previously-failing cases pass first time, no retries used.
+      #
+      # Left at 3 rather than reverted to the Spring AI default (10) because the eval's own
+      # budget accounting cannot see this layer at all: one logged "attempt" may be several
+      # real requests, which quietly multiplies both eval.max-llm-calls and the pacing below.
+      # A small number keeps that distortion small while still leaving some cushion.
+      max-attempts: 3
 
 # eval.* properties, read directly with @Value in EvalRunner - these are test-only knobs, not
 # part of the production configuration surface MediScanProperties covers.

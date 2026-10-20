@@ -51,8 +51,20 @@ public class LlmUsageLogger {
 				failure.getClass().getSimpleName(), safeDetailOf(failure));
 	}
 
+	/**
+	 * The failure's own description, for any {@link LlmException}.
+	 *
+	 * <p>Safe for every kind, by that type's documented contract: providers construct these
+	 * "with a fixed description, never with the response body". So this carries a finish
+	 * reason, an HTTP status, or a cause's class name - never report content.
+	 *
+	 * <p>Widened from {@code InvalidLlmOutputException} only (2026-10-20). Dropping the
+	 * message for the other two kinds cost days: a misconfiguration that failed every call
+	 * deterministically logged as nothing but {@code error=TransientLlmException}, while the
+	 * message it had already been given named the cause class that explained it.
+	 */
 	private static String safeDetailOf(Throwable failure) {
-		if (failure instanceof LlmException.InvalidLlmOutputException && failure.getMessage() != null) {
+		if (failure instanceof LlmException && failure.getMessage() != null) {
 			return " detail=\"" + failure.getMessage() + "\"";
 		}
 		return "";

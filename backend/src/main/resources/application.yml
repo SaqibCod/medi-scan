@@ -37,11 +37,22 @@ spring:
       genai:
         api-key: ${GEMINI_API_KEY:}
         chat:
-          options:
-            model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
-            # Both pipeline steps are transcription and summarisation of fixed
-            # input, so there is nothing for sampling to improve.
-            temperature: 0.0
+          # `chat.model`, not the `chat.options.*` nesting: the latter is
+          # deprecated in Spring AI 2.0 (its own configuration metadata names
+          # this path as the replacement). The deprecated keys still *bind* -
+          # Environment.getProperty returns them, which is what made this so
+          # hard to see - but the autoconfiguration no longer applies them, so
+          # the model silently fell back to the library default
+          # (gemini-2.5-flash) no matter what GEMINI_CHAT_MODEL said. See
+          # docs/phase-3-findings.md item 1.
+          #
+          # GeminiProvider now also sets the model on every request from
+          # mediscan.llm.model, which is the real source of truth; this default
+          # is kept in step so the two cannot disagree again.
+          model: ${GEMINI_CHAT_MODEL:gemini-3.8-flash}
+          # Both pipeline steps are transcription and summarisation of fixed
+          # input, so there is nothing for sampling to improve.
+          temperature: 0.0
 
   servlet:
     multipart:
@@ -153,7 +164,7 @@ mediscan:
     # `fake` is accepted only under the local and test profiles; see LlmProviderGuard.
     provider: ${LLM_PROVIDER:gemini}
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
+    model: ${GEMINI_CHAT_MODEL:gemini-3.8-flash}
     timeout: 30s
     max-invalid-retries: 1
     max-transient-retries: 2
