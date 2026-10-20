@@ -134,7 +134,7 @@ normalised before the summary call and discarded rather than stored when it reac
 
 | # | Item | Status |
 |---|---|---|
-| 1 | `./mvnw verify` passes, including dataset and masking regression tests | Passed at 1040 tests on the last full run; **not re-run after the final commit** |
+| 1 | `./mvnw verify` passes, including dataset and masking regression tests | Done - 1040 tests, 0 failures, on the final tree |
 | 2 | `./mvnw test -Peval` runs the full set and writes a results folder | Done - 31/31 |
 | 3 | A second cached run gives identical scores with zero model calls | Done - verified byte-identical |
 | 4 | Baseline in `docs/evaluation.md`, measured masking limits in `SECURITY.md` | Done |
