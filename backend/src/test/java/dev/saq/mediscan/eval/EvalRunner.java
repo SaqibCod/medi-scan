@@ -158,6 +158,25 @@ class EvalRunner extends PostgresTestBase {
 
 		EvalReportWriter.write(EvalReportWriter.RunInfo.of(startedAt, caching, stoppedEarlyReason),
 				outcomes, caseReports);
+
+		// After the report is written, never before: a failing run still has to leave its
+		// numbers on disk, or there is nothing to diagnose the failure from.
+		//
+		// Only for a complete run. A partial one (a case filter, or a stop on budget or
+		// provider failure) has not measured enough to judge - scoring 4 of 31 cases against
+		// a dataset-wide limit would fail or pass for reasons that say nothing about the
+		// pipeline.
+		if (stoppedEarlyReason == null && onlyCaseIdsCsv.isBlank()) {
+			List<String> missed = ThresholdCheck.failures(
+					ExtractionMetrics.summarize(outcomes),
+					FlagMetrics.summarize(ExtractionMetrics.summarize(outcomes).matches()),
+					caseReports);
+			if (!missed.isEmpty()) {
+				throw new AssertionError("eval/thresholds.json limits missed:"
+						+ missed.stream().collect(
+								java.util.stream.Collectors.joining("\n  - ", "\n  - ", "")));
+			}
+		}
 	}
 
 	private List<EvalDatasetLoader.Entry> filterToRequestedCases(List<EvalDatasetLoader.Entry> all) {

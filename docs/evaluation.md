@@ -73,28 +73,88 @@ target — NORMAL 58.2%, HIGH 27.7%, LOW 9.0%, UNKNOWN 5.1% — all within the
 
 ## Thresholds
 
-First goals, fixed as `eval/thresholds.json` only after the first real run and
-with explicit approval (never loosened to pass). See
-`docs/phase-3-lld.md` section 7 for the starting numbers.
+Fixed in `eval/thresholds.json` after the first full run, and enforced: a complete
+run that misses a limit fails and names every limit it missed. A partial run (a
+case filter, or a stop on budget or provider failure) is not judged, because
+scoring a handful of cases against a dataset-wide limit says nothing either way.
+
+Every accuracy limit is the "first goal" from `docs/phase-3-lld.md` section 7 —
+written before any result was known. The baseline below beat all of them
+outright, so none was relaxed to fit what the pipeline happens to do; the gap
+between limit and baseline is headroom for model variance, not a lowered bar.
+
+The one limit that is not a target is `maxInScopeLeaks: 2`. The target is zero.
+It records today's two known, approved misses so the gate catches a *third*
+rather than sitting permanently red and being ignored. See the known limits
+below and that file's own comment.
+
+Never loosen a limit to make a run pass. Fix the pipeline, or raise it in
+`docs/phase-3-findings.md` and get the change approved with a written reason.
 
 ## Baseline
 
-_Not yet run. Filled in after the first accepted run._
+First accepted run. Reproduced byte-for-byte by a second run from the response
+cache with zero model calls.
 
 | | |
 |---|---|
-| Date | — |
-| Model | — |
-| Git commit | — |
-| Cases / expected rows | — |
-| Row recall / precision | — |
-| Flag accuracy | — |
-| Dangerous flag errors | — |
-| Leaks (in-scope types) | — |
-| `ADDRESS` leak rate (known gap) | — |
-| Invented numbers in summaries | — |
-| Failure rate on valid reports | — |
+| Date | 2026-10-20 |
+| Model | `gemini-3.8-flash` (Gemini Developer API) |
+| Git commit | `f7568c2` |
+| Cases / expected rows | 31 / 31 cases, 177 / 177 rows matched |
+| Row recall / precision | 100% / 100% |
+| Unit / range / numeric accuracy | 100% / 100% / 100% |
+| Date accuracy | 100% |
+| Status accuracy | 100% |
+| Flag accuracy | 100% |
+| Dangerous flag errors | **0** |
+| Leaks (in-scope types) | 2 `NAME`, both known limits below |
+| `ADDRESS` leak rate (known gap, E6) | 1 of 1 planted — not counted toward the target |
+| Invented numbers in summaries | **0** |
+| Failure rate on valid reports | 0% |
+| Prompt-injection case | passed — the summary did not follow the injected instruction |
+| Real model calls | 53 (first run); 0 on re-runs, 57 cache hits |
+
+Summary style, measured but deliberately not gated: mean reading grade 4.1
+(target is 6th grade or below), every summary mentions a doctor or nurse, and
+42.9% land in the prompt's 3-to-5-sentence range. The sentence count is the one
+number worth a second look — see the findings log.
+
+One forbidden-phrase hit, which the method flags for human judgement rather than
+failing: `repeated-test`'s summary opens "You have two results for Potassium".
+The phrase `you have` is on the list as a diagnosis marker; here it is plainly
+descriptive. Read and accepted as a false positive of the phrase list, not a
+problem with the summary.
 
 ## Known limits
 
-_Filled in after the first run, alongside the `SECURITY.md` masking update._
+Measured, not estimated. The same two limits are recorded as approved
+`KNOWN_MISSES` in `MaskingRegressionTest`, so they are enforced as *known* and a
+new leak still fails the build.
+
+**Names with no recognised label and no honorific survive masking.** Both leaks
+in the baseline are this, both in `pii-names-everywhere`:
+
+- `Reviewed by Victor Hammond.` — `reviewed by` is not in the labelled-name
+  rule's label list, and the line carries no colon, which that rule requires on
+  purpose (the alternative is backtracking that masks the word "Name" in
+  `Patient Name: not recorded`). The header's `Attending:` occurrence of the same
+  name *is* masked correctly.
+- `Note: Grace Liu was seen for a routine follow-up.` — free prose. The labelled
+  occurrence (`Patient Name:`) is masked; this second mention is not, and `Note`
+  is correctly not treated as a person label.
+
+This is the gap the OpenNLP person-name rule exists to close. It is off by
+default (`mediscan.mask.opennlp-enabled`), so the baseline measures the label
+rules alone. Whether turning it on catches these two without over-masking lab
+values is an open question recorded in the findings log, not something this
+baseline answers.
+
+**Addresses are not masked at all.** Phase 2 ships no address rule, so the one
+planted street address leaked. Reported separately and excluded from the
+zero-leak target by decision E6 rather than hidden.
+
+**Everything here is synthetic.** 31 invented reports are not a claim about real
+lab paperwork: real reports bring layouts, abbreviations and PII shapes this set
+does not contain. The numbers above describe the pipeline against this dataset,
+which is the only honest reading of them.
