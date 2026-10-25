@@ -112,6 +112,8 @@ sequenceDiagram
 **Details**
 - **When it runs:** lazily, on the first guest action that needs it (an upload, picking a sample, or the history list), and only if the tab isn't signed in and has no guest token. Page loads and browsing the biomarker pages don't create sessions.
 - **New tab:** `sessionStorage` is per tab, so a guest's new tab gets its own guest session the first time it needs one.
+- **Single flight:** concurrent callers that all need a session share one in-flight `POST /api/sessions`. Two parallel creates would burn two of the 20-per-hour allowance and leave one session owning nothing.
+- **On `401 SESSION_INVALID`:** the client drops the stored token, clears every cached report from its query cache, and tells the page. Those reports belonged to the session that just went away, so showing them again would mean showing a report id that now resolves to nothing. A page that was displaying one shows the "Guest session ended" screen; an upload just creates a new session and retries once.
 
 ### 3.2 Google sign-in (with claiming guest reports)
 

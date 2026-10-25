@@ -255,6 +255,57 @@ The cost of that choice: a script-injection (XSS) bug could read
 - refresh-token rotation with reuse detection
 - one refresh-token family per tab, so tabs can't race each other
 
+**The one thing in `localStorage` is the theme.** Key `ms-theme`, value `dark`
+or `light`, written only by the theme toggle. It is a display preference, not a
+credential and not personal data, and it has to outlive the tab or a returning
+visitor gets a flash of the wrong theme on every visit. Tokens stay in memory
+and `sessionStorage`; nothing else is ever written to `localStorage`.
+
+### The Content Security Policy
+
+```text
+default-src 'self';
+script-src 'self' 'nonce-{random}' 'strict-dynamic';
+style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob:;
+font-src 'self';
+connect-src 'self' {API origin};
+frame-src 'none';
+object-src 'none';
+base-uri 'none';
+form-action 'self';
+frame-ancestors 'none';
+upgrade-insecure-requests        (production only)
+```
+
+A fresh nonce is generated per request in the Next.js middleware and put on
+every script the app emits — Next's own bootstrap and chunk-loading scripts, and
+the small inline script that sets the theme before first paint.
+`'strict-dynamic'` then lets those scripts load the chunks they need without
+host allowlisting. `'unsafe-eval'` is added in development only, for React Fast
+Refresh; a production response never carries it.
+
+**Why `style-src` keeps `'unsafe-inline'` and `script-src` does not.** React and
+Next both write inline `style` attributes — for route transitions, for
+measurement, for the font loader — and a strict style policy blocks them, which
+breaks the page rather than protecting it. The asymmetry is deliberate and not a
+shortcut: an injected stylesheet cannot read `sessionStorage` or call an API,
+and the threat this policy exists to stop is script injection reaching the
+tokens in browser storage. Styles can leak some things through selectors and
+background URLs, which is why `img-src` and `font-src` stay on `'self'` and
+`connect-src` names exactly one API origin.
+
+**What the nonce costs.** A per-request nonce means a per-request response, so
+pages that carry it cannot be served from Next's full-route static cache; they
+render dynamically on every request. The site is a handful of small pages in
+front of an API that is dynamic anyway, so the cost is a few milliseconds per
+request against the whole point of the policy. Static assets — the JS chunks,
+the CSS, the self-hosted fonts — are unaffected and still cached normally.
+
+Google Identity Services is added to `script-src`, `connect-src` and `frame-src`
+in phase 7c, when sign-in ships. It remains the only third-party origin that is
+ever allowed.
+
 ## Authorization
 
 Every report has exactly one owner — a guest session or a user — enforced by a
