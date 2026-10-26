@@ -24,6 +24,16 @@ import {
   Tag,
   ThemeToggle,
 } from "@/components/ds";
+import { InlineNotice } from "@/components/notices/inline-notice";
+import { useToast } from "@/components/notices/toaster";
+import {
+  ForbiddenScreen,
+  GuestSessionEndedScreen,
+  NotFoundScreen,
+  ReportNotAvailableScreen,
+  ServerErrorScreen,
+  ServerNotRespondingScreen,
+} from "@/components/system/screens";
 
 /**
  * Renders its children once per theme, side by side.
@@ -77,6 +87,7 @@ export function Gallery() {
   const [tab, setTab] = useState("upload");
   const [consent, setConsent] = useState(false);
   const [step, setStep] = useState(0);
+  const toast = useToast();
 
   return (
     <div className="mx-auto w-full max-w-340 px-space-4 py-space-9 md:px-space-8">
@@ -325,6 +336,88 @@ export function Gallery() {
 
         <Pair title="Helix — client only, static under reduced motion">
           <Helix width={240} height={380} />
+        </Pair>
+      </Group>
+
+      <Group title="System screens">
+        <p className="t-body-s -mt-space-3 max-w-[60ch] text-ink-2">
+          Each one full width, in both themes. Two of them are routes; the rest are states a
+          page enters, so this is the only place they can all be seen at once.
+        </p>
+
+        {(
+          [
+            ["404 — page not found", <NotFoundScreen key="404" />],
+            ["404 — report not available", <ReportNotAvailableScreen key="report" />],
+            ["401 — guest session ended", <GuestSessionEndedScreen key="guest" />],
+            ["403 — admins only", <ForbiddenScreen key="403" />],
+            ["500 — something went wrong", <ServerErrorScreen key="500" requestId="b7e2c1d0-4f1a-4c55-9d8e-2a6f0e1c9b3a" onRetry={() => {}} />],
+            ["500 — no request id (a render error)", <ServerErrorScreen key="500b" onRetry={() => {}} />],
+            ["503 — server not responding", <ServerNotRespondingScreen key="503" />],
+          ] as const
+        ).map(([title, screen]) => (
+          <section key={title} className="border-t border-line pt-space-5">
+            <h3 className="t-meta mb-space-4 text-ink-3">{title}</h3>
+            <div className="flex flex-col gap-space-4">
+              {(["dark", "light"] as const).map((theme) => (
+                <div
+                  key={theme}
+                  data-theme={theme}
+                  className="min-w-0 overflow-hidden rounded-lg border border-line bg-bg"
+                >
+                  <p className="t-meta px-space-5 pt-space-5 text-ink-3">{theme}</p>
+                  {screen}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </Group>
+
+      <Group title="Notices">
+        <Pair title="InlineNotice — warn, with the code line">
+          <div className="w-full">
+            <InlineNotice title="This file is too large." code="413 FILE_TOO_LARGE">
+              {" "}
+              It is 14.2 MB and the limit is 10 MB. Try exporting only the pages with your
+              results.
+            </InlineNotice>
+          </div>
+        </Pair>
+
+        <Pair title="InlineNotice — info">
+          <div className="w-full">
+            <InlineNotice tone="info" icon="clock" title="This report is still being read.">
+              {" "}
+              Questions open as soon as the results are ready.
+            </InlineNotice>
+          </div>
+        </Pair>
+
+        <Pair title="Toasts">
+          <div className="flex flex-wrap gap-space-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toast({ title: "Copied", body: "The request ID is on your clipboard.", icon: "file" })}
+            >
+              Show a toast
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                toast({
+                  title: "You were signed out.",
+                  body: "Sign in again to see your saved reports.",
+                  icon: "user",
+                  action: { label: "Sign in", onClick: () => {} },
+                })
+              }
+            >
+              Show one with an action
+            </Button>
+          </div>
         </Pair>
       </Group>
 
