@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 
 import "./styles/globals.css";
 import { geistMono, geistSans } from "./fonts";
+import { Providers } from "./providers";
 import { themeColors } from "./styles/theme-colors";
 
 export const metadata: Metadata = {
@@ -27,11 +29,20 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Set per request by proxy.ts, which also puts it in the CSP header. Next attaches it to its
+  // own scripts automatically; this copy is for the libraries that inject their own (the
+  // pre-hydration theme script, and Base UI's scroll-lock styles).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    // The theme script sets `data-theme` before React hydrates, so the attribute on the client
+    // legitimately differs from what the server rendered. Suppressed for that attribute only.
+    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
       {/* `.ms` is the design system's own scope: every selector in ds.css is written under it. */}
-      <body className="ms">{children}</body>
+      <body className="ms">
+        <Providers nonce={nonce}>{children}</Providers>
+      </body>
     </html>
   );
 }

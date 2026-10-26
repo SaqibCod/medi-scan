@@ -7,9 +7,11 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
-    // jsdom supplies `sessionStorage`, which the API client's guest-session handling needs.
+    // jsdom supplies `sessionStorage`, `localStorage` and a DOM, which the API client, the
+    // guest session and every component test need.
     environment: "jsdom",
+    setupFiles: ["./tests/setup.ts"],
     include: ["**/*.test.ts", "**/*.test.tsx"],
-    exclude: ["node_modules/**", ".next/**"],
+    exclude: ["node_modules/**", ".next/**", "e2e/**"],
   },
 });
