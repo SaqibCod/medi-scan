@@ -43,10 +43,12 @@ function Pair({ title, children }: { title: string; children: ReactNode }) {
           <div
             key={theme}
             data-theme={theme}
-            className="rounded-[var(--radius-lg)] border border-line bg-bg p-space-5"
+            // `min-w-0` on the grid item as well as on the flex row inside it: both default
+            // to `min-width: auto` and would otherwise be stretched by their widest child.
+            className="min-w-0 rounded-lg border border-line bg-bg p-space-5"
           >
             <p className="t-meta mb-space-4 text-ink-3">{theme}</p>
-            <div className="flex flex-wrap items-start gap-space-3">{children}</div>
+            <div className="flex min-w-0 flex-wrap items-start gap-space-3">{children}</div>
           </div>
         ))}
       </div>
@@ -282,9 +284,14 @@ export function Gallery() {
       </Group>
 
       <Group title="Navigation">
-        <Pair title="StepTimeline — horizontal (desktop)">
-          <div className="w-full">
-            <StepTimeline steps={SAMPLE_STEPS} active={step} onSelect={setStep} />
+        <Pair title="StepTimeline — horizontal (desktop, needs ~720px)">
+          {/* Six steps have a 120px minimum each, so the horizontal rail wants the full
+              content width. These gallery columns are half that, hence the scroller — on the
+              real desktop landing page it has 1360px and never scrolls. */}
+          <div className="w-full min-w-0 overflow-x-auto">
+            <div className="min-w-[720px]">
+              <StepTimeline steps={SAMPLE_STEPS} active={step} onSelect={setStep} />
+            </div>
           </div>
         </Pair>
 

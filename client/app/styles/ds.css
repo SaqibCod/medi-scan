@@ -148,10 +148,13 @@
 .ms-marquee__hl { color: var(--accent); }
 @keyframes ms-scroll { from { transform: translateX(0) } to { transform: translateX(-50%) } }
 
-/* 7a: a biomarker name links to its explainer page when the API gives a slug. Underlined on
-   hover only — a whole column of underlines would fight the figures beside it. */
-.ms-row__link { color: inherit; text-decoration: none; }
-.ms-row__link:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+/* 7a: a biomarker name links to its explainer page when the API gives a slug.
+   The mockup draws these names plain, but a link that looks exactly like text is only
+   discoverable by accident. A dotted hairline keeps the column calm — a full underline on
+   every name would fight the figures beside it — while still marking it as a link without
+   relying on colour alone. */
+.ms-row__link { color: inherit; text-decoration: underline dotted var(--line-strong); text-underline-offset: 4px; }
+.ms-row__link:hover { color: var(--accent-ink); text-decoration: underline solid currentColor; }
 
 /* 7a: the file input is visually hidden, so the ring has to be drawn on the label it sits in.
    Without this the drop zone is reachable by keyboard but gives no sign that it is focused. */

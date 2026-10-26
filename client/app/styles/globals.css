@@ -90,6 +90,18 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /*
+   * Re-resolve the text colour wherever a theme is declared.
+   *
+   * `color` inherits the *computed* value, so `color: var(--ink)` on <body> freezes whichever
+   * theme <body> was in. A nested `[data-theme]` scope redefines --ink but inherits the old
+   * colour, which is invisible in the real app (one theme at a time) and very visible in the
+   * gallery, where the light column rendered dark-theme text on white.
+   */
+  [data-theme] {
+    color: var(--ink);
+  }
+
   /* A pointer on anything clickable, except where the control says it is unavailable. */
   button:not(:disabled),
   [role="button"]:not(:disabled) {
