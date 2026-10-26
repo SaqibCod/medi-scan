@@ -1,8 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { CSPProvider } from "@base-ui/react/csp-provider";
 import { ThemeProvider } from "next-themes";
 
+import { NoticeProvider } from "@/components/notices/notice-provider";
+import { ToastProvider } from "@/components/notices/toaster";
+import { createQueryClient } from "@/lib/query-client";
 import { THEME_ATTRIBUTE, THEME_STORAGE_KEY, THEMES } from "@/lib/theme";
 
 /**
@@ -19,20 +24,32 @@ import { THEME_ATTRIBUTE, THEME_STORAGE_KEY, THEMES } from "@/lib/theme";
  * off.
  */
 export function Providers({ children, nonce }: { children: ReactNode; nonce?: string }) {
+  // Created here rather than at module scope: a module-level client is shared across requests
+  // on the server, which would leak one visitor's cached reports into another's render.
+  const [queryClient] = useState(createQueryClient);
+
   return (
-    <ThemeProvider
-      attribute={THEME_ATTRIBUTE}
-      // "system" is what makes it follow the device until the visitor picks. With no device
-      // signal at all the page stays on `DEFAULT_THEME`, because tokens.css defines dark on
-      // bare `:root` as well as on `[data-theme="dark"]`.
-      defaultTheme="system"
-      enableSystem
-      enableColorScheme
-      storageKey={THEME_STORAGE_KEY}
-      themes={[...THEMES]}
-      nonce={nonce}
-    >
-      {children}
-    </ThemeProvider>
+    // Nonces Base UI's own inline <style> and <script> tags, the scroll-lock ones in
+    // particular. Without it the mobile menu would be blocked by the CSP.
+    <CSPProvider nonce={nonce}>
+      <ThemeProvider
+        attribute={THEME_ATTRIBUTE}
+        // "system" is what makes it follow the device until the visitor picks. With no device
+        // signal at all the page stays dark, because tokens.css defines dark on bare `:root`
+        // as well as on `[data-theme="dark"]`.
+        defaultTheme="system"
+        enableSystem
+        enableColorScheme
+        storageKey={THEME_STORAGE_KEY}
+        themes={[...THEMES]}
+        nonce={nonce}
+      >
+        <QueryClientProvider client={queryClient}>
+          <NoticeProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </NoticeProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </CSPProvider>
   );
 }

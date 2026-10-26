@@ -1,6 +1,8 @@
 import { ApiError, networkError, timeoutError, toApiError } from "./api-error";
+import { getBackendStatusChecker } from "./backend-status";
 import { getCredentialProvider } from "./credentials";
 import { API_URL } from "./env";
+import { publishDailyLimit } from "./notices";
 import {
   ensureGuestSession,
   handleSessionInvalid,
@@ -113,6 +115,11 @@ async function attempt<T>(
 
     const error = controller.signal.aborted ? timeoutError(timeoutMs) : networkError();
     logRequest(method, path, 0, error.code);
+
+    // A health check that passed a minute ago says nothing about now. One call that could not
+    // reach the server puts the waking banner back up and restarts the checks (LLD 8.1).
+    getBackendStatusChecker().reportNetworkFailure();
+
     throw error;
   } finally {
     clearTimeout(timer);
@@ -122,9 +129,16 @@ async function attempt<T>(
   if (!response.ok) {
     const error = await toApiError(response);
     logRequest(method, path, response.status, error.code, error.requestId);
+
+    // The whole app shares one daily LLM budget, so this is never about the caller — it is a
+    // page-wide fact that blocks every upload until midnight UTC.
+    if (error.code === "CAPACITY") publishDailyLimit(error.retryAfterSec);
+
     throw error;
   }
 
+  // An answer from the server is better evidence than any health check.
+  getBackendStatusChecker().reportSuccess();
   logRequest(method, path, response.status, undefined, response.headers.get("X-Request-Id"));
 
   if (response.status === 204) return undefined as T;
