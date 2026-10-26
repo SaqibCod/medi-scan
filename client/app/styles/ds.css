@@ -148,6 +148,16 @@
 .ms-marquee__hl { color: var(--accent); }
 @keyframes ms-scroll { from { transform: translateX(0) } to { transform: translateX(-50%) } }
 
+/* 7a: the theme toggle renders both icons and lets CSS pick, so the markup is identical on
+   the server and the client — no hydration mismatch — and the right icon is the first one
+   painted. `display: none` also takes the hidden label out of the accessibility tree, so a
+   screen reader reads exactly one. */
+.ms-themetoggle { position: relative; }
+.ms-themetoggle__when-dark, .ms-themetoggle__when-light { display: inline-flex; align-items: center; justify-content: center; }
+.ms-themetoggle__when-light { display: none; }
+[data-theme="light"] .ms-themetoggle__when-dark { display: none; }
+[data-theme="light"] .ms-themetoggle__when-light { display: inline-flex; }
+
 /* 7a: a biomarker name links to its explainer page when the API gives a slug.
    The mockup draws these names plain, but a link that looks exactly like text is only
    discoverable by accident. A dotted hairline keeps the column calm — a full underline on

@@ -16,11 +16,18 @@ function readApiUrl(): string {
     throw new Error(`NEXT_PUBLIC_API_URL is not a valid URL: ${raw}`);
   }
 
-  // Plain http in production would send the session token in the clear, and the CSP's
-  // `upgrade-insecure-requests` would rewrite the request anyway — failing loudly beats
-  // silently depending on that.
-  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
-    throw new Error(`NEXT_PUBLIC_API_URL must use https in production, got: ${url.protocol}//`);
+  // Plain http to a real host in production would send the session token in the clear, and
+  // the CSP's `upgrade-insecure-requests` would rewrite the request anyway — failing loudly
+  // beats silently depending on that.
+  //
+  // Loopback is exempt: a production build run locally is how the e2e suite and any
+  // pre-deploy smoke check work, and nothing leaves the machine.
+  const isLoopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname);
+
+  if (process.env.NODE_ENV === "production" && url.protocol !== "https:" && !isLoopback) {
+    throw new Error(
+      `NEXT_PUBLIC_API_URL must use https in production, got: ${url.protocol}//${url.hostname}`,
+    );
   }
 
   // Stored without a trailing slash so paths can be joined as `${API_URL}${path}`.

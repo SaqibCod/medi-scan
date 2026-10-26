@@ -24,7 +24,6 @@ import {
   Tag,
   ThemeToggle,
 } from "@/components/ds";
-import type { Theme } from "@/lib/theme";
 
 /**
  * Renders its children once per theme, side by side.
@@ -78,10 +77,9 @@ export function Gallery() {
   const [tab, setTab] = useState("upload");
   const [consent, setConsent] = useState(false);
   const [step, setStep] = useState(0);
-  const [demoTheme, setDemoTheme] = useState<Theme>("dark");
 
   return (
-    <div className="mx-auto w-full max-w-[1360px] px-space-4 py-space-9 md:px-space-8">
+    <div className="mx-auto w-full max-w-340 px-space-4 py-space-9 md:px-space-8">
       <Eyebrow>Design system</Eyebrow>
       <h1 className="t-display-m mt-space-3 text-ink">
         Every component, <span className="text-faint">both themes.</span>
@@ -130,12 +128,11 @@ export function Gallery() {
           <IconButton icon="trash" label="Delete report" />
         </Pair>
 
-        <Pair title="ThemeToggle — drives this page's demo state only">
-          <ThemeToggle
-            theme={demoTheme}
-            onToggle={() => setDemoTheme((t) => (t === "dark" ? "light" : "dark"))}
-          />
-          <span className="t-meta self-center text-ink-3">demo state: {demoTheme}</span>
+        <Pair title="ThemeToggle — the icon follows the column's theme, not a prop">
+          {/* Both icons are always rendered and CSS picks one, so each column shows the icon
+              for its own theme. That is the same mechanism that keeps it from flashing or
+              mismatching on a real page load. */}
+          <ThemeToggle onToggle={() => {}} />
         </Pair>
       </Group>
 

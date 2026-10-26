@@ -1,16 +1,22 @@
 import Link from "next/link";
 
+import { Eyebrow } from "@/components/ds";
+import { PageContainer } from "@/components/shell/page-container";
+
 /**
  * Temporary home page (LLD 9.4).
  *
  * The landing page — hero, upload panel, samples, the how-it-works timeline — is 7b. This
  * stands in with the real headline and nothing that pretends to work: no upload control and no
  * button that does nothing (LLD F8).
+ *
+ * No `<main>` here: the shell already provides the one the skip link targets, and a second
+ * would give the page two main landmarks.
  */
 export default function HomePage() {
   return (
-    <main className="mx-auto w-full max-w-[1360px] px-space-4 py-space-9 md:px-space-8 md:py-space-10">
-      <p className="t-eyebrow text-accent-ink">AI lab report reader</p>
+    <PageContainer className="py-space-9 md:py-space-10">
+      <Eyebrow>AI lab report reader</Eyebrow>
 
       <h1 className="t-display-xl mt-space-5 max-w-[16ch] text-ink">
         Your lab report,
@@ -28,6 +34,6 @@ export default function HomePage() {
           How your data is handled
         </Link>
       </p>
-    </main>
+    </PageContainer>
   );
 }

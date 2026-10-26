@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 
 import "./styles/globals.css";
+import { AppShell } from "@/components/shell/app-shell";
 import { geistMono, geistSans } from "./fonts";
 import { Providers } from "./providers";
 import { themeColors } from "./styles/theme-colors";
@@ -41,7 +42,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
       {/* `.ms` is the design system's own scope: every selector in ds.css is written under it. */}
       <body className="ms">
-        <Providers nonce={nonce}>{children}</Providers>
+        <Providers nonce={nonce}>
+          <AppShell>{children}</AppShell>
+        </Providers>
       </body>
     </html>
   );

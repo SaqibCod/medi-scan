@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -116,25 +116,55 @@ describe("IconButton", () => {
   });
 
   it("exposes pressed and expanded state when given", () => {
-    render(<IconButton icon="menu" label="Open menu" expanded controls="site-menu" />);
+    render(<IconButton icon="menu" label="Open menu" expanded pressed={false} />);
 
     const button = screen.getByRole("button", { name: "Open menu" });
     expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(button).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("passes through the props a headless primitive merges into it", () => {
+    // Base UI's Dialog hands its trigger aria-expanded, aria-controls and its own handlers
+    // this way. A button that dropped them would render fine and say nothing about its state.
+    render(<IconButton icon="menu" label="Open menu" aria-controls="site-menu" id="menu-btn" />);
+
+    const button = screen.getByRole("button", { name: "Open menu" });
     expect(button).toHaveAttribute("aria-controls", "site-menu");
+    expect(button).toHaveAttribute("id", "menu-btn");
   });
 });
 
 describe("ThemeToggle", () => {
-  it("names what a press will do, not what the theme is", async () => {
+  it("names what a press will do, not what the theme is", () => {
+    render(<ThemeToggle onToggle={() => {}} />);
+
+    // Both labels are in the markup; CSS hides one, which also takes it out of the
+    // accessibility tree. jsdom applies no stylesheet, so both are visible here — what this
+    // asserts is that the wording is actionable, not which one is showing.
+    expect(screen.getByText("Switch to light mode")).toBeInTheDocument();
+    expect(screen.getByText("Switch to dark mode")).toBeInTheDocument();
+  });
+
+  it("reports a press", async () => {
     const onToggle = vi.fn();
     const user = userEvent.setup();
 
-    const { rerender } = render(<ThemeToggle theme="dark" onToggle={onToggle} />);
-    await user.click(screen.getByRole("button", { name: "Switch to light mode" }));
-    expect(onToggle).toHaveBeenCalledOnce();
+    render(<ThemeToggle onToggle={onToggle} />);
+    await user.click(screen.getByRole("button"));
 
-    rerender(<ThemeToggle theme="light" onToggle={onToggle} />);
-    expect(screen.getByRole("button", { name: "Switch to dark mode" })).toBeInTheDocument();
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
+
+  it("renders the same markup whatever the theme, so hydration cannot mismatch", () => {
+    // The server cannot know the theme. If the markup depended on it, every light-mode
+    // visitor would get a hydration error and a re-rendered tree on each page load.
+    const { container: asDark } = render(<ThemeToggle theme="dark" onToggle={() => {}} />);
+    const darkHtml = asDark.innerHTML;
+
+    cleanup();
+
+    const { container: asLight } = render(<ThemeToggle theme="light" onToggle={() => {}} />);
+    expect(asLight.innerHTML).toBe(darkHtml);
   });
 });
 
