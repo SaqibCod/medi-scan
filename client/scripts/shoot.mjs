@@ -56,7 +56,9 @@ try {
         );
 
         const page = await context.newPage();
-        await page.goto(new URL(path, baseUrl).href, { waitUntil: "networkidle" });
+        // Not `networkidle`: the backend heartbeat polls every 15s, so the network is never
+        // idle for long enough and the wait would simply time out.
+        await page.goto(new URL(path, baseUrl).href, { waitUntil: "load" });
         // The helix is client-only and animates in; give it a beat so it is in the picture.
         await page.waitForTimeout(600);
 

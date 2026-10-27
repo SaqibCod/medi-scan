@@ -18,10 +18,12 @@ export const metadata: Metadata = {
  * Two places where the mockup and the repo disagreed, resolved the way docs/ui/README.md
  * says to resolve them — the docs win:
  *
- *  - The mockup gives sign-in sessions "up to 30 days". The refresh token lives 7 days
- *    (plan.md section 4.10), and 30 days is the *report* retention. Corrected to 7.
  *  - The mockup heads a block "Sign-in cookies". There are no cookies anywhere in this app,
  *    by design; it says "Sign-in tokens" (LLD 9.4).
+ *
+ * The sign-in retention row quotes both limits on purpose. A refresh token is valid 7 days
+ * from issue, and a family cannot outlive 30 days from the original sign-in. Quoting either
+ * one alone would be wrong for half the cases.
  */
 
 const SECTIONS: Section[] = [
@@ -93,7 +95,14 @@ const PIPELINE: { step: string; title: string; body: string }[] = [
 const RETENTION: { what: string; how: string }[] = [
   { what: "Guest reports and their results", how: "24 hours after the guest session started" },
   { what: "Saved reports and their results", how: "30 days after upload, or until you delete them" },
-  { what: "Sign-in sessions", how: "Up to 7 days, or until you sign out" },
+  // Two limits, and quoting only one of them would mislead: a refresh token is valid 7 days
+  // from issue, and a family cannot outlive 30 days from the original sign-in
+  // (plan.md:259, dataflow.md:229). So an idle session dies at 7 days and an actively used
+  // one still ends at 30.
+  {
+    what: "Sign-in sessions",
+    how: "Up to 30 days from signing in, 7 days without use, or until you sign out",
+  },
   { what: "Chat messages", how: "Never stored on our server" },
   { what: "Accounts with no sign-in", how: "Deleted after 180 days" },
   { what: "Usage counts and error logs", how: "90 days" },

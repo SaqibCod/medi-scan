@@ -28,14 +28,17 @@ describe("retention claims", () => {
     expect(within(row).getByText(how)).toBeInTheDocument();
   });
 
-  it("says sign-in sessions last 7 days, not the 30 the mockup shows", () => {
-    // plan.md section 4.10: the refresh token lives 7 days. 30 days is report retention, and
-    // the mockup conflated the two. docs/ui/README.md says the docs win.
+  it("quotes both sign-in limits, because either alone would mislead", () => {
+    // A refresh token is valid 7 days from issue (plan.md:233); a family cannot outlive 30
+    // days from the original sign-in (plan.md:259, dataflow.md:229). An idle session ends at
+    // 7 days, an actively used one still ends at 30.
     renderPage();
 
     const row = screen.getByRole("rowheader", { name: "Sign-in sessions" }).closest("tr")!;
-    expect(within(row).getByText("Up to 7 days, or until you sign out")).toBeInTheDocument();
-    expect(within(row).queryByText(/30 days/)).not.toBeInTheDocument();
+    const text = row.textContent ?? "";
+
+    expect(text).toContain("30 days from signing in");
+    expect(text).toContain("7 days without use");
   });
 });
 

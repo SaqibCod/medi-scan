@@ -55,7 +55,19 @@ test.describe("the mobile menu", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    // Tab around the dialog; focus must never leave it.
+    // Wait for the dialog to have taken focus before tabbing. Base UI moves initial focus
+    // asynchronously, and a Tab that lands before the trap is armed escapes legitimately —
+    // which made this test fail while the behaviour was correct.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const open = document.querySelector('[role="dialog"]');
+          return !!open && !!document.activeElement && open.contains(document.activeElement);
+        }),
+      )
+      .toBe(true);
+
+    // Tab right around the dialog and past the end; focus must never leave it.
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press("Tab");
       const inside = await page.evaluate(() => {

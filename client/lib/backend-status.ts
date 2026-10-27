@@ -38,6 +38,19 @@ export const HEALTH_TIMEOUT_MS = 4_000;
 const BACKOFF_SEC = [3, 6, 9, 12];
 const STEADY_SEC = 15;
 
+/**
+ * How often to re-check while the backend is up.
+ *
+ * Without this the pill is a claim made once and never revisited: the checker would reach
+ * ONLINE, stop, and go on saying ONLINE after the server had gone away — which is exactly
+ * what a liveness indicator must not do. A failed API call also demotes it, but in 7a there
+ * are no API calls to fail, so nothing would ever notice.
+ *
+ * The request is tiny and the host is one we are allowed to talk to; the side effect of
+ * keeping a free-tier server from dozing off while someone is reading the page is welcome.
+ */
+const HEARTBEAT_SEC = 15;
+
 /** How long a backend may stay unreachable before we stop calling it "waking". */
 export const DOWN_AFTER_MS = 90_000;
 
@@ -135,6 +148,7 @@ export class BackendStatusChecker {
       this.clearTimers();
       this.firstFailureAt = null;
       this.set({ state: "ONLINE", attempt: 0, nextRetryInSec: null });
+      this.scheduleHeartbeat();
     }
   }
 
@@ -145,7 +159,9 @@ export class BackendStatusChecker {
 
     if (paused) {
       this.clearTimers();
-    } else if (this.running && this.status.state !== "ONLINE") {
+    } else if (this.running) {
+      // Coming back to a tab is a good moment to find out the truth either way: the backend
+      // may have gone away while nobody was looking.
       this.retryNow();
     }
   }
@@ -171,6 +187,7 @@ export class BackendStatusChecker {
       // job is done and it should close rather than linger.
       this.firstFailureAt = null;
       this.set({ state: "ONLINE", attempt: 0, nextRetryInSec: null });
+      this.scheduleHeartbeat();
       return;
     }
 
@@ -185,6 +202,23 @@ export class BackendStatusChecker {
       episode: wasReachable ? this.status.episode + 1 : this.status.episode,
     });
     this.scheduleRetry();
+  }
+
+  /**
+   * Keeps checking while it is up, quietly.
+   *
+   * No countdown and no attempt number: nothing is being waited for, so there is nothing to
+   * show. This only ever matters at the moment it fails, which is when the pill and the
+   * banner need to change.
+   */
+  private scheduleHeartbeat(): void {
+    if (!this.running || this.paused) return;
+    this.clearTimers();
+
+    this.retryTimer = setTimeout(() => {
+      this.clearTimers();
+      void this.check();
+    }, HEARTBEAT_SEC * 1000);
   }
 
   private scheduleRetry(): void {

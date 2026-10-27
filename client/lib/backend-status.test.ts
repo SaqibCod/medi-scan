@@ -286,7 +286,7 @@ describe("a hidden tab", () => {
     expect(health.mock.calls.length).toBe(before + 1);
   });
 
-  it("does not start polling an ONLINE backend on return", async () => {
+  it("checks on return even when it last saw the backend up", async () => {
     const health = healthStub(true);
     const checker = new BackendStatusChecker(health);
     checker.start();
@@ -297,6 +297,64 @@ describe("a hidden tab", () => {
     checker.setPaused(false);
     await settle();
 
+    // Coming back to a tab is a good moment to find out the truth either way — the backend
+    // may have gone away while nobody was looking.
+    expect(health.mock.calls.length).toBe(before + 1);
+  });
+});
+
+describe("while it is up", () => {
+  it("keeps checking, so ONLINE stays a fact rather than a memory", async () => {
+    const health = healthStub(true);
+    const checker = new BackendStatusChecker(health);
+    checker.start();
+    await settle();
+
+    expect(checker.getSnapshot().state).toBe("ONLINE");
+    const afterFirst = health.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await settle();
+
+    expect(health.mock.calls.length).toBeGreaterThan(afterFirst);
+  });
+
+  it("notices when the backend goes away, with no API call to tell it", async () => {
+    // The bug this exists for: the checker reached ONLINE, stopped, and went on saying
+    // ONLINE after the server had been killed. Nothing else would have noticed, because 7a
+    // makes no API calls that could fail.
+    const health = healthStub(true, false, false);
+    const checker = new BackendStatusChecker(health);
+    checker.start();
+    await settle();
+    expect(checker.getSnapshot().state).toBe("ONLINE");
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await settle();
+
+    expect(checker.getSnapshot().state).toBe("WAKING");
+  });
+
+  it("shows no countdown while it is simply up", async () => {
+    const checker = new BackendStatusChecker(healthStub(true));
+    checker.start();
+    await settle();
+
+    // Nothing is being waited for, so there is nothing to count down.
+    expect(checker.getSnapshot().nextRetryInSec).toBeNull();
+    expect(checker.getSnapshot().attempt).toBe(0);
+  });
+
+  it("stops the heartbeat when the tab is hidden", async () => {
+    const health = healthStub(true);
+    const checker = new BackendStatusChecker(health);
+    checker.start();
+    await settle();
+
+    checker.setPaused(true);
+    const before = health.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(90_000);
     expect(health.mock.calls.length).toBe(before);
   });
 });
