@@ -1,0 +1,247 @@
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./ds.css";
+
+/*
+ * Design tokens as Tailwind utilities.
+ *
+ * `inline` is what makes the themes switch without React re-rendering: the utility is compiled
+ * to `color: var(--ink)` rather than to a copy of the value, so flipping `data-theme` on <html>
+ * repaints straight from the cascade. Without `inline` Tailwind would resolve the value at
+ * build time and both themes would get whichever one it saw first.
+ *
+ * Only colours and spacing are registered here. Radius, blur and shadow are consumed directly
+ * as `var(--radius-lg)` inside ds.css — registering them would mean writing
+ * `--radius-lg: var(--radius-lg)`, a variable defined in terms of itself, because the design
+ * system and Tailwind happen to use the same names.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bar: var(--bar);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-glass: var(--glass);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-faint: var(--faint);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+
+  --color-solid: var(--solid);
+  --color-on-solid: var(--on-solid);
+  --color-solid-hover: var(--solid-hover);
+  --color-on-solid-hover: var(--on-solid-hover);
+
+  --color-flag-high-bg: var(--flag-high-bg);
+  --color-flag-high-fg: var(--flag-high-fg);
+  --color-flag-normal-bg: var(--flag-normal-bg);
+  --color-flag-normal-fg: var(--flag-normal-fg);
+  --color-flag-low-bg: var(--flag-low-bg);
+  --color-flag-low-fg: var(--flag-low-fg);
+
+  --color-status-ok: var(--status-ok);
+  --color-status-warn: var(--status-warn);
+  --color-dot-idle: var(--dot-idle);
+  --color-glow: var(--glow);
+  --color-foot-top: var(--foot-top);
+  --color-helix-violet: var(--helix-violet);
+  --color-helix-cyan: var(--helix-cyan);
+
+  /* `p-space-5`, `gap-space-4`, `mt-space-10`. Named rather than numbered so they never
+     collide with Tailwind's own 0.25rem scale, which stays available for one-off nudges. */
+  --spacing-space-1: var(--space-1);
+  --spacing-space-2: var(--space-2);
+  --spacing-space-3: var(--space-3);
+  --spacing-space-4: var(--space-4);
+  --spacing-space-5: var(--space-5);
+  --spacing-space-6: var(--space-6);
+  --spacing-space-7: var(--space-7);
+  --spacing-space-8: var(--space-8);
+  --spacing-space-9: var(--space-9);
+  --spacing-space-10: var(--space-10);
+}
+
+@layer base {
+  /*
+   * `.ms` is the design system's scope (ds.css line 1 of the bundle). Putting it on <body>
+   * keeps every ported selector working unchanged while still covering the whole app.
+   */
+  html {
+    background: var(--bg);
+    color-scheme: dark;
+  }
+
+  [data-theme="light"] {
+    color-scheme: light;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Re-resolve the text colour wherever a theme is declared.
+   *
+   * `color` inherits the *computed* value, so `color: var(--ink)` on <body> freezes whichever
+   * theme <body> was in. A nested `[data-theme]` scope redefines --ink but inherits the old
+   * colour, which is invisible in the real app (one theme at a time) and very visible in the
+   * gallery, where the light column rendered dark-theme text on white.
+   */
+  [data-theme] {
+    color: var(--ink);
+  }
+
+  /* A pointer on anything clickable, except where the control says it is unavailable. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Type styles.
+ *
+ * One class per style in tokens.json, assembled from the `--<name>-*` parts that
+ * scripts/build-tokens.mjs generates. Changing a size means changing the JSON, not this file.
+ */
+@layer components {
+  .t-display-xl,
+  .t-display-l,
+  .t-display-m,
+  .t-display-mobile,
+  .t-heading,
+  .t-numeral-xl,
+  .t-numeral-l,
+  .t-title,
+  .t-body-l,
+  .t-body,
+  .t-body-s,
+  .t-caption {
+    font-family: var(--font-sans);
+  }
+
+  .t-eyebrow,
+  .t-data,
+  .t-meta,
+  .t-flag {
+    font-family: var(--font-mono);
+  }
+
+  .t-display-xl {
+    font-size: var(--display-xl-size);
+    line-height: var(--display-xl-line);
+    font-weight: var(--display-xl-weight);
+    letter-spacing: var(--display-xl-track);
+  }
+  .t-display-l {
+    font-size: var(--display-l-size);
+    line-height: var(--display-l-line);
+    font-weight: var(--display-l-weight);
+    letter-spacing: var(--display-l-track);
+  }
+  .t-display-m {
+    font-size: var(--display-m-size);
+    line-height: var(--display-m-line);
+    font-weight: var(--display-m-weight);
+    letter-spacing: var(--display-m-track);
+  }
+  .t-display-mobile {
+    font-size: var(--display-mobile-size);
+    line-height: var(--display-mobile-line);
+    font-weight: var(--display-mobile-weight);
+    letter-spacing: var(--display-mobile-track);
+  }
+  .t-heading {
+    font-size: var(--heading-size);
+    line-height: var(--heading-line);
+    font-weight: var(--heading-weight);
+    letter-spacing: var(--heading-track);
+  }
+  .t-numeral-xl {
+    font-size: var(--numeral-xl-size);
+    line-height: var(--numeral-xl-line);
+    font-weight: var(--numeral-xl-weight);
+    letter-spacing: var(--numeral-xl-track);
+  }
+  .t-numeral-l {
+    font-size: var(--numeral-l-size);
+    line-height: var(--numeral-l-line);
+    font-weight: var(--numeral-l-weight);
+    letter-spacing: var(--numeral-l-track);
+  }
+  .t-title {
+    font-size: var(--title-size);
+    line-height: var(--title-line);
+    font-weight: var(--title-weight);
+    letter-spacing: var(--title-track);
+  }
+  .t-body-l {
+    font-size: var(--body-l-size);
+    line-height: var(--body-l-line);
+    font-weight: var(--body-l-weight);
+  }
+  .t-body {
+    font-size: var(--body-size);
+    line-height: var(--body-line);
+    font-weight: var(--body-weight);
+  }
+  .t-body-s {
+    font-size: var(--body-s-size);
+    line-height: var(--body-s-line);
+    font-weight: var(--body-s-weight);
+  }
+  .t-caption {
+    font-size: var(--caption-size);
+    line-height: var(--caption-line);
+    font-weight: var(--caption-weight);
+  }
+  .t-eyebrow {
+    font-size: var(--eyebrow-size);
+    line-height: var(--eyebrow-line);
+    font-weight: var(--eyebrow-weight);
+    letter-spacing: var(--eyebrow-track);
+    text-transform: uppercase;
+  }
+  .t-data {
+    font-size: var(--data-size);
+    line-height: var(--data-line);
+    font-weight: var(--data-weight);
+  }
+  .t-meta {
+    font-size: var(--meta-size);
+    line-height: var(--meta-line);
+    font-weight: var(--meta-weight);
+  }
+  .t-flag {
+    font-size: var(--flag-size);
+    line-height: var(--flag-line);
+    font-weight: var(--flag-weight);
+    letter-spacing: var(--flag-track);
+  }
+
+  /* The phone hero drops to `display-mobile`; everything else scales with the viewport. */
+  @media (max-width: 899px) {
+    .t-display-xl {
+      font-size: var(--display-mobile-size);
+      line-height: var(--display-mobile-line);
+      letter-spacing: var(--display-mobile-track);
+    }
+    .t-display-l,
+    .t-display-m {
+      font-size: var(--heading-size);
+      line-height: var(--heading-line);
+      letter-spacing: var(--heading-track);
+    }
+  }
+}

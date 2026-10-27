@@ -1,0 +1,186 @@
+/*
+ * Generated from docs/design-system/tokens.json by scripts/build-tokens.mjs.
+ * Do not edit by hand — run `npm run tokens`.
+ *
+ * This is the only file in the client that holds colour values. Everything else reads these
+ * variables, directly or through a Tailwind utility mapped in globals.css.
+ */
+
+:root,
+[data-theme="dark"] {
+  --bg: #0e0e10;
+  --bar: rgba(14,14,16,0.78);
+  --surface: rgba(255,255,255,0.04);
+  --surface-2: rgba(255,255,255,0.07);
+  --glass: rgba(24,24,28,0.72);
+  --ink: #f2f1f5;
+  --ink-2: #b7b5c2;
+  --ink-3: #8e8c9a;
+  --faint: #6f6d7b;
+  --line: rgba(255,255,255,0.10);
+  --line-strong: rgba(242,241,245,0.32);
+  --accent: #a99bff;
+  --accent-ink: #c9c0ff;
+  --accent-soft: rgba(169,155,255,0.15);
+  --on-accent: #0e0e10;
+  --solid: #f2f1f5;
+  --on-solid: #0e0e10;
+  --solid-hover: #c9c0ff;
+  --on-solid-hover: #0e0e10;
+  --flag-high-bg: rgba(255,179,122,0.16);
+  --flag-high-fg: #ffc58f;
+  --flag-normal-bg: rgba(127,224,176,0.12);
+  --flag-normal-fg: #9debc4;
+  --flag-low-bg: rgba(127,178,255,0.15);
+  --flag-low-fg: #9ec3ff;
+  --status-ok: #7fe0b0;
+  --status-warn: #ffb37a;
+  --dot-idle: #4a4855;
+  --glow: rgba(169,155,255,0.18);
+  --foot-top: #2a2a31;
+  --helix-violet: #c58bff;
+  --helix-cyan: #6fd0ff;
+  --shadow-panel: none;
+  --shadow-cta: 0 10px 30px -10px rgba(169,155,255,0.9);
+}
+
+[data-theme="light"] {
+  --bg: #f6f6f8;
+  --bar: rgba(246,246,248,0.82);
+  --surface: #ffffff;
+  --surface-2: #ebebf0;
+  --glass: rgba(255,255,255,0.78);
+  --ink: #111114;
+  --ink-2: #4d4b57;
+  --ink-3: #666472;
+  --faint: #8a8896;
+  --line: rgba(17,17,20,0.10);
+  --line-strong: rgba(17,17,20,0.28);
+  --accent: #6a55e8;
+  --accent-ink: #5640d6;
+  --accent-soft: rgba(106,85,232,0.10);
+  --on-accent: #ffffff;
+  --solid: #111114;
+  --on-solid: #ffffff;
+  --solid-hover: #5640d6;
+  --on-solid-hover: #ffffff;
+  --flag-high-bg: #ffe6d1;
+  --flag-high-fg: #933f0a;
+  --flag-normal-bg: #dcf3e6;
+  --flag-normal-fg: #1a6440;
+  --flag-low-bg: #dce8ff;
+  --flag-low-fg: #1e4fa3;
+  --status-ok: #1e9a5e;
+  --status-warn: #c2621b;
+  --dot-idle: #c9c7d3;
+  --glow: rgba(106,85,232,0.16);
+  --foot-top: #d6d5de;
+  --helix-violet: #8a3ff0;
+  --helix-cyan: #1e9ae0;
+  --shadow-panel: 0 24px 60px -30px rgba(40,30,90,0.25);
+  --shadow-cta: 0 10px 30px -10px rgba(106,85,232,0.7);
+}
+
+/* Theme-independent: spacing, shape, blur and the font stacks. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 36px;
+  --space-7: 40px;
+  --space-8: 56px;
+  --space-9: 88px;
+  --space-10: 120px;
+
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 24px;
+  --radius-xl: 28px;
+  --radius-2xl: 32px;
+  --radius-pill: 999px;
+
+  --blur-glass: 22px;
+  --blur-bar: 16px;
+
+  --font-sans: var(--font-geist-sans), "Helvetica Neue", Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* Type styles, as parts. Assembled into `.t-*` classes in globals.css. */
+:root {
+  --display-xl-size: 76px;
+  --display-xl-line: 78px;
+  --display-xl-weight: 400;
+  --display-xl-track: -0.035em;
+
+  --display-l-size: 64px;
+  --display-l-line: 66px;
+  --display-l-weight: 400;
+  --display-l-track: -0.035em;
+
+  --display-m-size: 48px;
+  --display-m-line: 52px;
+  --display-m-weight: 400;
+  --display-m-track: -0.03em;
+
+  --display-mobile-size: 46px;
+  --display-mobile-line: 48px;
+  --display-mobile-weight: 400;
+  --display-mobile-track: -0.04em;
+
+  --heading-size: 34px;
+  --heading-line: 42px;
+  --heading-weight: 400;
+  --heading-track: -0.025em;
+
+  --numeral-xl-size: 96px;
+  --numeral-xl-line: 76px;
+  --numeral-xl-weight: 300;
+  --numeral-xl-track: -0.06em;
+
+  --numeral-l-size: 72px;
+  --numeral-l-line: 72px;
+  --numeral-l-weight: 300;
+  --numeral-l-track: -0.05em;
+
+  --title-size: 22px;
+  --title-line: 28px;
+  --title-weight: 400;
+  --title-track: -0.01em;
+
+  --body-l-size: 17px;
+  --body-l-line: 27px;
+  --body-l-weight: 400;
+
+  --body-size: 15px;
+  --body-line: 23px;
+  --body-weight: 400;
+
+  --body-s-size: 14px;
+  --body-s-line: 22px;
+  --body-s-weight: 400;
+
+  --caption-size: 13px;
+  --caption-line: 20px;
+  --caption-weight: 400;
+
+  --eyebrow-size: 12px;
+  --eyebrow-line: 16px;
+  --eyebrow-weight: 400;
+  --eyebrow-track: 0.12em;
+
+  --data-size: 14px;
+  --data-line: 21px;
+  --data-weight: 400;
+
+  --meta-size: 12px;
+  --meta-line: 18px;
+  --meta-weight: 400;
+
+  --flag-size: 11px;
+  --flag-line: 14px;
+  --flag-weight: 500;
+  --flag-track: 0.06em;
+}

@@ -1,0 +1,245 @@
+/*
+ * Design-system component styles, ported from docs/design-system/components/bundle.css.
+ *
+ * Same class names, same declarations, same token variables. Keeping it byte-for-byte where
+ * possible means a change to the design system is a diff against this file rather than a
+ * re-interpretation of it. Additions this phase needs are marked "7a:".
+ *
+ * The `@import url("https://fonts.googleapis.com/…")` on line 1 of the bundle is deliberately
+ * NOT copied: fonts are self-hosted through next/font (LLD F4), and a runtime request to
+ * Google would break both the CSP and the privacy promise on /privacy.
+ */
+
+/* Medi-Scan components. Every value reads a token from tokens.json. */
+.ms, .ms *, .ms *::before, .ms *::after { box-sizing: border-box; }
+.ms { font-family: var(--font-sans); color: var(--ink); }
+.ms :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Button */
+.ms-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 48px; padding: 0 26px; border-radius: var(--radius-pill); border: 1px solid transparent; font: 500 14px/1 var(--font-sans); text-decoration: none; cursor: pointer; transition: background .2s, color .2s, border-color .2s; white-space: nowrap; }
+.ms-btn--sm { height: 36px; padding: 0 16px; font-size: 12px; gap: 8px; }
+.ms-btn--lg { height: 52px; font-size: 15px; }
+.ms-btn--block { display: flex; width: 100%; }
+.ms-btn--solid { background: var(--solid); color: var(--on-solid); }
+.ms-btn--solid:hover { background: var(--solid-hover); color: var(--on-solid-hover); }
+.ms-btn--outline { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+.ms-btn--outline:hover { background: var(--solid); color: var(--on-solid); border-color: var(--solid); }
+.ms-btn--accent { background: var(--accent); color: var(--on-accent); }
+.ms-btn--accent:hover { filter: brightness(1.08); }
+.ms-btn:disabled, .ms-btn[aria-disabled="true"] { background: var(--surface-2); color: var(--ink-3); border-color: transparent; cursor: not-allowed; filter: none; }
+
+/* Icon button */
+.ms-iconbtn { width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s, color .2s, border-color .2s; }
+.ms-iconbtn:hover { background: var(--solid); color: var(--on-solid); border-color: var(--solid); }
+
+/* Status */
+.ms-status { display: inline-flex; align-items: center; gap: 8px; font: 400 12px/1 var(--font-mono); letter-spacing: .04em; color: var(--ink-2); }
+.ms-status__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--status-ok); }
+.ms-status--waking { color: var(--flag-high-fg); }
+.ms-status--waking .ms-status__dot { background: var(--status-warn); animation: ms-pulse 1.6s ease-in-out infinite; }
+@keyframes ms-pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+
+/* Chips & tags */
+.ms-flag { display: inline-flex; align-items: center; justify-content: center; height: 24px; min-width: 64px; padding: 0 10px; border-radius: var(--radius-pill); font: 500 11px/1 var(--font-mono); letter-spacing: .06em; }
+.ms-flag--high { background: var(--flag-high-bg); color: var(--flag-high-fg); }
+.ms-flag--normal { background: var(--flag-normal-bg); color: var(--flag-normal-fg); }
+.ms-flag--low { background: var(--flag-low-bg); color: var(--flag-low-fg); }
+.ms-flag--unknown { background: var(--surface-2); color: var(--ink-3); }
+.ms-tag { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: var(--radius-pill); border: 1px solid var(--line-strong); font: 400 11px/1 var(--font-sans); color: var(--ink-2); }
+.ms-tag--count { border: 0; background: var(--surface-2); color: var(--ink); font-size: 12px; }
+.ms-tag--high { border: 0; background: var(--flag-high-bg); color: var(--flag-high-fg); font-size: 12px; }
+.ms-tag--normal { border: 0; background: var(--flag-normal-bg); color: var(--flag-normal-fg); font-size: 12px; }
+.ms-tag--low { border: 0; background: var(--flag-low-bg); color: var(--flag-low-fg); font-size: 12px; }
+.ms-eyebrow { margin: 0; font: 400 12px/16px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent-ink); }
+
+/* Tabs */
+.ms-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: var(--radius-pill); background: var(--surface-2); }
+.ms-tabs--block { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+.ms-tab { height: 36px; padding: 0 18px; border-radius: var(--radius-pill); border: 0; background: transparent; color: var(--ink-2); font: 500 13px/1 var(--font-sans); cursor: pointer; }
+.ms-tab[aria-selected="true"] { background: var(--solid); color: var(--on-solid); }
+
+/* Checkbox */
+.ms-check { display: flex; align-items: flex-start; gap: 12px; font: 400 13px/20px var(--font-sans); color: var(--ink-2); cursor: pointer; }
+.ms-check input { width: 18px; height: 18px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--accent); }
+.ms-check a { color: var(--accent-ink); }
+
+/* Drop zone */
+.ms-drop { position: relative; display: flex; align-items: center; gap: 20px; min-height: 128px; padding: 24px 28px; border-radius: var(--radius-md); border: 1px dashed var(--line-strong); cursor: pointer; transition: border-color .2s, background .2s; }
+.ms-drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+.ms-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.ms-drop--tile { flex-direction: column; align-items: flex-start; gap: 14px; min-height: 0; padding: 18px 16px; }
+.ms-drop__icon { width: 56px; height: 56px; flex-shrink: 0; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }
+.ms-drop--tile .ms-drop__icon { width: 44px; height: 44px; }
+.ms-drop__title { font: 400 16px/22px var(--font-sans); }
+.ms-drop__title em { font-style: normal; color: var(--accent-ink); text-decoration: underline; }
+.ms-drop__hint { font: 400 12px/18px var(--font-mono); color: var(--ink-3); }
+
+/* Card */
+.ms-card { border-radius: var(--radius-lg); border: 1px solid var(--line); background: var(--surface); padding: 24px; color: var(--ink); }
+.ms-card--glass { background: var(--glass); backdrop-filter: blur(var(--blur-glass)); -webkit-backdrop-filter: blur(var(--blur-glass)); box-shadow: var(--shadow-panel); }
+.ms-card--panel { border-radius: var(--radius-xl); padding: 36px; }
+.ms-card--interactive { cursor: pointer; transition: transform .25s, border-color .25s; text-align: left; font: inherit; }
+.ms-card--interactive:hover { transform: translateY(-4px); border-color: var(--accent); }
+.ms-card--selected { border-color: var(--accent); background: linear-gradient(160deg, var(--accent-soft), transparent), var(--surface); }
+
+/* Sample card */
+.ms-sample { display: flex; flex-direction: column; min-height: 380px; width: 100%; }
+.ms-sample__top { display: flex; justify-content: space-between; align-items: flex-start; color: var(--accent); }
+.ms-sample__body { margin-top: 56px; display: flex; flex-direction: column; gap: 8px; }
+.ms-sample__title { font: 400 22px/28px var(--font-sans); letter-spacing: -.01em; }
+.ms-sample__desc { font: 400 14px/21px var(--font-sans); color: var(--ink-2); }
+.ms-sample__foot { margin-top: auto; padding-top: 36px; display: flex; justify-content: space-between; align-items: flex-end; }
+.ms-sample__num { font: 300 96px/76px var(--font-sans); letter-spacing: -.06em; }
+.ms-sample__cta { height: 32px; padding: 0 14px; border-radius: var(--radius-pill); background: var(--solid); color: var(--on-solid); font: 500 12px/32px var(--font-sans); }
+
+/* Stat figure */
+.ms-stat { border-top: 1px solid var(--line); padding-top: 18px; }
+.ms-stat__value { font: 300 72px/72px var(--font-sans); letter-spacing: -.05em; }
+.ms-stat__unit { font-size: 28px; color: var(--ink-3); letter-spacing: 0; }
+.ms-stat__label { margin: 14px 0 0; font: 400 14px/20px var(--font-sans); color: var(--ink-2); }
+
+/* Biomarker row */
+.ms-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, .8fr) 72px; gap: 10px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); font: 400 14px/20px var(--font-sans); }
+.ms-row__value { font-family: var(--font-mono); }
+.ms-row__unit, .ms-row__range { font: 400 12px/18px var(--font-mono); color: var(--ink-3); }
+.ms-row .ms-flag { justify-self: end; }
+.ms-row--compact { display: flex; gap: 12px; }
+.ms-row--compact .ms-row__name { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+/* Chat */
+.ms-bubble { max-width: 85%; padding: 10px 16px; font: 400 14px/21px var(--font-sans); }
+.ms-bubble--user { align-self: flex-end; border-radius: 18px 18px 4px 18px; background: var(--solid); color: var(--on-solid); }
+.ms-bubble--assistant { align-self: flex-start; border-radius: 18px 18px 18px 4px; background: var(--accent-soft); color: var(--ink); }
+.ms-chat { display: flex; flex-direction: column; gap: 10px; }
+.ms-sources { display: flex; gap: 8px; align-items: center; font: 400 12px/18px var(--font-sans); color: var(--ink-3); }
+.ms-sources a { color: var(--accent-ink); }
+
+/* Timeline */
+.ms-timeline { position: relative; }
+.ms-timeline__rail { position: absolute; background: var(--line); }
+.ms-timeline--h .ms-timeline__rail { left: 6px; right: 6px; top: 22px; height: 1px; }
+.ms-timeline--h .ms-timeline__list { position: relative; display: grid; grid-template-columns: repeat(var(--ms-steps, 6), minmax(120px, 1fr)); gap: 16px; }
+.ms-timeline--v .ms-timeline__rail { left: 10px; top: 14px; bottom: 14px; width: 1px; }
+.ms-step { position: relative; background: none; border: 0; padding: 12px 0 0; text-align: left; cursor: pointer; color: inherit; font: inherit; display: flex; flex-direction: column; gap: 18px; }
+.ms-step__dot { width: 9px; height: 9px; margin: -3px 0 4px 6px; border-radius: 50%; background: var(--dot-idle); }
+.ms-step[aria-pressed="true"] .ms-step__dot, .ms-step[aria-expanded="true"] .ms-step__dot { width: 22px; height: 22px; margin: -10px 0 0; background: var(--accent); box-shadow: 0 0 0 6px var(--glow), 0 0 24px var(--accent); }
+.ms-step__label { font: 400 13px/20px var(--font-sans); color: var(--ink-3); white-space: pre; transition: color .2s; }
+.ms-step:hover .ms-step__label, .ms-step[aria-pressed="true"] .ms-step__label { color: var(--ink); }
+.ms-timeline--v .ms-step { width: 100%; display: block; min-height: 48px; padding: 10px 0 10px 40px; }
+.ms-timeline--v .ms-step__dot { position: absolute; left: 6px; top: 17px; margin: 0; }
+.ms-timeline--v .ms-step[aria-expanded="true"] .ms-step__dot { left: 2px; top: 13px; width: 17px; height: 17px; margin: 0; }
+.ms-timeline--v .ms-step__head { display: flex; align-items: baseline; gap: 12px; }
+.ms-timeline--v .ms-step__num { font: 400 11px/1 var(--font-mono); color: var(--ink-3); }
+.ms-timeline--v .ms-step__title { font: 400 22px/28px var(--font-sans); letter-spacing: -.02em; color: var(--ink-3); }
+.ms-timeline--v .ms-step[aria-expanded="true"] .ms-step__title { color: var(--ink); }
+.ms-timeline--v .ms-step__body { display: block; margin-top: 8px; padding-left: 28px; font: 400 14px/21px var(--font-sans); color: var(--ink-2); }
+
+/* Helix */
+.ms-helix { position: relative; pointer-events: none; }
+.ms-helix__inner { position: absolute; inset: 0; animation: ms-float 9s ease-in-out infinite; }
+.ms-helix__dot { position: absolute; border-radius: 50%; animation: ms-tw 4.2s ease-in-out infinite; }
+@keyframes ms-tw { 0%,100% { transform: scale(1) } 50% { transform: scale(.55); opacity: .35 } }
+@keyframes ms-float { 0%,100% { transform: translateY(0) rotate(-14deg) } 50% { transform: translateY(-14px) rotate(-12deg) } }
+
+/* Marquee */
+.ms-marquee { overflow: hidden; white-space: nowrap; }
+.ms-marquee__track { display: inline-flex; gap: 40px; font: 400 clamp(44px, 7vw, 96px)/1 var(--font-sans); letter-spacing: -.04em; animation: ms-scroll 38s linear infinite; }
+.ms-marquee__sep { color: var(--faint); }
+.ms-marquee__hl { color: var(--accent); }
+@keyframes ms-scroll { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+
+/* 7a: the theme toggle renders both icons and lets CSS pick, so the markup is identical on
+   the server and the client — no hydration mismatch — and the right icon is the first one
+   painted. `display: none` also takes the hidden label out of the accessibility tree, so a
+   screen reader reads exactly one. */
+.ms-themetoggle { position: relative; }
+.ms-themetoggle__when-dark, .ms-themetoggle__when-light { display: inline-flex; align-items: center; justify-content: center; }
+.ms-themetoggle__when-light { display: none; }
+[data-theme="light"] .ms-themetoggle__when-dark { display: none; }
+[data-theme="light"] .ms-themetoggle__when-light { display: inline-flex; }
+
+/* 7a: a biomarker name links to its explainer page when the API gives a slug.
+   The mockup draws these names plain, but a link that looks exactly like text is only
+   discoverable by accident. A dotted hairline keeps the column calm — a full underline on
+   every name would fight the figures beside it — while still marking it as a link without
+   relying on colour alone. */
+.ms-row__link { color: inherit; text-decoration: underline dotted var(--line-strong); text-underline-offset: 4px; }
+.ms-row__link:hover { color: var(--accent-ink); text-decoration: underline solid currentColor; }
+
+/* 7a: the file input is visually hidden, so the ring has to be drawn on the label it sits in.
+   Without this the drop zone is reachable by keyboard but gives no sign that it is focused. */
+.ms-drop:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; border-color: var(--accent); }
+
+/* 7a: theme change fades the ground and the text (design system, "Motion"). Only these two
+   properties, and only on the root elements — fading every colour on the page is what makes a
+   theme switch look like a slow wipe instead of a dissolve. */
+html, body { transition: background-color .3s ease, color .3s ease; }
+
+/* ---------------------------------------------------------------------------
+   7a: notices. Page-wide banners, inline notices and toasts (mockups
+   system-screens--07 and --10). Not in the component bundle: these are the
+   app's own surfaces, built from the same tokens.
+   --------------------------------------------------------------------------- */
+
+.ms-banner { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 14px var(--space-4); font: 400 13px/20px var(--font-sans); color: var(--ink-2); }
+.ms-banner b { font-weight: 500; color: var(--ink); }
+.ms-banner__icon { flex-shrink: 0; margin-top: 1px; }
+.ms-banner__text { flex: 1 1 auto; min-width: 0; }
+.ms-banner__close { flex-shrink: 0; }
+
+/* Waking: violet, because it is the brand telling you about itself, not a fault. */
+.ms-banner--waking { background: var(--accent-soft); border-bottom: 1px solid var(--line); }
+.ms-banner--waking .ms-banner__icon { color: var(--accent); }
+
+/* Daily limit: orange, the same hue as a HIGH flag and for the same reason — it is a fact that
+   blocks an action, not an alarm. Never red (root CLAUDE.md). */
+.ms-banner--limit { background: var(--flag-high-bg); border-bottom: 1px solid var(--line); }
+.ms-banner--limit b { color: var(--flag-high-fg); }
+.ms-banner--limit .ms-banner__icon { color: var(--flag-high-fg); }
+.ms-banner time, .ms-banner__count { font-family: var(--font-mono); color: var(--ink); }
+
+/* Decorative progress line under the waking bar. aria-hidden; it reports no real progress. */
+.ms-banner__progress { position: absolute; left: 0; bottom: -1px; height: 2px; width: 100%; overflow: hidden; }
+.ms-banner__progress::after { content: ""; position: absolute; inset: 0; width: 35%; background: var(--accent); animation: ms-indeterminate 2.4s ease-in-out infinite; }
+@keyframes ms-indeterminate { 0% { transform: translateX(-100%) } 100% { transform: translateX(386%) } }
+
+/* Inline notice: sits next to the thing it is about. */
+.ms-notice { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--radius-md); font: 400 13px/20px var(--font-sans); color: var(--ink-2); }
+.ms-notice b { display: block; font-weight: 500; }
+.ms-notice__icon { flex-shrink: 0; margin-top: 1px; }
+.ms-notice--warn { background: var(--flag-high-bg); }
+.ms-notice--warn b, .ms-notice--warn .ms-notice__icon { color: var(--flag-high-fg); }
+.ms-notice--info { background: var(--accent-soft); }
+.ms-notice--info b, .ms-notice--info .ms-notice__icon { color: var(--accent-ink); }
+.ms-notice__code { margin-top: 8px; font: 400 12px/18px var(--font-mono); color: var(--ink-3); }
+
+/* Toasts: bottom-right on desktop, full width at the bottom on phones. */
+.ms-toasts { position: fixed; right: var(--space-5); bottom: var(--space-5); left: auto; z-index: 60; display: flex; flex-direction: column; gap: 10px; width: 360px; max-width: calc(100vw - var(--space-5) * 2); }
+.ms-toast { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--radius-lg); border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(var(--blur-glass)); -webkit-backdrop-filter: blur(var(--blur-glass)); box-shadow: var(--shadow-panel); color: var(--ink-2); }
+.ms-toast__icon { flex-shrink: 0; margin-top: 2px; color: var(--ink-3); }
+.ms-toast__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ms-toast__title { font: 500 14px/20px var(--font-sans); color: var(--ink); }
+.ms-toast__text { font: 400 13px/19px var(--font-sans); }
+.ms-toast__action { margin-top: 10px; }
+.ms-toast[data-starting-style], .ms-toast[data-ending-style] { opacity: 0; transform: translateY(12px); }
+.ms-toast { transition: opacity .25s ease, transform .25s ease; }
+
+@media (max-width: 899px) {
+  .ms-toasts { right: var(--space-4); left: var(--space-4); bottom: var(--space-4); width: auto; max-width: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   7a: the oversized status numeral on the system screens (404, 401, 403, 500,
+   503). aria-hidden — the status is also in the eyebrow as words.
+   --------------------------------------------------------------------------- */
+
+.ms-sysnum { font: 300 clamp(140px, 19vw, 280px)/.85 var(--font-sans); letter-spacing: -.06em; color: var(--ink); user-select: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-helix__inner, .ms-helix__dot, .ms-marquee__track, .ms-status--waking .ms-status__dot { animation: none; }
+  /* 7a: the rest of the looping and entrance motion this phase adds. */
+  .ms-banner__progress::after { animation: none; width: 100%; opacity: .5; }
+  .ms-toast { transition: none; }
+  .ms-toast[data-starting-style], .ms-toast[data-ending-style] { transform: none; }
+  html, body { transition: none; }
+}

@@ -1,309 +1,345 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, api, BASE_URL, GUEST_TOKEN_KEY } from "./api";
+import { ApiError } from "./api-error";
+import { request } from "./api";
+import {
+  resetCredentialProvider,
+  setCredentialProvider,
+  type CredentialProvider,
+} from "./credentials";
+import { GUEST_STORAGE_KEY, resetGuestSessionForTests } from "./guest-session";
 
-/**
- * Tests for the API client's three load-bearing behaviours: lazy session creation, the
- * single retry on `SESSION_INVALID`, and Problem Details parsing.
- *
- * These are worth testing because each one is invisible when it breaks. A session created
- * eagerly still works, it just burns the rate limit; a retry loop still works, it just
- * hammers the server; an unparsed Problem Details still shows an error, just the wrong one.
- */
+const API = "http://localhost:8080";
 
-type FetchMock = ReturnType<typeof vi.fn>;
-
-function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-}
-
-function problemResponse(
+/** A Problem Details response, as the backend actually sends them (contract 1.5). */
+function problem(
   status: number,
   code: string,
   extra: Record<string, unknown> = {},
   headers: Record<string, string> = {},
-): Response {
+) {
   return new Response(
     JSON.stringify({
-      type: `https://medi-scan.dev/errors/${code.toLowerCase().replace(/_/g, "-")}`,
+      type: `https://medi-scan.dev/errors/${code.toLowerCase()}`,
       title: code,
       status,
-      detail: "Something went wrong.",
+      detail: "Something for a human to read.",
       code,
-      requestId: "req-1234",
+      requestId: "req-1",
       ...extra,
     }),
-    {
-      status,
-      headers: { "Content-Type": "application/problem+json", "X-Request-Id": "req-1234", ...headers },
-    },
+    { status, headers: { "Content-Type": "application/problem+json", ...headers } },
   );
 }
 
-let fetchMock: FetchMock;
+function json(status: number, body: unknown, headers: Record<string, string> = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
+}
+
+function aliveSession() {
+  return {
+    token: "guest-token-abc",
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  };
+}
+
+let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  window.sessionStorage.clear();
+  resetGuestSessionForTests();
+  resetCredentialProvider();
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
-describe("guest sessions", () => {
-  it("does not create a session until a call needs one", async () => {
-    // Importing the module and reading the token must not touch the network. A session
-    // created on page load would be a session for someone who only read a biomarker page.
-    expect(api.guestToken()).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
+describe("sending a request", () => {
+  it("never sends cookies", async () => {
+    fetchMock.mockResolvedValue(json(200, { ok: true }));
+
+    await request("GET", "/api/samples");
+
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: "omit" });
   });
 
-  it("creates a session on the first authenticated call and stores the token", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({ token: "t".repeat(43), expiresAt: "2026-10-04T09:30:00Z" }, { status: 201 }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+  it("sends JSON bodies with a Content-Type", async () => {
+    fetchMock.mockResolvedValue(json(200, {}));
 
-    await api.request("/api/reports");
+    await request("POST", "/api/reports", { body: { sampleId: "lipid" } });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE_URL}/api/sessions`);
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST" });
-
-    expect(window.sessionStorage.getItem(GUEST_TOKEN_KEY)).toBe("t".repeat(43));
+    const init = fetchMock.mock.calls[0][1];
+    expect(init.headers["Content-Type"]).toBe("application/json");
+    expect(init.body).toBe('{"sampleId":"lipid"}');
   });
 
-  it("sends the token as X-Session-Token", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "existing-token");
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+  it("leaves Content-Type off FormData, so the browser can set the boundary", async () => {
+    fetchMock.mockResolvedValue(json(202, {}));
 
-    await api.request("/api/reports");
+    const form = new FormData();
+    form.append("file", new File(["%PDF"], "r.pdf", { type: "application/pdf" }));
+    await request("POST", "/api/reports", { body: form });
 
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get("X-Session-Token")).toBe("existing-token");
-    expect(headers.get("Authorization")).toBeNull();
+    const init = fetchMock.mock.calls[0][1];
+    expect(init.headers["Content-Type"]).toBeUndefined();
+    expect(init.body).toBeInstanceOf(FormData);
   });
 
-  it("reuses an existing token instead of creating another session", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "existing-token");
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+  it("returns undefined for 204, rather than trying to parse nothing", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
 
-    await api.request("/api/reports");
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE_URL}/api/reports`);
-  });
-
-  it("shares one session creation between concurrent calls", async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url.endsWith("/api/sessions")) {
-        return Promise.resolve(
-          jsonResponse({ token: "shared-token", expiresAt: "2026-10-04T09:30:00Z" }, { status: 201 }),
-        );
-      }
-      return Promise.resolve(jsonResponse({ ok: true }));
-    });
-
-    await Promise.all([
-      api.request("/api/reports"),
-      api.request("/api/reports"),
-      api.request("/api/reports"),
-    ]);
-
-    // Three parallel calls, one session. Three sessions would burn the 20/hour allowance and
-    // leave two of them owning nothing.
-    const sessionCalls = fetchMock.mock.calls.filter((call) => String(call[0]).endsWith("/api/sessions"));
-    expect(sessionCalls).toHaveLength(1);
-  });
-
-  it("does not attach a credential to anonymous calls", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse([]));
-
-    await api.request("/api/samples", { anonymous: true });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get("X-Session-Token")).toBeNull();
-  });
-
-  it("health never creates a session", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ status: "UP" }));
-
-    await expect(api.health()).resolves.toBe(true);
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE_URL}/actuator/health`);
-  });
-
-  it("health reports false instead of throwing when the backend is unreachable", async () => {
-    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
-
-    // A cold EC2 box is the expected case, not an exception: the UI shows a notice.
-    await expect(api.health()).resolves.toBe(false);
+    await expect(request("DELETE", "/api/reports/x")).resolves.toBeUndefined();
   });
 });
 
-describe("SESSION_INVALID retry", () => {
-  it("creates a new session and retries once", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "stale-token");
-
-    fetchMock
-      .mockResolvedValueOnce(problemResponse(401, "SESSION_INVALID"))
-      .mockResolvedValueOnce(
-        jsonResponse({ token: "fresh-token", expiresAt: "2026-10-04T09:30:00Z" }, { status: 201 }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ ok: true }));
-
-    await expect(api.request("/api/reports")).resolves.toEqual({ ok: true });
-
-    expect(window.sessionStorage.getItem(GUEST_TOKEN_KEY)).toBe("fresh-token");
-
-    const retryHeaders = fetchMock.mock.calls[2][1].headers as Headers;
-    expect(retryHeaders.get("X-Session-Token")).toBe("fresh-token");
-  });
-
-  it("retries only once, then throws", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "stale-token");
-
-    fetchMock.mockImplementation((url: string) => {
-      if (url.endsWith("/api/sessions")) {
-        return Promise.resolve(
-          jsonResponse({ token: "fresh-token", expiresAt: "2026-10-04T09:30:00Z" }, { status: 201 }),
-        );
-      }
-      return Promise.resolve(problemResponse(401, "SESSION_INVALID"));
-    });
-
-    await expect(api.request("/api/reports")).rejects.toBeInstanceOf(ApiError);
-
-    // The guard that matters: a loop here would spend the rate-limit allowance in seconds.
-    const reportCalls = fetchMock.mock.calls.filter((call) => String(call[0]).endsWith("/api/reports"));
-    expect(reportCalls).toHaveLength(2);
-  });
-
-  it("does not retry a 401 with a different code", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(problemResponse(401, "AUTH_REQUIRED"));
-
-    await expect(api.request("/api/me")).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    // The token was valid; it is just not a user credential. Dropping it would lose the
-    // guest's reports for no reason.
-    expect(window.sessionStorage.getItem(GUEST_TOKEN_KEY)).toBe("a-token");
-  });
-
-  it("does not retry other statuses", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(problemResponse(404, "REPORT_NOT_FOUND"));
-
-    await expect(api.request("/api/reports/abc")).rejects.toMatchObject({ code: "REPORT_NOT_FOUND" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("Problem Details parsing", () => {
-  it("maps the body onto a typed ApiError", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(problemResponse(404, "REPORT_NOT_FOUND"));
-
-    const error = await api.request("/api/reports/abc").catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(ApiError);
-    const apiError = error as ApiError;
-    expect(apiError.status).toBe(404);
-    expect(apiError.code).toBe("REPORT_NOT_FOUND");
-    expect(apiError.requestId).toBe("req-1234");
-    expect(apiError.message).toBe("Something went wrong.");
-  });
-
-  it("exposes the errors array on a validation failure", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(
-      problemResponse(400, "VALIDATION_ERROR", {
+describe("parsing an error", () => {
+  it("reads code, requestId and the field errors out of Problem Details", async () => {
+    fetchMock.mockResolvedValue(
+      problem(400, "VALIDATION_ERROR", {
         errors: [{ field: "question", message: "must be between 1 and 500 characters" }],
       }),
     );
 
-    const error = (await api
-      .request("/api/reports/abc/chat", { method: "POST", body: { question: "" } })
-      .catch((caught: unknown) => caught)) as ApiError;
+    const error = await request("POST", "/api/x").catch((e: unknown) => e);
 
-    expect(error.code).toBe("VALIDATION_ERROR");
-    expect(error.fieldErrors).toEqual([
+    expect(error).toBeInstanceOf(ApiError);
+    const api = error as ApiError;
+    expect(api.status).toBe(400);
+    expect(api.code).toBe("VALIDATION_ERROR");
+    expect(api.requestId).toBe("req-1");
+    expect(api.errors).toEqual([
       { field: "question", message: "must be between 1 and 500 characters" },
     ]);
   });
 
-  it("reads Retry-After on a 429", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(
-      problemResponse(429, "RATE_LIMITED", {}, { "Retry-After": "120" }),
-    );
+  it("reads Retry-After into retryAfterSec", async () => {
+    fetchMock.mockResolvedValue(problem(429, "CAPACITY", {}, { "Retry-After": "3600" }));
 
-    const error = (await api
-      .request("/api/reports", { method: "POST", body: {} })
-      .catch((caught: unknown) => caught)) as ApiError;
+    const error = (await request("POST", "/api/x").catch((e: unknown) => e)) as ApiError;
 
-    expect(error.code).toBe("RATE_LIMITED");
-    expect(error.retryAfterSeconds).toBe(120);
+    expect(error.retryAfterSec).toBe(3600);
   });
 
-  it("falls back to INTERNAL_ERROR when the body is not Problem Details", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(
+  it("falls back to INTERNAL_ERROR for a non-JSON 5xx", async () => {
+    // A proxy timeout page, or a crash before the handler ran.
+    fetchMock.mockResolvedValue(
       new Response("<html>502 Bad Gateway</html>", {
         status: 502,
-        headers: { "Content-Type": "text/html", "X-Request-Id": "req-gateway" },
+        headers: { "Content-Type": "text/html", "X-Request-Id": "req-9" },
       }),
     );
 
-    // A proxy returning HTML must still produce a usable typed error, not a JSON parse crash.
-    const error = (await api.request("/api/reports").catch((caught: unknown) => caught)) as ApiError;
+    const error = (await request("GET", "/api/x").catch((e: unknown) => e)) as ApiError;
 
-    expect(error).toBeInstanceOf(ApiError);
-    expect(error.status).toBe(502);
     expect(error.code).toBe("INTERNAL_ERROR");
-    expect(error.requestId).toBe("req-gateway");
+    expect(error.status).toBe(502);
+    expect(error.requestId).toBe("req-9");
   });
 
-  it("returns undefined for a 204", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  it("falls back to UNKNOWN_ERROR for a non-JSON 4xx", async () => {
+    fetchMock.mockResolvedValue(new Response("nope", { status: 418 }));
 
-    await expect(api.request("/api/reports/abc", { method: "DELETE" })).resolves.toBeUndefined();
+    const error = (await request("GET", "/api/x").catch((e: unknown) => e)) as ApiError;
+
+    expect(error.code).toBe("UNKNOWN_ERROR");
+    expect(error.status).toBe(418);
   });
 
-  it("serialises a JSON body and sets Content-Type", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+  it("passes an unrecognised code through untouched", async () => {
+    // Contract 9.2: a new code is a compatible change, so the client must not choke on one.
+    fetchMock.mockResolvedValue(problem(400, "SOMETHING_ADDED_LATER"));
 
-    await api.request("/api/reports", { method: "POST", body: { consent: true } });
+    const error = (await request("GET", "/api/x").catch((e: unknown) => e)) as ApiError;
 
-    const init = fetchMock.mock.calls[0][1];
-    expect((init.headers as Headers).get("Content-Type")).toBe("application/json");
-    expect(init.body).toBe(JSON.stringify({ consent: true }));
+    expect(error.code).toBe("SOMETHING_ADDED_LATER");
   });
 
-  it("leaves Content-Type unset for FormData so the browser adds the boundary", async () => {
-    window.sessionStorage.setItem(GUEST_TOKEN_KEY, "a-token");
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+  it("keeps the response body out of the error message", async () => {
+    fetchMock.mockResolvedValue(
+      problem(500, "INTERNAL_ERROR", { detail: "Patient Jane Roe, MRN 12345, LDL 162" }),
+    );
 
-    const form = new FormData();
-    form.set("consent", "true");
+    const error = (await request("GET", "/api/x").catch((e: unknown) => e)) as ApiError;
 
-    await api.request("/api/reports", { method: "POST", body: form });
+    // `message` is what ends up in any log or error reporter. Report content must not.
+    expect(error.message).toBe("500 INTERNAL_ERROR (requestId req-1)");
+    expect(error.message).not.toContain("Jane Roe");
+    expect(error.toString()).not.toContain("Jane Roe");
+  });
 
-    const init = fetchMock.mock.calls[0][1];
-    expect((init.headers as Headers).get("Content-Type")).toBeNull();
-    expect(init.body).toBeInstanceOf(FormData);
+  it("turns a dropped connection into NETWORK_ERROR", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const error = (await request("GET", "/api/x").catch((e: unknown) => e)) as ApiError;
+
+    expect(error.code).toBe("NETWORK_ERROR");
+    expect(error.isRetryable).toBe(true);
+  });
+
+  it("turns a slow response into TIMEOUT", async () => {
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    );
+
+    const error = (await request("GET", "/api/x", { timeoutMs: 10 }).catch(
+      (e: unknown) => e,
+    )) as ApiError;
+
+    expect(error.code).toBe("TIMEOUT");
+  });
+
+  it("lets a caller's own abort through as an abort, not a timeout", async () => {
+    const controller = new AbortController();
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    );
+
+    const pending = request("GET", "/api/x", { signal: controller.signal }).catch(
+      (e: unknown) => e,
+    );
+    controller.abort();
+
+    const error = await pending;
+    expect(error).not.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("credentials", () => {
+  it("sends nothing when auth is 'none'", async () => {
+    fetchMock.mockResolvedValue(json(200, {}));
+
+    await request("GET", "/api/samples", { auth: "none" });
+
+    const headers = fetchMock.mock.calls[0][1].headers;
+    expect(headers["X-Session-Token"]).toBeUndefined();
+    expect(headers.Authorization).toBeUndefined();
+  });
+
+  it("sends only X-Session-Token for a guest call", async () => {
+    window.sessionStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(aliveSession()));
+    fetchMock.mockResolvedValue(json(200, {}));
+
+    await request("GET", "/api/reports", { auth: "guest" });
+
+    const headers = fetchMock.mock.calls[0][1].headers;
+    expect(headers["X-Session-Token"]).toBe("guest-token-abc");
+    expect(headers.Authorization).toBeUndefined();
+  });
+
+  it("sends only Authorization when signed in, never both", async () => {
+    window.sessionStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(aliveSession()));
+    setCredentialProvider({
+      authorization: async () => "Bearer access-token",
+      onAuthFailure: async () => "fail",
+    });
+    fetchMock.mockResolvedValue(json(200, {}));
+
+    await request("GET", "/api/reports", { auth: "auto" });
+
+    const headers = fetchMock.mock.calls[0][1].headers;
+    expect(headers.Authorization).toBe("Bearer access-token");
+    // Sending both would leak the guest token for no reason.
+    expect(headers["X-Session-Token"]).toBeUndefined();
+  });
+
+  it("falls back to the guest token when 'auto' finds nobody signed in", async () => {
+    window.sessionStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(aliveSession()));
+    fetchMock.mockResolvedValue(json(200, {}));
+
+    await request("GET", "/api/reports", { auth: "auto" });
+
+    expect(fetchMock.mock.calls[0][1].headers["X-Session-Token"]).toBe("guest-token-abc");
+  });
+});
+
+describe("retrying a rejected bearer token", () => {
+  function provider(decision: "retry" | "fail"): CredentialProvider & { calls: number } {
+    const p = {
+      calls: 0,
+      authorization: async () => "Bearer access-token",
+      onAuthFailure: async () => {
+        p.calls += 1;
+        return decision;
+      },
+    };
+    return p;
+  }
+
+  it("retries exactly once when the provider says to", async () => {
+    const p = provider("retry");
+    setCredentialProvider(p);
+
+    fetchMock
+      .mockResolvedValueOnce(problem(401, "TOKEN_EXPIRED"))
+      .mockResolvedValueOnce(json(200, { ok: true }));
+
+    await expect(request("GET", "/api/me", { auth: "auto" })).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(p.calls).toBe(1);
+  });
+
+  it("does not retry when the provider says to fail", async () => {
+    const p = provider("fail");
+    setCredentialProvider(p);
+    fetchMock.mockResolvedValue(problem(401, "TOKEN_EXPIRED"));
+
+    await expect(request("GET", "/api/me", { auth: "auto" })).rejects.toBeInstanceOf(ApiError);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("never retries a second time", async () => {
+    const p = provider("retry");
+    setCredentialProvider(p);
+    // The refresh "worked" but the new token is rejected too.
+    fetchMock.mockResolvedValue(problem(401, "TOKEN_INVALID"));
+
+    await expect(request("GET", "/api/me", { auth: "auto" })).rejects.toBeInstanceOf(ApiError);
+
+    // One original plus one retry. A loop here would hammer the refresh rate limit and look
+    // like token reuse, which revokes the whole family.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(p.calls).toBe(1);
+  });
+
+  it("does not try to refresh a guest call", async () => {
+    const p = provider("retry");
+    setCredentialProvider(p);
+    window.sessionStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(aliveSession()));
+    fetchMock.mockResolvedValue(problem(401, "TOKEN_EXPIRED"));
+
+    await expect(request("GET", "/api/reports", { auth: "guest" })).rejects.toBeInstanceOf(
+      ApiError,
+    );
+
+    expect(p.calls).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the base URL", () => {
+  it("prefixes the configured API origin", async () => {
+    fetchMock.mockResolvedValue(json(200, {}));
+
+    await request("GET", "/api/samples");
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API}/api/samples`);
   });
 });

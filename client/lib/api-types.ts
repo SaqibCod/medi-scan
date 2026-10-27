@@ -193,6 +193,52 @@ export interface AdminStats {
 
 // ---- Errors ----
 
+/**
+ * Every `code` the API can put in a Problem Details body (contract 8.1).
+ *
+ * Listed rather than described so the UI can be checked against it: a test asserts that every
+ * code here has wording in `error-messages.ts`, which means adding a code to the contract
+ * without deciding what the user is told fails the build.
+ *
+ * Client-only codes (`NETWORK_ERROR`, `TIMEOUT`, `UNKNOWN_ERROR`) are deliberately absent —
+ * they live in `api-error.ts`, because nothing sends them.
+ */
+export const HTTP_ERROR_CODES = [
+  "VALIDATION_ERROR",
+  "FILE_SIGNATURE_MISMATCH",
+  "SESSION_INVALID",
+  "AUTH_REQUIRED",
+  "TOKEN_EXPIRED",
+  "TOKEN_INVALID",
+  "GOOGLE_TOKEN_INVALID",
+  "REFRESH_TOKEN_INVALID",
+  "FORBIDDEN",
+  "REPORT_NOT_FOUND",
+  "SAMPLE_NOT_FOUND",
+  "REPORT_NOT_READY",
+  "FILE_TOO_LARGE",
+  "UNSUPPORTED_FILE_TYPE",
+  "RATE_LIMITED",
+  "CAPACITY",
+  "BUSY",
+  "INTERNAL_ERROR",
+] as const;
+
+export type HttpErrorCode = (typeof HTTP_ERROR_CODES)[number];
+
+/** `error.code` on a report that reached status `FAILED` (contract 8.2). */
+export const REPORT_ERROR_CODES = [
+  "UNREADABLE",
+  "DOCUMENT_TOO_LONG",
+  "NO_RESULTS_FOUND",
+  "EXTRACTION_FAILED",
+  "CAPACITY",
+  "LLM_UNAVAILABLE",
+  "INTERRUPTED",
+] as const;
+
+export type ReportErrorCode = (typeof REPORT_ERROR_CODES)[number];
+
 export interface ProblemDetail {
   type: string;
   title: string;

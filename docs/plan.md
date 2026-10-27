@@ -63,7 +63,8 @@ Anyone can use the app as a guest with no login. Signing in with Google is optio
 
 | Layer | Choice |
 |---|---|
-| Frontend | Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Recharts, Lucide |
+| Frontend | Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query, Recharts |
+| Design system | `docs/design-system/` is the styling source of truth: tokens for every colour, space, radius, shadow and type style, and one usage note per component. Geist and Geist Mono are self-hosted through `next/font` — no runtime request to Google Fonts. Icons come only from the project's own `Icon` set; there is no Lucide and no other icon library. shadcn/ui is used only for behaviour primitives (the mobile menu sheet and the toaster), fully restyled with the tokens. |
 | Backend | Java 21, Spring Boot, Spring AI, Spring Data JPA, Actuator |
 | Document parsing | Apache PDFBox (PDF text and page rendering), Tess4J / Tesseract (OCR) |
 | PII masking | Regex rules + Apache OpenNLP name finder |
@@ -335,14 +336,7 @@ It reads only aggregated counts. It never shows report content, ids of other use
 - **Retention:** raw uploads are deleted right after extraction. Guest sessions and their reports auto-delete after 24 hours, and signed-in users' reports after 30 days, via a scheduled job. Reads also refuse anything past `expires_at`.
 - **Minimal user data:** users are stored as Google `sub`, display name, role, and timestamps only. No email address and no photo. Accounts with no sign-in for 180 days are deleted.
 - **Tokens:** session tokens and refresh tokens are stored only as SHA-256 hashes. `JWT_SIGNING_KEYS` and `GOOGLE_CLIENT_ID` come from the environment. Local and production use different signing keys.
-- **Content Security Policy** (set in `next.config` headers):
-  - `default-src 'self'`
-  - `script-src 'self' https://accounts.google.com/gsi/client`
-  - `frame-src https://accounts.google.com`
-  - `connect-src 'self' <API origin> https://accounts.google.com`
-  - `style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style`
-  - `object-src 'none'`
-  - `base-uri 'self'`
+- **Content Security Policy:** nonce-based `script-src` (`'self' 'nonce-…' 'strict-dynamic'`), set per request in the Next.js middleware rather than as a static `next.config` header. `style-src` keeps `'unsafe-inline'`, for styles only. The full policy, the reason `style-src` is the exception, and what the nonce costs in rendering are in `SECURITY.md`. Google Identity Services is added to `script-src`, `connect-src` and `frame-src` in phase 7c, when sign-in ships.
 - **No third-party scripts** other than Google Identity Services. No analytics or tag managers.
 - **HTTPS:** HTTPS only, terminated by Caddy. CORS is restricted to the Vercel origin.
 - **Guest session token:** the backend issues a random token when a session starts. The client stores it in `sessionStorage` and sends it as an `X-Session-Token` header. No cookies are used, so Safari's third-party cookie blocking isn't an issue.
@@ -405,11 +399,23 @@ medi-scan/
 │   ├── app/
 │   │   ├── page.tsx
 │   │   ├── report/[id]/
-│   │   └── biomarkers/[slug]/
+│   │   ├── biomarkers/[slug]/
+│   │   └── styles/           (generated tokens.css, ds.css, globals.css)
 │   ├── content/biomarkers/   (curated markdown, also indexed for RAG)
-│   ├── components/           (upload, samples, status, results, chat, disclaimer)
+│   ├── components/
+│   │   ├── ds/               (design-system components, ported from docs/design-system/)
+│   │   ├── shell/            (header, mobile menu, footer, disclaimer)
+│   │   ├── system/           (404, 401, 403, 500, 503 screens)
+│   │   └── notices/          (banners, inline notices, toasts)
 │   ├── lib/
+│   ├── scripts/build-tokens.mjs  (tokens.json → app/styles/tokens.css)
+│   ├── e2e/                  (Playwright)
 │   └── package.json
+├── docs/
+│   ├── plan.md, dataflow.md, api-contract.md, evaluation.md
+│   ├── phase-<n>-lld.md       (one low-level design per phase)
+│   ├── design-system/         (tokens.json, voice and component rules — styling source of truth)
+│   └── ui/screens/            (PNGs of the approved mockups, one per artboard)
 ├── backend/
 │   ├── src/main/java/.../
 │   │   ├── auth/          (Google token check, JWT issue, refresh rotation, security config)
@@ -553,6 +559,8 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 **Phase numbers are labels, not positions.** Each phase keeps the number it was given when the work was first described, because code comments, migrations, and the design docs refer to "Phase 2" or "Phase 6" by name. The order of this list is the build order; the numbers in the labels are not. Phase 6 is split into 6a (accounts backend) and 6b (the data endpoints it enables), and 6a is built before phases 3, 4, and 5 so that chat is written against the final ownership model instead of being rewritten once users exist.
 
+Phase 7 is split into 7a to 7d (see item 8), and **7a is built before phases 4 and 5**. The frontend foundation — tokens, components, the shell, the API client — is what every later screen is drawn on, and OCR and chat both need a UI to be worth anything. Building it now also means the design system is ported once, against the design docs, rather than retrofitted onto screens that already exist. **The current phase is 7a.**
+
 1. **Foundation (Phase 1) — done:**
    - Monorepo setup.
    - Docker Postgres + pgvector.
@@ -576,7 +584,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
    - Authorization tests.
 
    Built here, before the pipeline work that follows, because every later phase reads or writes reports through the owner model. Chat in particular would otherwise be built against guest-only ownership and rewritten. No frontend work: the sign-in UI ships with phase 7.
-4. **Evaluation (Phase 3) — current phase:** build the synthetic test set and scoring script now, before adding OCR, so every later change is measured.
+4. **Evaluation (Phase 3) — done:** the synthetic test set and the scoring runner, built before OCR so every later change is measured. Method and baseline: `docs/evaluation.md`.
 5. **OCR (Phase 4):** Tess4J for images and the scanned-PDF fallback, feeding the same pipeline.
 6. **Chat (Phase 5):**
    - Curated biomarker content and embeddings.
@@ -588,13 +596,14 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
    - `GET /api/reports` (history list).
    - `GET /api/trends` and `GET /api/trends/markers`.
    - `GET /api/admin/stats`.
-8. **Frontend polish and SEO (Phase 7):**
-   - Sign in with Google, auto sign-in, cross-tab logout, and the CSP entries Google needs.
-   - Results view with range bars.
-   - History and trend charts.
-   - Status and skeleton states.
-   - Disclaimer and consent.
-   - Biomarker pages with metadata.
+8. **Frontend (Phase 7),** split into four parts. The design system (`docs/design-system/`) and the approved mockups (`docs/ui/`) are the reference for all four.
+   - **7a — Foundation:** design tokens and the two themes, the 19 design-system components, the app shell, the API client, the lazy guest session, the backend wake check, banners, inline notices and toasts, the six system screens, and the privacy page. Low-level design: `docs/phase-7a-lld.md`.
+   - **7b — The product:** landing page, the upload panel, samples, report processing, the results and failed states, and the biomarker explainer page.
+   - **Deploy a first version:** after 7b, to Vercel, AWS EC2 and Neon, following the Phase 8 steps below. 7b is the first point where a visitor can do the whole thing end to end, and deploying then surfaces hosting problems while the remaining frontend work can still absorb them.
+   - **7c — Accounts:** Sign in with Google, auto sign-in, token refresh, cross-tab logout, the CSP entries Google needs, My reports, Account, and Trends.
+   - **7d — Admin and polish:** the admin dashboard, the accessibility pass, performance, SEO and metadata.
+
+   The chat UI is built with Phase 5, on the report page from 7b.
 9. **Deploy and harden (Phase 8):**
    - arm64 image, EC2 + Caddy + DuckDNS.
    - Neon.
