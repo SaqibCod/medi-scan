@@ -211,16 +211,16 @@ record ReportSummary(String patientSummary, List<String> highlights) {}
 - The test set includes a synthetic report with injected instructions ("Ignore previous instructions...").
 
 ### 4.7 SEO biomarker pages
-- Curated static pages such as `/biomarkers/tsh` and `/biomarkers/hba1c`, generated at build time.
+- Curated pages such as `/biomarkers/tsh` and `/biomarkers/ldl-cholesterol`, server-rendered from markdown. The files are read and parsed once per server instance and cached in memory, rather than pre-rendered at build time: the nonce-based CSP makes every page render per request anyway (`SECURITY.md`), so a build-time render would be thrown away.
 - OpenGraph metadata and JSON-LD structured data.
 - Content is written and reviewed by me, with sources, and is also the knowledge base for chat RAG.
-- The purpose is to show static generation and metadata work, not to win search traffic. Medical search results favour well-established sites.
+- The purpose is to show content modelling and metadata work, not to win search traffic. Medical search results favour well-established sites.
 
 ### 4.8 UX
 - Skeleton loaders and React Suspense.
 - A processing status view while the background job runs.
 - A disclaimer banner and a consent checkbox before upload.
-- Results show each marker on a range bar (Recharts), with qualitative values shown as text.
+- Results are a table of every marker with its value, the reference range printed on the report, and a flag, per the mockups. Qualitative values show as text. There is no range bar: a bar invites comparison against a scale the report never printed, and the range on one report is not the range on another.
 - A "Sign in with Google" button in the header. Guests see what signing in unlocks, but nothing is blocked.
 
 ### 4.9 Authentication
@@ -398,8 +398,8 @@ medi-scan/
 ├── client/
 │   ├── app/
 │   │   ├── page.tsx
-│   │   ├── report/[id]/
-│   │   ├── biomarkers/[slug]/
+│   │   ├── reports/[id]/
+│   │   ├── biomarkers/        (index, and [slug] per curated page)
 │   │   └── styles/           (generated tokens.css, ds.css, globals.css)
 │   ├── content/biomarkers/   (curated markdown, also indexed for RAG)
 │   ├── components/
@@ -559,7 +559,9 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 **Phase numbers are labels, not positions.** Each phase keeps the number it was given when the work was first described, because code comments, migrations, and the design docs refer to "Phase 2" or "Phase 6" by name. The order of this list is the build order; the numbers in the labels are not. Phase 6 is split into 6a (accounts backend) and 6b (the data endpoints it enables), and 6a is built before phases 3, 4, and 5 so that chat is written against the final ownership model instead of being rewritten once users exist.
 
-Phase 7 is split into 7a to 7d (see item 8), and **7a is built before phases 4 and 5**. The frontend foundation — tokens, components, the shell, the API client — is what every later screen is drawn on, and OCR and chat both need a UI to be worth anything. Building it now also means the design system is ported once, against the design docs, rather than retrofitted onto screens that already exist. **The current phase is 7a.**
+Phase 7 is split into 7a to 7d (see item 8), and **7a and 7b are built before phases 4 and 5**. The frontend foundation — tokens, components, the shell, the API client — is what every later screen is drawn on, and OCR and chat both need a UI to be worth anything. Building it now also means the design system is ported once, against the design docs, rather than retrofitted onto screens that already exist. 7b follows immediately because it is what turns that foundation into something a visitor can actually use, and because OCR and chat both hang off screens it builds: the upload panel and the report page.
+
+The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is 7b.**
 
 1. **Foundation (Phase 1) — done:**
    - Monorepo setup.
@@ -598,8 +600,7 @@ Phase 7 is split into 7a to 7d (see item 8), and **7a is built before phases 4 a
    - `GET /api/admin/stats`.
 8. **Frontend (Phase 7),** split into four parts. The design system (`docs/design-system/`) and the approved mockups (`docs/ui/`) are the reference for all four.
    - **7a — Foundation:** design tokens and the two themes, the 19 design-system components, the app shell, the API client, the lazy guest session, the backend wake check, banners, inline notices and toasts, the six system screens, and the privacy page. Low-level design: `docs/phase-7a-lld.md`.
-   - **7b — The product:** landing page, the upload panel, samples, report processing, the results and failed states, and the biomarker explainer page.
-   - **Deploy a first version:** after 7b, to Vercel, AWS EC2 and Neon, following the Phase 8 steps below. 7b is the first point where a visitor can do the whole thing end to end, and deploying then surfaces hosting problems while the remaining frontend work can still absorb them.
+   - **7b — The product:** landing page, the upload panel, samples, report processing, the results and failed states, and the biomarker explainer page. Low-level design: `docs/phase-7b-lld.md`.
    - **7c — Accounts:** Sign in with Google, auto sign-in, token refresh, cross-tab logout, the CSP entries Google needs, My reports, Account, and Trends.
    - **7d — Admin and polish:** the admin dashboard, the accessibility pass, performance, SEO and metadata.
 
