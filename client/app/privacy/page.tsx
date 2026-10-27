@@ -210,7 +210,18 @@ export default function PrivacyPage() {
           </ContentSection>
 
           <ContentSection id="retention" title="How long we keep it">
-            <div className="overflow-x-auto">
+            {/*
+              A scrollable box has to be reachable by keyboard, or someone who cannot use a
+              pointer simply cannot see the right-hand column. `tabIndex={0}` makes it
+              focusable and arrow-scrollable; the role and label stop it being an unexplained
+              stop in the tab order. Caught by axe at phone width.
+            */}
+            <div
+              className="overflow-x-auto"
+              tabIndex={0}
+              role="region"
+              aria-label="How long we keep it"
+            >
               <table className="w-full min-w-[420px] border-collapse text-left">
                 <thead>
                   <tr>

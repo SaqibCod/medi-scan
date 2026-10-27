@@ -27,8 +27,11 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bar backdrop-blur-(--blur-bar)">
       <PageContainer>
-        <div className="flex h-[72px] items-center gap-space-7">
-          <Wordmark className="text-ink" />
+        {/* The gap closes up on small phones: at 320px the wordmark, the pill and the two
+            round buttons do not fit with 40px between them, and the bar pushed the whole
+            page sideways. */}
+        <div className="flex h-[72px] items-center gap-space-4 lg:gap-space-7">
+          <Wordmark className="shrink-0 text-ink" />
 
           <nav aria-label="Main" className="hidden lg:block">
             <ul className="flex items-center gap-space-5">
@@ -44,7 +47,7 @@ export function Header() {
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-space-3">
+          <div className="flex shrink-0 items-center gap-space-2 lg:gap-space-3">
             {/* Nothing at all while the first health check is in flight, so the bar does not
                 flash a state before it is true. */}
             {status && (
@@ -52,7 +55,12 @@ export function Header() {
                 <span className="hidden lg:inline">
                   <StatusPill status={status} />
                 </span>
-                <span className="lg:hidden">
+                {/*
+                  Below 360px there is genuinely no room for it beside the wordmark and the
+                  two round buttons. Nothing is lost: the waking banner directly underneath
+                  says the same thing in full sentences.
+                */}
+                <span className="hidden min-[360px]:inline lg:hidden">
                   <StatusPill status={status} short />
                 </span>
               </>
