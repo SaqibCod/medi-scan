@@ -26,7 +26,8 @@ export function UploadPanel() {
     <section id="upload" aria-labelledby="upload-heading" className="scroll-mt-[96px]">
       <Card variant="panel" className="relative overflow-hidden">
         <div className="flex flex-col gap-space-6 md:flex-row md:gap-space-8">
-          <div className="flex items-start gap-space-5 md:w-[240px] md:shrink-0 md:flex-col md:gap-space-4">
+          {/* The numeral sits beside the heading, not above it, as in the mockup. */}
+          <div className="flex items-start gap-space-5 md:w-72 md:shrink-0">
             <span className="t-numeral-xl leading-none text-ink">01</span>
             <div>
               <Eyebrow>Start here</Eyebrow>

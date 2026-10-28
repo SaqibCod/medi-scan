@@ -1,39 +1,79 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 
-import { Eyebrow } from "@/components/ds";
+import { Marquee } from "@/components/ds";
+import { FactsRow } from "@/components/landing/facts-row";
+import { Hero } from "@/components/landing/hero";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { PrivacySection } from "@/components/landing/privacy-section";
+import { ResultsPreview } from "@/components/landing/results-preview";
+import { SamplesSection } from "@/components/landing/samples-section";
+import { StickyAnalyzeBar } from "@/components/landing/sticky-analyze-bar";
+import { UploadPanel } from "@/components/landing/upload-panel";
 import { PageContainer } from "@/components/shell/page-container";
+import { UploadSourceProvider } from "@/components/upload/upload-source-context";
 
 /**
- * Temporary home page (LLD 9.4).
+ * The landing page.
  *
- * The landing page — hero, upload panel, samples, the how-it-works timeline — is 7b. This
- * stands in with the real headline and nothing that pretends to work: no upload control and no
- * button that does nothing (LLD F8).
+ * Text-only Open Graph tags: an image would be another asset to host and another thing to
+ * keep true, and the page has no screenshot worth sharing that is not of invented data.
+ */
+export const metadata: Metadata = {
+  // The layout's template appends "· Medi-Scan"; the home page states it in full instead.
+  title: { absolute: "Medi-Scan · Your lab report in plain language" },
+  description:
+    "Upload a blood test or lab PDF and read it in plain language. Every value is checked against the reference range printed on your report. No account needed.",
+  openGraph: {
+    type: "website",
+    siteName: "Medi-Scan",
+    title: "Medi-Scan · Your lab report in plain language",
+    description:
+      "Upload a blood test or lab PDF and read it in plain language. No account needed, and guest reports are deleted after 24 hours.",
+  },
+};
+
+/**
+ * The marquee's four phrases (decorative, `aria-hidden`).
  *
+ * Each one is also real text elsewhere on the page: "plain language" in the hero headline,
+ * "private by default" and "every value flagged" in the privacy section's lead, "no account
+ * needed" in the upload panel.
+ */
+const MARQUEE = [
+  "PLAIN LANGUAGE",
+  "PRIVATE BY DEFAULT",
+  "EVERY VALUE FLAGGED",
+  "NO ACCOUNT NEEDED",
+];
+
+/**
  * No `<main>` here: the shell already provides the one the skip link targets, and a second
  * would give the page two main landmarks.
  */
 export default function HomePage() {
   return (
-    <PageContainer className="py-space-9 md:py-space-10">
-      <Eyebrow>AI lab report reader</Eyebrow>
+    // One provider for the whole page, because the sample cards, the upload panel and the
+    // phone bar are all three about the same single choice.
+    <UploadSourceProvider>
+      <PageContainer>
+        <Hero />
+        <UploadPanel />
+        <FactsRow />
+        <HowItWorks />
+        <SamplesSection />
+        <ResultsPreview />
+      </PageContainer>
 
-      <h1 className="t-display-xl mt-space-5 max-w-[16ch] text-ink">
-        Your lab report,
-        <br />
-        <span className="text-faint">in plain language.</span>
-      </h1>
+      {/* Full-bleed, so it runs off both edges the way the mockup shows. */}
+      <div className="py-space-8">
+        <Marquee items={MARQUEE} />
+      </div>
 
-      <p className="t-body-l mt-space-5 max-w-[52ch] text-ink-2">
-        Upload a blood test or lab PDF. Medi-Scan reads every value, checks it against the
-        reference range printed on your report, and explains what it says.
-      </p>
+      <PageContainer>
+        <PrivacySection />
+      </PageContainer>
 
-      <p className="t-body mt-space-7 text-ink-2">
-        <Link href="/privacy" className="text-accent-ink underline underline-offset-4">
-          How your data is handled
-        </Link>
-      </p>
-    </PageContainer>
+      <StickyAnalyzeBar />
+    </UploadSourceProvider>
   );
 }

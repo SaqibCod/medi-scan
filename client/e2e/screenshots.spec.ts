@@ -1,6 +1,6 @@
 import { test } from "@playwright/test";
 
-import { backendUp, seedTheme } from "./support";
+import { landingReady, seedTheme } from "./support";
 
 /**
  * Takes the pictures for the visual review against docs/ui/screens/ (LLD 13).
@@ -34,7 +34,7 @@ test.describe("visual review", () => {
       for (const theme of ["dark", "light"] as const) {
         test(`${name} at ${size.label} in ${theme}`, async ({ context, page }) => {
           await seedTheme(context, theme);
-          await backendUp(page);
+          await landingReady(page);
           await page.setViewportSize({ width: size.width, height: size.height });
 
           await page.goto(path);
@@ -48,5 +48,52 @@ test.describe("visual review", () => {
         });
       }
     }
+  }
+});
+
+/**
+ * The upload panel's three interesting states.
+ *
+ * Cropped to the panel rather than the whole page: the states differ inside one card, and a
+ * full-page shot of a 4,700px landing page makes them hard to compare.
+ */
+test.describe("upload panel states", () => {
+  test.skip(({ browserName }) => browserName !== "chromium", "one browser is enough");
+
+  for (const theme of ["dark", "light"] as const) {
+    test(`panel states in ${theme}`, async ({ context, page }) => {
+      await seedTheme(context, theme);
+      await landingReady(page);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.goto("/");
+
+      const panel = page.locator("#upload");
+      await panel.scrollIntoViewIfNeeded();
+
+      // A file chosen.
+      await page.locator('#upload input[type="file"]').first().setInputFiles({
+        name: "bloods-september.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4\n% a small but real-looking name\n"),
+      });
+      await page.getByRole("checkbox").check();
+      await panel.screenshot({ path: `${OUT}/upload--file-selected--${theme}.png` });
+
+      // A file well over the limit, rather than one byte past it: at the exact boundary the
+      // notice rounds to "10.0 MB and the limit is 10 MB", which is true but reads oddly and
+      // is not what anyone actually hits.
+      await page.locator('#upload input[type="file"]').first().setInputFiles({
+        name: "whole-record.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.alloc(Math.round(14.2 * 1024 * 1024), 0x20),
+      });
+      await page.getByText(/the limit is 10 MB/).waitFor();
+      await panel.screenshot({ path: `${OUT}/upload--too-large--${theme}.png` });
+
+      // A sample chosen, which replaces the tabs entirely.
+      await page.getByRole("button", { name: /Try it/ }).first().click();
+      await page.getByText("Sample: Lipid panel").waitFor();
+      await panel.screenshot({ path: `${OUT}/upload--sample-selected--${theme}.png` });
+    });
   }
 });

@@ -55,6 +55,56 @@ export function trackHealth(page: Page) {
   return state;
 }
 
+/** The three bundled samples, as `GET /api/samples` returns them (contract 3). */
+export const SAMPLES = [
+  {
+    id: "lipid-panel",
+    title: "Lipid panel",
+    description: "Cholesterol and triglycerides, with high LDL.",
+    markerCount: 5,
+  },
+  {
+    id: "cbc",
+    title: "Complete blood count",
+    description: "Red and white blood cells, all in range.",
+    markerCount: 12,
+  },
+  {
+    id: "thyroid-panel",
+    title: "Thyroid panel",
+    description: "TSH and free T4, with low TSH.",
+    markerCount: 3,
+  },
+];
+
+/** `GET /api/samples` answers with the bundled three. */
+export async function samplesLoad(page: Page) {
+  await page.route(`${API}/api/samples`, (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SAMPLES) }),
+  );
+}
+
+/** `POST /api/sessions` hands out a guest token. */
+export async function guestSession(page: Page) {
+  await page.route(`${API}/api/sessions`, (route: Route) =>
+    route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        token: "e2e-guest-token",
+        expiresAt: new Date(Date.now() + 24 * 3_600_000).toISOString(),
+      }),
+    }),
+  );
+}
+
+/** The landing page, ready to use: health up, samples listed, a session available. */
+export async function landingReady(page: Page) {
+  await backendUp(page);
+  await samplesLoad(page);
+  await guestSession(page);
+}
+
 /** A Problem Details response, in the shape the backend actually sends (contract 1.5). */
 export function problem(
   status: number,
