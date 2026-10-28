@@ -27,7 +27,7 @@ It does not build the landing page, upload, results, sign-in, history, trends, o
 |---|---|---|
 | **7a** | Foundation: tokens, components, shell, API client, guest session, status, errors, toasts, system screens, privacy page | System screens, Privacy |
 | **7b** | Landing page, upload panel, samples, report processing, results and failed states, biomarker explainer page | Landing, Report (no chat), Biomarker explainer |
-| — | **Deploy a first version** (Vercel, AWS, Neon) | — |
+| — | ~~**Deploy a first version** (Vercel, AWS, Neon)~~ — **superseded.** See `docs/phase-7b-lld.md` §12 and `docs/plan.md` §14: there is no early deploy, and deployment stays Phase 8. | — |
 | **7c** | Google sign-in, refresh, cross-tab logout, My reports, Account, Trends | My reports, Account, Trends |
 | **7d** | Admin dashboard, accessibility pass, performance, polish | Admin |
 
@@ -413,7 +413,7 @@ Spacing, type sizes, colours, copy and alignment all count. Approximate is fine.
 ## 14. Docs to update (first, before code)
 
 1. **`docs/plan.md`:**
-   - Section 14: split Phase 7 into 7a to 7d per section 1, and add "Deploy a first version" after 7b.
+   - Section 14: split Phase 7 into 7a to 7d per section 1, and add "Deploy a first version" after 7b. (**Superseded by 7b:** that line was removed again, and deployment stays Phase 8.)
    - Stack table: icons are the design-system set (no Lucide), fonts are Geist (self-hosted), shadcn/ui only for behaviour primitives.
    - Repository structure: add `docs/ui/` and `docs/design-system/`.
 2. **Root `CLAUDE.md`, "Frontend":**
