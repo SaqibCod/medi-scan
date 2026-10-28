@@ -61,11 +61,18 @@ describe("every system screen", () => {
 });
 
 describe("404", () => {
-  it("points home and at the report list", () => {
+  it("points home", () => {
     renderScreen(<NotFoundScreen />);
 
     expect(screen.getByRole("link", { name: /Back to home/ })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /My reports/ })).toHaveAttribute("href", "/reports");
+  });
+
+  it("offers no route to a report list that does not exist yet", () => {
+    renderScreen(<NotFoundScreen />);
+
+    // B10: `/reports` is the history list and arrives in 7c. Until then the link would land
+    // on this very screen, which makes a 404 page into a loop.
+    expect(screen.queryByRole("link", { name: /My reports/ })).not.toBeInTheDocument();
   });
 
   it("reassures that nothing was lost", () => {

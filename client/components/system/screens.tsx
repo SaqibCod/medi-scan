@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ds";
 import { useNotices } from "@/components/notices/notice-provider";
+import { FEATURE_SIGNIN } from "@/lib/env";
 import { RequestIdBlock } from "./request-id-block";
 import { RetryCounter } from "./retry-counter";
 import { SystemScreen } from "./system-screen";
@@ -29,9 +30,11 @@ export function NotFoundScreen() {
           <Button href="/" icon="arrow-right">
             Back to home
           </Button>
-          <Button href="/reports" variant="outline">
-            My reports
-          </Button>
+          {FEATURE_SIGNIN && (
+            <Button href="/reports" variant="outline">
+              My reports
+            </Button>
+          )}
         </>
       }
     >
@@ -53,9 +56,11 @@ export function ReportNotAvailableScreen() {
           <Button href="/" icon="upload">
             Analyze a report
           </Button>
-          <Button href="/reports" variant="outline">
-            My reports
-          </Button>
+          {FEATURE_SIGNIN && (
+            <Button href="/reports" variant="outline">
+              My reports
+            </Button>
+          )}
         </>
       }
       notes={[

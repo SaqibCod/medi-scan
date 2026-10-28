@@ -14,6 +14,15 @@ export interface InlineNoticeProps {
   code?: string;
   /** An action that undoes or works around the problem. */
   action?: ReactNode;
+  /**
+   * Interrupts a screen reader instead of waiting for a pause.
+   *
+   * Off by default, because most notices appear beside something the reader is already
+   * looking at. On for the upload errors (LLD 5.4): the file was just rejected, focus is
+   * about to move here, and finding out at the next natural pause is too late to stop
+   * someone pressing "Analyze report" again.
+   */
+  assertive?: boolean;
 }
 
 /**
@@ -30,9 +39,13 @@ export function InlineNotice({
   children,
   code,
   action,
+  assertive = false,
 }: InlineNoticeProps) {
   return (
-    <div className={cx("ms-notice", `ms-notice--${tone}`)} role="status">
+    <div
+      className={cx("ms-notice", `ms-notice--${tone}`)}
+      role={assertive ? "alert" : "status"}
+    >
       <span className="ms-notice__icon" aria-hidden="true">
         <Icon name={icon ?? (tone === "warn" ? "file" : "clock")} size={16} />
       </span>

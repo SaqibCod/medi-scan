@@ -193,6 +193,46 @@ describe("evidence from real requests", () => {
     expect(checker.getSnapshot().state).toBe("WAKING");
   });
 
+  it("a failed call during the very first check still raises the banner", async () => {
+    // The window that matters: the first health check takes up to four seconds, and someone
+    // pressing "Analyze report" inside it on a cold server would otherwise see a failed
+    // upload with nothing explaining why.
+    const checker = new BackendStatusChecker(healthStub(false));
+    checker.start();
+    expect(checker.getSnapshot().state).toBe("CHECKING");
+
+    checker.reportNetworkFailure();
+
+    expect(checker.getSnapshot().state).toBe("WAKING");
+  });
+
+  it("starts checking again at once rather than waiting out the steady interval", async () => {
+    const health = healthStub(true);
+    const checker = new BackendStatusChecker(health);
+    checker.start();
+    await settle();
+    expect(checker.getSnapshot().state).toBe("ONLINE");
+
+    const before = health.mock.calls.length;
+    checker.reportNetworkFailure();
+    await settle();
+
+    // A banner that says the server is waking has to have something actually asking it.
+    expect(health.mock.calls.length).toBe(before + 1);
+  });
+
+  it("does not run two health checks at once when a call fails mid-check", async () => {
+    const health = healthStub(false);
+    const checker = new BackendStatusChecker(health);
+    checker.start();
+
+    // start() left a check in flight. The failure report must not fire a second one.
+    checker.reportNetworkFailure();
+    await settle();
+
+    expect(health.mock.calls.length).toBe(1);
+  });
+
   it("a successful call is enough to call it ONLINE again", async () => {
     const checker = new BackendStatusChecker(healthStub(false));
     checker.start();

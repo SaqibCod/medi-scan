@@ -75,6 +75,8 @@ export class BackendStatusChecker {
   private firstFailureAt: number | null = null;
   private running = false;
   private paused = false;
+  /** Guards against two health checks overlapping when a failed call arrives mid-check. */
+  private checking = false;
 
   constructor(private readonly checkHealth: () => Promise<boolean> = defaultHealthCheck) {}
 
@@ -133,13 +135,24 @@ export class BackendStatusChecker {
    *
    * A health check that passed a minute ago says nothing about now. One dropped call is
    * enough to put the banner back up and restart the checks.
+   *
+   * `CHECKING` counts too, and that case is the one that matters most: the first health check
+   * takes up to four seconds, and someone who presses "Analyze report" inside that window on a
+   * cold server would otherwise watch a failed upload with no banner explaining it. A request
+   * that could not reach the server is better evidence than a check still in flight.
    */
   reportNetworkFailure(): void {
-    if (this.status.state === "ONLINE") {
-      this.firstFailureAt = Date.now();
-      this.set({ state: "WAKING", attempt: 0, episode: this.status.episode + 1 });
-      this.scheduleRetry();
-    }
+    if (this.status.state !== "ONLINE" && this.status.state !== "CHECKING") return;
+
+    this.firstFailureAt = Date.now();
+    this.set({ state: "WAKING", attempt: 0, episode: this.status.episode + 1 });
+
+    // Check again rather than only scheduling one. `check()` is what walks the 3/6/9/12
+    // backoff, because it is what counts the attempt; calling `scheduleRetry()` here with the
+    // attempt back at 0 would fall through to the steady 15 seconds and leave the banner
+    // claiming the server is waking while nothing was asking it.
+    this.clearTimers();
+    void this.check();
   }
 
   /** Called when a request succeeds, which is better evidence than any health check. */
@@ -167,17 +180,22 @@ export class BackendStatusChecker {
   }
 
   private async check(): Promise<void> {
-    if (!this.running || this.paused) return;
+    // A failed API call can land while a check is already in flight, and asking the same
+    // question twice at once would double the requests and double-count the attempt.
+    if (!this.running || this.paused || this.checking) return;
 
     const attempt = this.status.attempt + 1;
     this.set({ attempt, nextRetryInSec: null });
 
     const startedAt = Date.now();
     let healthy = false;
+    this.checking = true;
     try {
       healthy = await this.checkHealth();
     } catch {
       healthy = false;
+    } finally {
+      this.checking = false;
     }
 
     if (!this.running) return;
@@ -192,7 +210,8 @@ export class BackendStatusChecker {
     }
 
     // Only a transition *into* being unreachable starts a new episode; each retry within the
-    // same outage stays part of it, so a dismissal keeps holding.
+    // same outage stays part of it, so a dismissal keeps holding. `reportNetworkFailure` has
+    // usually moved the state to WAKING already, which is why it counts its own episode.
     const wasReachable = this.status.state === "CHECKING" || this.status.state === "ONLINE";
     this.firstFailureAt ??= startedAt;
 

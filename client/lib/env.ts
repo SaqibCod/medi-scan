@@ -45,5 +45,17 @@ export const REPO_URL = process.env.NEXT_PUBLIC_REPO_URL ?? null;
 /**
  * Sign-in ships in 7c. Until then the header keeps the slot but shows no button, because a
  * button that does nothing is worse than no button (LLD F8).
+ *
+ * It also hides "My reports", which has nowhere to go until the history list exists (7b LLD
+ * B10).
  */
 export const FEATURE_SIGNIN = process.env.NEXT_PUBLIC_FEATURE_SIGNIN === "true";
+
+/**
+ * OCR for photos and scanned PDFs ships in Phase 4.
+ *
+ * Until then the backend answers `415 UNSUPPORTED_FILE_TYPE` for PNG and JPEG, so no copy
+ * anywhere may offer photos. Every string that would is in `lib/copy.ts` with both versions,
+ * switched by this one flag (7b LLD B4).
+ */
+export const FEATURE_OCR = process.env.NEXT_PUBLIC_FEATURE_OCR === "true";
