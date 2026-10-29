@@ -105,6 +105,83 @@ export async function landingReady(page: Page) {
   await guestSession(page);
 }
 
+export const REPORT_ID = "6f1c2a9e-3b4d-4e8f-9a1b-2c3d4e5f6a7b";
+
+/** A done report with the lipid panel from the mockups. */
+export function doneReport() {
+  return {
+    id: REPORT_ID,
+    status: "DONE",
+    sourceType: "PDF",
+    createdAt: "2026-10-02T09:31:00Z",
+    expiresAt: new Date(Date.now() + 23 * 3_600_000 + 12 * 60_000 + 30_000).toISOString(),
+    error: null,
+    result: {
+      collectedOn: "2026-09-28",
+      biomarkers: [
+        row("b1", "Total Cholesterol", "238", "<200", "HIGH", "total-cholesterol"),
+        row("b2", "LDL Cholesterol", "162", "<100", "HIGH", "ldl-cholesterol"),
+        row("b3", "HDL Cholesterol", "52", ">40", "NORMAL", "hdl-cholesterol"),
+        row("b4", "Triglycerides", "140", "<150", "NORMAL", "triglycerides"),
+        row("b5", "VLDL Cholesterol", "28", "5-40", "NORMAL", null),
+      ],
+      summary:
+        "Most of your results are in the normal range. Your total and LDL cholesterol are higher than the reference ranges printed on this report.",
+      highlights: [
+        "Total Cholesterol is 238 mg/dL, above the reference range of <200.",
+        "LDL Cholesterol is 162 mg/dL, above the reference range of <100.",
+      ],
+      counts: { total: 5, low: 0, normal: 3, high: 2, unknown: 0 },
+    },
+  };
+}
+
+function row(
+  id: string,
+  testName: string,
+  rawValue: string,
+  referenceRangeText: string,
+  flag: string,
+  biomarkerSlug: string | null,
+) {
+  return {
+    id,
+    testName,
+    rawValue,
+    numericValue: Number(rawValue),
+    unit: "mg/dL",
+    referenceRangeText,
+    refLow: null,
+    refHigh: null,
+    flag,
+    biomarkerSlug,
+  };
+}
+
+/** The same report, still being read. */
+export function processingReport(status: "PENDING" | "PROCESSING" = "PROCESSING") {
+  return { ...doneReport(), status, result: null };
+}
+
+/** The same report, failed with the given code. */
+export function failedReport(code: string, message = "Server-side wording.") {
+  return { ...doneReport(), status: "FAILED", result: null, error: { code, message } };
+}
+
+/** `GET /api/reports/{id}` answers with whatever the test says. */
+export async function reportIs(page: Page, body: unknown) {
+  await page.route(`${API}/api/reports/${REPORT_ID}`, (route: Route) => {
+    if (route.request().method() === "DELETE") {
+      return route.fulfill({ status: 204, body: "" });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+  });
+}
+
 /** A Problem Details response, in the shape the backend actually sends (contract 1.5). */
 export function problem(
   status: number,

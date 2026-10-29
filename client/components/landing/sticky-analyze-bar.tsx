@@ -48,7 +48,7 @@ export function StickyAnalyzeBar() {
 
   return (
     // Toasts sit above this; ds.css already lifts them on phones.
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bar px-space-4 py-space-3 backdrop-blur-[var(--blur-bar)] md:hidden">
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bar px-space-4 py-space-3 shadow-[var(--shadow-cta)] backdrop-blur-[var(--blur-bar)] md:hidden">
       <Button variant="accent" block icon="upload" disabled={sending} onClick={onClick}>
         {sending ? "Sending…" : ready ? "Analyze report" : "Analyze a report"}
       </Button>

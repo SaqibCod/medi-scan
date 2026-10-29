@@ -84,7 +84,7 @@ export function Hero() {
           </div>
         </div>
 
-        <p className="t-meta absolute bottom-space-7 right-0 hidden items-center gap-space-2 rounded-pill border border-line px-space-4 py-space-2 text-ink-3 lg:flex">
+        <p className="t-meta absolute bottom-space-7 right-0 hidden items-center gap-space-2 rounded-full border border-line px-space-4 py-space-2 text-ink-3 lg:flex">
           <Icon name="arrow-down" size={14} />
           Scroll for more
         </p>

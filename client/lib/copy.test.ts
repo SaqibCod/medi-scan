@@ -107,7 +107,7 @@ describe("with OCR on, as Phase 4 will ship it", () => {
     expect(on.copy.steps.mask).toBe(off.copy.steps.mask);
     expect(on.copy.steps.extract).toBe(off.copy.steps.extract);
     expect(on.RANGE_NOTE).toBe(off.RANGE_NOTE);
-    expect(on.RESULTS_DISCLAIMER).toBe(off.RESULTS_DISCLAIMER);
+    expect(on.RESULTS_DISCLAIMER_EXTRA).toBe(off.RESULTS_DISCLAIMER_EXTRA);
   });
 });
 
@@ -149,11 +149,19 @@ describe("the failed-report views", () => {
 });
 
 describe("the disclaimer", () => {
-  it("carries the exact line the root rules require", async () => {
+  it("keeps the mandated line whole, with the results sentence as a separate tail", async () => {
     const mod = await loadCopy(false);
+    const { DISCLAIMER } = await import("@/components/shell/nav");
 
-    expect(mod.RESULTS_DISCLAIMER).toContain(
+    // Word for word, in one place, so no page can paraphrase it (root CLAUDE.md).
+    expect(DISCLAIMER).toBe(
       "Medi-Scan explains what your report says and is not medical advice.",
     );
+
+    // The tail adds to it rather than restating it; `Disclaimer` appends the two.
+    expect(mod.RESULTS_DISCLAIMER_EXTRA).toBe(
+      "Talk to your doctor about what these results mean for you.",
+    );
+    expect(mod.RESULTS_DISCLAIMER_EXTRA).not.toMatch(/medical advice/i);
   });
 });

@@ -109,3 +109,63 @@ describe("no raw colours", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * Utilities that look like design-system tokens but do not exist in Tailwind.
+ *
+ * `rounded-pill` is the trap this catches: the design system calls the token
+ * `--radius-pill`, and `ds.css` consumes it as `var(--radius-pill)`, so writing
+ * `rounded-pill` in a component reads as obviously right. Tailwind's class for it is
+ * `rounded-full`, and an unknown utility compiles to nothing at all — the corner silently
+ * stays square and no build step complains.
+ *
+ * The radius scale itself is fine: `tokens.css` redefines `--radius-sm/md/lg/xl` on `:root`,
+ * so `rounded-md` really does resolve to the design system's 20px.
+ */
+const DEAD_UTILITIES: Array<{ name: string; instead: string }> = [
+  { name: "rounded-pill", instead: "rounded-full" },
+  { name: "shadow-cta", instead: "shadow-[var(--shadow-cta)]" },
+  { name: "backdrop-blur-bar", instead: "backdrop-blur-[var(--blur-bar)]" },
+  { name: "blur-bar", instead: "blur-[var(--blur-bar)]" },
+];
+
+/**
+ * Matches the bare class only.
+ *
+ * The lookarounds keep `backdrop-blur-[var(--blur-bar)]` out of it: there, `blur-bar` is
+ * preceded by a hyphen and is part of the variable's name, which is the correct way to
+ * reach the token.
+ */
+function classPattern(name: string): RegExp {
+  return new RegExp(`(?<![\\w-])${name}(?![\\w-])`);
+}
+
+describe("no utilities that compile to nothing", () => {
+  it("components use Tailwind's name, not the design system's, for radius and effects", () => {
+    const offenders: string[] = [];
+
+    for (const root of ["app", "components"]) {
+      for (const file of walk(join(CLIENT, root))) {
+        const rel = relative(CLIENT, file).split(sep).join("/");
+        // ds.css is the port of the design system's own stylesheet and uses the variables
+        // directly, which is correct there.
+        if (rel.endsWith("styles/ds.css")) continue;
+
+        readFileSync(file, "utf8")
+          .split("\n")
+          .forEach((line, i) => {
+            for (const { name, instead } of DEAD_UTILITIES) {
+              if (classPattern(name).test(line)) {
+                offenders.push(`${rel}:${i + 1}  ${line.trim()}  → use ${instead}`);
+              }
+            }
+          });
+      }
+    }
+
+    expect(
+      offenders,
+      `These classes compile to nothing:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+});

@@ -136,7 +136,7 @@ function SampleRow({
         {samples.map((sample, index) => (
           <span
             key={sample.id}
-            className={`h-1.5 w-1.5 rounded-pill ${index === current ? "bg-accent" : "bg-line-strong"}`}
+            className={`h-1.5 w-1.5 rounded-full ${index === current ? "bg-accent" : "bg-line-strong"}`}
           />
         ))}
       </div>
@@ -152,7 +152,7 @@ function SampleSkeletons() {
         <li key={i}>
           <Card>
             <div className="flex h-[232px] flex-col justify-between">
-              <div className="h-5 w-24 rounded-pill bg-surface-2" />
+              <div className="h-5 w-24 rounded-full bg-surface-2" />
               <div className="flex flex-col gap-space-3">
                 <div className="h-4 w-2/3 rounded-sm bg-surface-2" />
                 <div className="h-3 w-full rounded-sm bg-surface-2" />

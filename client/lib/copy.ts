@@ -78,9 +78,15 @@ export const acceptsPhotos = FEATURE_OCR;
  */
 export const FILE_ACCEPT = FEATURE_OCR ? "application/pdf,image/png,image/jpeg" : "application/pdf";
 
-/** Word for word on every page that shows results, plus the sentence the mockup adds there. */
-export const RESULTS_DISCLAIMER =
-  "Medi-Scan explains what your report says and is not medical advice. Talk to your doctor about what these results mean for you.";
+/**
+ * The sentence the mockup adds after the mandated disclaimer on a results page.
+ *
+ * Only the tail. The mandated line itself lives in one place — `components/shell/nav.ts` —
+ * and `Disclaimer` appends this to it, so no page can end up with a paraphrase of the part
+ * that has to be word for word.
+ */
+export const RESULTS_DISCLAIMER_EXTRA =
+  "Talk to your doctor about what these results mean for you.";
 
 /** Under the results table. The one thing a reader most needs to know about a range. */
 export const RANGE_NOTE =

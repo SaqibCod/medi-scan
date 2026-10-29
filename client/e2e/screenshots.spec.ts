@@ -1,6 +1,14 @@
 import { test } from "@playwright/test";
 
-import { landingReady, seedTheme } from "./support";
+import {
+  REPORT_ID,
+  doneReport,
+  failedReport,
+  landingReady,
+  processingReport,
+  reportIs,
+  seedTheme,
+} from "./support";
 
 /**
  * Takes the pictures for the visual review against docs/ui/screens/ (LLD 13).
@@ -43,6 +51,37 @@ test.describe("visual review", () => {
 
           await page.screenshot({
             path: `${OUT}/${name}--${size.label}--${theme}.png`,
+            fullPage: true,
+          });
+        });
+      }
+    }
+  }
+});
+
+test.describe("the report page", () => {
+  test.skip(({ browserName }) => browserName !== "chromium", "one browser is enough");
+
+  const STATES = [
+    { name: "report-done", body: () => doneReport() },
+    { name: "report-processing", body: () => processingReport() },
+    { name: "report-failed", body: () => failedReport("UNREADABLE") },
+  ];
+
+  for (const state of STATES) {
+    for (const size of WIDTHS) {
+      for (const theme of ["dark", "light"] as const) {
+        test(`${state.name} at ${size.label} in ${theme}`, async ({ context, page }) => {
+          await seedTheme(context, theme);
+          await landingReady(page);
+          await reportIs(page, state.body());
+          await page.setViewportSize({ width: size.width, height: size.height });
+
+          await page.goto(`/reports/${REPORT_ID}`);
+          await page.waitForTimeout(900);
+
+          await page.screenshot({
+            path: `${OUT}/${state.name}--${size.label}--${theme}.png`,
             fullPage: true,
           });
         });
