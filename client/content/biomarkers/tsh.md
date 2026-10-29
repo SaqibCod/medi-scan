@@ -1,72 +1,62 @@
 ---
 slug: tsh
 title: TSH (Thyroid Stimulating Hormone)
-aliases:
-  - TSH
-  - Thyroid Stimulating Hormone
-  - Thyrotropin
-summary: A pituitary hormone that tells the thyroid how much thyroid hormone to make.
-draft: true
+panel: Thyroid panel
+aliases: [TSH, Thyroid Stimulating Hormone, Thyrotropin]
+measures: The pituitary hormone that tells your thyroid how much thyroid hormone to make
+usualUnits: mIU/L, sometimes written µIU/mL
+usuallyPartOf: A thyroid panel, usually with free T4
+related: [free-t4, thyroid-peroxidase-antibodies]
+sources:
+  - title: "TSH (Thyroid-stimulating hormone) Test — MedlinePlus Medical Test"
+    url: https://medlineplus.gov/lab-tests/tsh-thyroid-stimulating-hormone-test/
+  - title: "Underactive thyroid (hypothyroidism) — NHS"
+    url: https://www.nhs.uk/conditions/underactive-thyroid-hypothyroidism/
 reviewedOn: null
-sources: []
+reviewer: null
 ---
 
-<!--
-  STRUCTURE EXAMPLE — not real content. Replace the body before clearing `draft: true`.
+## What it measures
 
-  Why the headings matter: this same folder is the backend's RAG index, and chunks are split
-  by heading (docs/dataflow.md 9.1). A heading is what the chat answer cites as its source, so
-  each one needs to name a question a reader would actually ask, and its section needs to be
-  answerable on its own without the heading above it.
+TSH does not come from your thyroid. It comes from the pituitary gland at the base of your
+brain, and its job is to tell the thyroid how hard to work.
 
-  Keep these five headings and this order across every biomarker page. Consistency is what
-  lets retrieval compare like with like, and it is why "Overview" is a bad heading and
-  "What TSH Measures" is a good one.
+That makes it an indirect measurement, and it is the single most misread number on a thyroid
+report, because **TSH moves in the opposite direction to the thyroid hormone it is asking
+for.** When thyroid hormone runs low, the pituitary pushes harder and TSH goes up. When
+there is too much thyroid hormone, the pituitary eases off and TSH goes down.
 
-  Front matter:
-    slug        must match the filename and the backend's biomarkerSlug
-    aliases     names as they appear on real reports, for matching extracted test names
-    summary     one sentence; used as the meta description and the card blurb
-    draft       true hides the page from the index and from the RAG index
-    reviewedOn  ISO date; set when a human has checked it against the sources
-    sources     reputable references, required before draft can be cleared
--->
+## What high TSH means
 
-## What TSH Measures
+A value above the range printed on your report usually means the pituitary is pushing hard —
+which points towards an underactive thyroid, not an overactive one.
 
-What the marker is, in one short paragraph, and what the body uses it for. Plain language at
-roughly a sixth-grade reading level: short sentences, no jargon that is not immediately
-explained.
+How far above matters, and so does what free T4 is doing alongside it. A raised TSH with a
+normal free T4 is a different situation from a raised TSH with a low free T4, and your doctor
+reads the two together.
 
-Note the counter-intuitive part here, since it is the single most common misreading of this
-panel: TSH goes **up** when the thyroid is **under**active, because the pituitary is pushing
-harder.
+## What low TSH means
 
-## Why It Gets Tested
+A value below the range usually means the pituitary has eased off because there is plenty of
+thyroid hormone around, which points towards an overactive thyroid. Less often it reflects a
+problem with the pituitary itself rather than with the thyroid.
 
-The reasons a clinician orders it, and what it is usually ordered alongside — for TSH, free T4
-and sometimes free T3.
+## What can affect the result
 
-## What the Numbers Mean
+Pregnancy lowers TSH, particularly in the first three months, and pregnancy ranges differ
+from the usual ones. In people over about 80, a higher TSH can be ordinary rather than a sign
+of anything. A serious illness unrelated to the thyroid can push TSH down for a while, which
+is why thyroid testing is often deferred until someone is well.
 
-How to read a result against the reference range printed on the report, and why that range is
-the one that matters rather than any number quoted here.
+TSH also varies through the day, so two samples taken at different times are not strictly
+comparable. Thyroid medicines, steroids, lithium, amiodarone and several others affect it, as
+can biotin supplements — biotin interferes with how some analysers measure it, producing a
+result that is wrong rather than merely shifted. Tell whoever ordered the test about
+everything you take, supplements included.
 
-State explicitly that reference ranges differ between laboratories, and that pregnancy and age
-shift them. Do not put a specific numeric range in this file: the app reads the range off the
-user's own report, and a hardcoded one here could contradict it.
+## Questions to ask your doctor
 
-## What Can Move It
-
-Common, non-alarming reasons a value sits outside the range — recent illness, time of day,
-medication, pregnancy, biotin supplements interfering with the assay.
-
-The point of this section is to keep a single out-of-range value from reading as a diagnosis.
-
-## When to Talk to a Clinician
-
-Close on the limits of this page: it explains what a test measures, it does not interpret
-anyone's results. Say plainly that a clinician reads these numbers together with symptoms and
-history, and that this page is not a substitute for that.
-
-No diagnosis, no treatment advice, and no "normal"/"abnormal" verdicts anywhere on the page.
+- What does my TSH mean alongside my free T4?
+- Should the test be repeated, and after how long?
+- Could any medicine or supplement I take have affected it, including biotin?
+- Would it help to check thyroid antibodies?
