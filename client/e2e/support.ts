@@ -10,6 +10,19 @@ import type { BrowserContext, Page, Route } from "@playwright/test";
 
 export const API = "http://localhost:8080";
 
+/**
+ * The response headers the backend exposes to the browser (contract 1.4).
+ *
+ * `X-Request-Id`, `Retry-After` and `Location` are not on the CORS safelist, so on a
+ * cross-origin response — which every API call is — JavaScript cannot read them unless the
+ * server says so. A mock that omits this hides headers the real backend hands over.
+ */
+export const EXPOSED_HEADERS = "X-Request-Id, Retry-After, Location, WWW-Authenticate";
+
+/** The only `sessionStorage` key the app may write, and the only `localStorage` one. */
+export const GUEST_STORAGE_KEY = "ms.guest";
+export const THEME_STORAGE_KEY = "ms-theme";
+
 /** Seeded before any script runs, so the pre-paint theme script sees it. */
 export async function seedTheme(context: BrowserContext, theme: "dark" | "light") {
   await context.addInitScript(
@@ -187,10 +200,30 @@ export function problem(
   status: number,
   code: string,
   extra: Record<string, unknown> = {},
+  /**
+   * Seconds for the `Retry-After` header.
+   *
+   * A header, not a body field: that is where the contract puts it and where the client
+   * reads it from. Putting it in the JSON looks right and is silently ignored.
+   */
+  retryAfterSec?: number,
 ): { status: number; contentType: string; body: string; headers?: Record<string, string> } {
   return {
     status,
     contentType: "application/problem+json",
+    ...(retryAfterSec === undefined
+      ? {}
+      : {
+          headers: {
+            "Retry-After": String(retryAfterSec),
+            // The API is a different origin from the page, so a header the browser does not
+            // safelist is invisible to JavaScript unless the response says to expose it.
+            // Contract 1.4 lists exactly these, and without it here the mock would hide a
+            // header the real backend hands over — the countdown would pass in production
+            // and fail in the suite.
+            "Access-Control-Expose-Headers": EXPOSED_HEADERS,
+          },
+        }),
     body: JSON.stringify({
       type: `https://medi-scan.dev/errors/${code.toLowerCase()}`,
       title: code,

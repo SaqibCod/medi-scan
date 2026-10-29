@@ -62,7 +62,13 @@ export function CountTiles({
               count === 0 && tile.filter !== null && "opacity-45",
             )}
           >
-            <span className="t-numeral-xl leading-none text-ink">{count}</span>
+            {/*
+              `t-display-m` (48px) rather than `t-numeral-xl` (96px): five 96px numerals do
+              not fit across a 320px screen and pushed the page sideways. The type classes
+              are plain CSS rather than Tailwind utilities, so there is no `md:` variant of
+              them to fall back to — and 48px is closer to the mockup's proportion anyway.
+            */}
+            <span className="t-display-m leading-none text-ink">{count}</span>
             <span
               className={cx(
                 "t-body-s mt-space-2",
