@@ -90,6 +90,41 @@ test.describe("the report page", () => {
   }
 });
 
+test.describe("the biomarker pages", () => {
+  test.skip(({ browserName }) => browserName !== "chromium", "one browser is enough");
+
+  for (const size of WIDTHS) {
+    for (const theme of ["dark", "light"] as const) {
+      test(`biomarker-ldl at ${size.label} in ${theme}`, async ({ context, page }) => {
+        await seedTheme(context, theme);
+        await landingReady(page);
+        await reportIs(page, doneReport());
+        await page.setViewportSize({ width: size.width, height: size.height });
+
+        // Reached from a results row, so the "On your report" box has what it needs.
+        await page.goto(`/biomarkers/ldl-cholesterol?report=${REPORT_ID}&b=b2`);
+        await page.waitForTimeout(900);
+
+        await page.screenshot({
+          path: `${OUT}/biomarker-ldl--${size.label}--${theme}.png`,
+          fullPage: true,
+        });
+      });
+    }
+  }
+
+  test("biomarker index at 1440 in dark", async ({ context, page }) => {
+    await seedTheme(context, "dark");
+    await landingReady(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
+    await page.goto("/biomarkers");
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: `${OUT}/biomarker-index--1440--dark.png`, fullPage: true });
+  });
+});
+
 /**
  * The upload panel's three interesting states.
  *

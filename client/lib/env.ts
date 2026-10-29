@@ -43,6 +43,17 @@ export const API_URL = readApiUrl();
 export const REPO_URL = process.env.NEXT_PUBLIC_REPO_URL ?? null;
 
 /**
+ * Where this build is served from, for the sitemap and robots.
+ *
+ * Optional, and absent in development. Without it the sitemap is empty rather than full of
+ * guessed URLs — a sitemap of relative paths is invalid, and a wrong host is worse than no
+ * sitemap at all. Stored without a trailing slash so paths join cleanly.
+ */
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL
+  ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")
+  : null;
+
+/**
  * Sign-in ships in 7c. Until then the header keeps the slot but shows no button, because a
  * button that does nothing is worse than no button (LLD F8).
  *
