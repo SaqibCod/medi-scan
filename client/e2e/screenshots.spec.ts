@@ -35,7 +35,9 @@ const WIDTHS = [
 ];
 
 test.describe("visual review", () => {
-  test.skip(({ browserName }) => browserName !== "chromium", "one browser is enough");
+  // The "mobile" project is excluded in playwright.config.ts rather than here: it is Pixel 7,
+  // which is also chromium, so a `browserName` guard let it through — and with a device scale
+  // factor of 2.625 it quietly overwrote every desktop shot at 2.6x the size.
 
   for (const { path, name } of PAGES) {
     for (const size of WIDTHS) {
@@ -60,7 +62,9 @@ test.describe("visual review", () => {
 });
 
 test.describe("the report page", () => {
-  test.skip(({ browserName }) => browserName !== "chromium", "one browser is enough");
+  // The "mobile" project is excluded in playwright.config.ts rather than here: it is Pixel 7,
+  // which is also chromium, so a `browserName` guard let it through — and with a device scale
+  // factor of 2.625 it quietly overwrote every desktop shot at 2.6x the size.
 
   const STATES = [
     { name: "report-done", body: () => doneReport() },
@@ -91,7 +95,9 @@ test.describe("the report page", () => {
 });
 
 test.describe("the biomarker pages", () => {
-  test.skip(({ browserName }) => browserName !== "chromium", "one browser is enough");
+  // The "mobile" project is excluded in playwright.config.ts rather than here: it is Pixel 7,
+  // which is also chromium, so a `browserName` guard let it through — and with a device scale
+  // factor of 2.625 it quietly overwrote every desktop shot at 2.6x the size.
 
   for (const size of WIDTHS) {
     for (const theme of ["dark", "light"] as const) {
@@ -132,7 +138,9 @@ test.describe("the biomarker pages", () => {
  * full-page shot of a 4,700px landing page makes them hard to compare.
  */
 test.describe("upload panel states", () => {
-  test.skip(({ browserName }) => browserName !== "chromium", "one browser is enough");
+  // The "mobile" project is excluded in playwright.config.ts rather than here: it is Pixel 7,
+  // which is also chromium, so a `browserName` guard let it through — and with a device scale
+  // factor of 2.625 it quietly overwrote every desktop shot at 2.6x the size.
 
   for (const theme of ["dark", "light"] as const) {
     test(`panel states in ${theme}`, async ({ context, page }) => {

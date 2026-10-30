@@ -115,10 +115,21 @@ describe("the mobile menu", () => {
 });
 
 describe("the footer", () => {
-  it("carries the short disclaimer", () => {
+  it("says what this is and that it is not medical advice", () => {
     render(<Footer />);
 
-    expect(screen.getByText(/explains your report, not medical advice/)).toBeInTheDocument();
+    expect(screen.getByText(/is not medical advice/)).toBeInTheDocument();
+    expect(screen.getByText(/Always talk to a doctor/)).toBeInTheDocument();
+  });
+
+  it("sets the wordmark as scenery, not as something to read again", () => {
+    const { container } = render(<Footer />);
+
+    // The giant faded wordmark is the brand used as a graphic. A screen reader announcing
+    // "MEDI·SCAN" at the end of every page would be noise — the name is already in the
+    // header and in the paragraph above it.
+    const wordmark = container.querySelector('[aria-hidden="true"]');
+    expect(wordmark).toHaveTextContent("MEDI·SCAN");
   });
 
   it("links privacy", () => {

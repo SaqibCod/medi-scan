@@ -109,11 +109,13 @@ Match `landing-page--01` to `--04` (desktop and phone, both themes). Sections in
    - **Error:** an inline notice and a retry. The rest of the page still works. While the server wakes, the 7a banner explains.
    - Card numbers are `01`, `02`, … in API order. The markers tag is "{markerCount} markers".
 6. **Results preview** (`id="results"`): "What you get" with A, B, C, and the static example card (Lipid panel).
+   - **The band carries its own ground, not a `Card`.** It is one of the two gradients the design system allows (`docs/design-system/README.md`, "Colour"): a faint radial glow of `accent` and `helix-cyan` over the page ground. The mockup holds it in a `--preview-bg` token, which 7a never carried into `tokens.json` — added there, so it is generated like every other colour. Apply it with the `background` shorthand: the token's last layer is a solid colour, which `background-image` rejects, dropping the whole declaration silently.
+   - A/B/C are hairline-ruled rows, and the chat bubbles sit in their own card beside the results card.
    - Take the example values from the sample in the mockup, and label the card "Example".
    - It is a picture of the output, not live data. The "Why is my LDL flagged?" chat bubbles are kept as an illustration of Phase 5, inside the example card only.
 7. **Marquee:** "Plain language / Private by default / Every value flagged / No account needed" (`aria-hidden`). Each phrase must appear as real text elsewhere on the page.
 8. **Privacy** (`id="privacy"`): the four cards from the mockup, and a link to `/privacy`.
-9. **Footer** (from 7a) with the disclaimer line.
+9. **Footer.** 7a shipped a one-line version; the mockup's is the real one and 7b builds it: the "portfolio project … always talk to a doctor" paragraph, the nav, and the giant faded `MEDI·SCAN` wordmark clipped to a `foot-top` → `bg` fade. That is the second of the two allowed gradients, and `--foot-top` existed as a token with no other user. The wordmark is `aria-hidden`: it is the brand as scenery, and announcing it again at the end of every page is noise.
 
 **Phone extras:**
 - **Sticky bar:** a full-width accent "Analyze report" bar (`shadow-cta`) at the bottom.

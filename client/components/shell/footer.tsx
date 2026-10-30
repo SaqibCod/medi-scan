@@ -1,38 +1,47 @@
 import Link from "next/link";
 
 import { REPO_URL } from "@/lib/env";
+import { NAV_LINKS } from "./nav";
 import { PageContainer } from "./page-container";
 
 /**
- * The footer.
+ * The footer, with the giant faded wordmark from the mockups.
  *
- * The left-hand line is the short form of the disclaimer, which belongs on every page rather
- * than only on the ones showing results.
+ * The wordmark is the second of the two gradients the design system allows (README,
+ * "Colour"): the text is clipped to a `foot-top` → `bg` fade, so it reads as the page
+ * dissolving rather than as a block of colour. `--foot-top` exists as a token for exactly
+ * this and had no other user.
+ *
+ * It is `aria-hidden`: it is the brand set as scenery, and a screen reader announcing
+ * "MEDI·SCAN" again at the end of every page is noise. The real name is in the paragraph
+ * above it and in the header.
  */
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-line py-space-6">
-      <PageContainer>
-        <div className="flex flex-col gap-space-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="t-caption text-ink-3">
-            <span aria-hidden="true">MEDI·SCAN</span>
-            <span className="sr-only">Medi-Scan</span> — explains your report, not medical advice.
+    <footer className="mt-auto overflow-hidden border-t border-line">
+      <PageContainer className="pt-space-7">
+        <div className="flex flex-wrap items-start justify-between gap-x-space-9 gap-y-space-5">
+          <p className="t-caption max-w-[62ch] text-ink-2">
+            Medi-Scan is a portfolio project. It explains what your report says and is not
+            medical advice. Always talk to a doctor about your results.
           </p>
 
           <nav aria-label="Footer">
-            <ul className="flex items-center gap-space-5">
-              <li>
-                <Link href="/privacy" className="t-caption text-ink-2 underline underline-offset-4">
-                  Privacy
-                </Link>
-              </li>
+            <ul className="flex flex-wrap items-center gap-space-5">
+              {NAV_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="t-caption text-ink-2 hover:text-ink">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
               {/* Hidden rather than pointing nowhere when the repo URL is not configured. */}
               {REPO_URL && (
                 <li>
                   <a
                     href={REPO_URL}
                     rel="noopener noreferrer"
-                    className="t-caption text-ink-2 underline underline-offset-4"
+                    className="t-caption text-ink-2 hover:text-ink"
                   >
                     GitHub
                   </a>
@@ -42,6 +51,23 @@ export function Footer() {
           </nav>
         </div>
       </PageContainer>
+
+      <div
+        aria-hidden="true"
+        className="select-none bg-clip-text pt-space-7 text-center font-medium text-transparent"
+        style={{
+          // Sized in vw so the wordmark spans the page at any width, as in the mockup. The
+          // fade is the two tokens the design system names for it — no literal colour here.
+          fontSize: "15.5vw",
+          lineHeight: 0.8,
+          letterSpacing: "-0.06em",
+          marginBottom: "-2vw",
+          backgroundImage: "linear-gradient(180deg, var(--foot-top) 0%, var(--bg) 95%)",
+          WebkitBackgroundClip: "text",
+        }}
+      >
+        MEDI·SCAN
+      </div>
     </footer>
   );
 }
