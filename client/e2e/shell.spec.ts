@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { backendUp, seedTheme } from "./support";
+import { backendUp, landingReady, seedTheme } from "./support";
 
 test.describe("the shell", () => {
   test("the skip link is first and moves focus to the content", async ({ page }) => {
@@ -99,7 +99,10 @@ test.describe("layout", () => {
     for (const path of ["/", "/privacy", "/nope"]) {
       test(`${path} does not scroll sideways at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
-        await backendUp(page);
+        // The landing page's widest row is the sample swipe row, which only exists once the
+        // samples have loaded. Checking with a bare `backendUp` leaves it out and misses the
+        // overflow entirely.
+        await landingReady(page);
         await page.goto(path);
         await page.waitForTimeout(400);
 

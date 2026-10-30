@@ -38,6 +38,7 @@
   --dot-idle: #4a4855;
   --glow: rgba(169,155,255,0.18);
   --foot-top: #2a2a31;
+  --preview-bg: radial-gradient(120% 90% at 85% 10%, rgba(169,155,255,.22), rgba(14,14,16,0) 55%), radial-gradient(80% 70% at 10% 100%, rgba(110,200,255,.12), rgba(14,14,16,0) 60%), #141417;
   --helix-violet: #c58bff;
   --helix-cyan: #6fd0ff;
   --shadow-panel: none;
@@ -75,6 +76,7 @@
   --dot-idle: #c9c7d3;
   --glow: rgba(106,85,232,0.16);
   --foot-top: #d6d5de;
+  --preview-bg: radial-gradient(120% 90% at 85% 10%, rgba(140,120,255,.22), rgba(246,246,248,0) 55%), radial-gradient(80% 70% at 10% 100%, rgba(90,180,255,.16), rgba(246,246,248,0) 60%), #ffffff;
   --helix-violet: #8a3ff0;
   --helix-cyan: #1e9ae0;
   --shadow-panel: 0 24px 60px -30px rgba(40,30,90,0.25);

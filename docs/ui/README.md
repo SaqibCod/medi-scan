@@ -49,6 +49,10 @@ Screenshots of the approved Medi-Scan mockups, one PNG per artboard. They are th
 
 ## Report page
 
+**The chat parts of these screens are Phase 5, not 7b.** The "Ask about this report" column on the desktop results screens, the suggested-question chips, the chat composer, and the two chat-only artboards (`--07`, `--11`) all ship with chat. Until then the report page shows no chat panel and no "Ask about this report" entry point at all, and the desktop results layout is a single centred column rather than the two columns below (`docs/phase-7b-lld.md` B7). An empty or disabled panel would be worse than none.
+
+The chat bubbles inside the landing page's results-preview card are the exception: they stay, as part of a static illustration of what the finished product does.
+
 - `screens/report-page--01-desktop-dark-results-chat.png`
 - `screens/report-page--02-desktop-dark-processing.png`
 - `screens/report-page--03-desktop-dark-failed.png`

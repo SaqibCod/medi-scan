@@ -14,6 +14,14 @@ export interface BiomarkerRowProps {
   compact?: boolean;
   /** When the API gives one, the name links to the curated explainer page. */
   biomarkerSlug?: string | null;
+  /**
+   * The exact link to use instead of the one derived from the slug.
+   *
+   * The report page passes `?report=…&b=…` so the explainer can show an "On your report"
+   * box. Only ids go in that URL, never a value — see the privacy rules. Ignored unless
+   * `biomarkerSlug` is set, so a row with no curated page can never become a link.
+   */
+  href?: string;
 }
 
 /** Missing values show an em dash rather than an empty cell, so the column still reads. */
@@ -33,9 +41,10 @@ export function BiomarkerRow({
   flag,
   compact,
   biomarkerSlug,
+  href,
 }: BiomarkerRowProps) {
   const label = biomarkerSlug ? (
-    <Link href={`/biomarkers/${biomarkerSlug}`} className="ms-row__link">
+    <Link href={href ?? `/biomarkers/${biomarkerSlug}`} className="ms-row__link">
       {name}
     </Link>
   ) : (

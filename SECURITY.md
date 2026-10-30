@@ -261,6 +261,25 @@ credential and not personal data, and it has to outlive the tab or a returning
 visitor gets a flash of the wrong theme on every visit. Tokens stay in memory
 and `sessionStorage`; nothing else is ever written to `localStorage`.
 
+### In the browser
+
+Report content — values, test names, the summary — is held in one place only:
+the in-memory TanStack Query cache for the open tab. Closing the tab drops it.
+It is never written to `localStorage` or `sessionStorage`, never put in a URL,
+a page title, a log line or an error message, and never sent anywhere but the
+API. Page titles stay generic ("Your report · Medi-Scan") for the same reason:
+a title ends up in browser history and in the window switcher.
+
+Report ids do appear in URLs. That is safe because an id is a random UUID and
+is useless without the owner's credential — someone else's report returns 404,
+not 403, so a leaked URL confirms nothing. `/reports/` is excluded in
+`robots.txt` and report pages carry `noindex`.
+
+An uploaded file stays a `File` object in memory until the request is sent, is
+never read into storage, and the file input is reset afterwards. The browser
+makes no third-party requests: the only origins it ever contacts are the site
+itself and the one API origin named in `connect-src`.
+
 ### The Content Security Policy
 
 ```text
