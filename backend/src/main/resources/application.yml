@@ -160,6 +160,36 @@ mediscan:
     min-chars-per-page: 50
     min-total-chars: 100
     max-pages: 50
+  ocr:
+    # Photos and scanned pages, read by running `tesseract` as a child process.
+    # Never Tess4J: a crash in native code inside the JVM takes the server down,
+    # while a child process can be killed and its memory comes back when it exits.
+    enabled: ${OCR_ENABLED:true}
+    command: ${OCR_COMMAND:tesseract}
+    # Blank uses the system tessdata. Point this at a tessdata_best directory to
+    # trade speed for accuracy.
+    tessdata-dir: ${OCR_TESSDATA_DIR:}
+    # 4 is "a single column of variable-sized text", which is what a lab table is.
+    psm: ${OCR_PSM:4}
+    # OMP_THREAD_LIMIT. 1 leaves the JVM a CPU on the 2-vCPU box; measured on a
+    # rendered page, 2 and 4 threads made no difference beyond run-to-run noise.
+    threads: 1
+    page-timeout: 45s
+    # Includes time spent waiting for the OCR permit, so a queue cannot push a
+    # report past the client's 2-minute polling window unnoticed.
+    total-timeout: 150s
+    max-pages: 10
+    # 40 megapixels, checked from the file header before any decode.
+    max-pixels: 40000000
+    # The ceiling on what the decoder may allocate. Subsampling to max-long-edge
+    # keeps a 40 MP source well under this.
+    max-decoded-bytes: 67108864
+    min-long-edge: 1500
+    max-long-edge: 4000
+    max-output-bytes: 2097152
+    min-page-confidence: 30
+    # The low-confidence rule. The evaluation picks the final value.
+    min-value-confidence: 80
   llm:
     # `fake` is accepted only under the local and test profiles; see LlmProviderGuard.
     provider: ${LLM_PROVIDER:gemini}

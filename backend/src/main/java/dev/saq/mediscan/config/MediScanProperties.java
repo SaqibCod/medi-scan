@@ -37,6 +37,7 @@ public record MediScanProperties(
 		@Valid @NotNull Upload upload,
 		@Valid @NotNull Jobs jobs,
 		@Valid @NotNull Extract extract,
+		@Valid @NotNull Ocr ocr,
 		@Valid @NotNull Llm llm,
 		@Valid @NotNull Mask mask,
 		@Valid @NotNull Retention retention,
@@ -105,6 +106,64 @@ public record MediScanProperties(
 			@Positive int minCharsPerPage,
 			@Positive int minTotalChars,
 			@Positive int maxPages) {
+	}
+
+	/**
+	 * Reading photos and scanned pages with Tesseract.
+	 *
+	 * <p>Every limit here exists to bound something that would otherwise be unbounded on a 2 GB
+	 * box: how long one page may take, how long a whole report may spend in OCR, how many pages
+	 * may be OCR'd, how large an image may be, how much the child process may print, and how
+	 * little confidence is still worth believing.
+	 *
+	 * @param enabled whether images are accepted and scanned pages are OCR'd. When false,
+	 *     images get {@code 415 UNSUPPORTED_FILE_TYPE} at upload and a text-less PDF fails with
+	 *     {@code UNREADABLE}, exactly as before this phase. The {@code local} profile turns
+	 *     itself off with a warning when Tesseract is missing; {@code prod} refuses to start
+	 * @param command the Tesseract program. A path, never a shell string: arguments are passed
+	 *     as a list so nothing in a file name can be read as a command
+	 * @param tessdataDir set to use a different model directory, such as one holding
+	 *     {@code tessdata_best}; blank uses the system default
+	 * @param psm Tesseract's page segmentation mode. 4 suits a single column of variable-sized
+	 *     text, which is what a lab table is; the evaluation picks the final value
+	 * @param threads value for {@code OMP_THREAD_LIMIT}. 1 leaves the JVM a CPU on a 2-vCPU box,
+	 *     and measurement showed no meaningful gain from more on a page this size
+	 * @param pageTimeout how long one page may take before the process is killed
+	 * @param totalTimeout how long one report may spend in OCR in total, including time spent
+	 *     waiting for the permit. Over this the job fails with {@code EXTRACTION_FAILED}
+	 * @param maxPages scanned pages OCR'd per report; more is {@code DOCUMENT_TOO_LONG}
+	 * @param maxPixels largest image accepted, as width times height. Checked against the file
+	 *     header <em>before</em> anything is decoded, so a small file claiming to be enormous is
+	 *     refused rather than decoded
+	 * @param maxDecodedBytes largest raster the decoder may allocate. The pixel cap bounds what
+	 *     is accepted; this bounds what is actually allocated, which subsampling keeps far below
+	 *     the source size
+	 * @param minLongEdge shortest long edge given to Tesseract; smaller images are scaled up,
+	 *     because Tesseract reads small text poorly
+	 * @param maxLongEdge longest long edge given to Tesseract, and the target the decoder
+	 *     subsamples towards
+	 * @param maxOutputBytes most the child process may write to stdout before it is killed
+	 * @param minPageConfidence below this mean confidence a page counts as empty rather than
+	 *     being fed to the model as garbage
+	 * @param minValueConfidence below this, a value, range or date keeps its printed text but
+	 *     gets {@code UNKNOWN} and no number. The evaluation picks the final value
+	 */
+	public record Ocr(
+			boolean enabled,
+			@NotNull String command,
+			String tessdataDir,
+			@Min(0) int psm,
+			@Positive int threads,
+			@NotNull Duration pageTimeout,
+			@NotNull Duration totalTimeout,
+			@Positive int maxPages,
+			@Positive long maxPixels,
+			@Positive long maxDecodedBytes,
+			@Positive int minLongEdge,
+			@Positive int maxLongEdge,
+			@Positive int maxOutputBytes,
+			@Min(0) double minPageConfidence,
+			@Min(0) double minValueConfidence) {
 	}
 
 	/**
