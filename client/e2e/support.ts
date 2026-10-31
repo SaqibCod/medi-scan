@@ -131,6 +131,7 @@ export function doneReport() {
     error: null,
     result: {
       collectedOn: "2026-09-28",
+      textSource: "TEXT_LAYER",
       biomarkers: [
         row("b1", "Total Cholesterol", "238", "<200", "HIGH", "total-cholesterol"),
         row("b2", "LDL Cholesterol", "162", "<100", "HIGH", "ldl-cholesterol"),

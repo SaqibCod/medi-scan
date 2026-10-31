@@ -2,7 +2,7 @@
 
 This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v3 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
 
-**Version:** 2.4 (history, trends, and admin stats clarifications; no breaking change)
+**Version:** 2.5 (OCR: images accepted, new `result.textSource`; no breaking change)
 
 ---
 
@@ -387,7 +387,12 @@ Creates a report and queues it for processing. Accepts exactly one of: a file, p
 | `file` | file | yes | PDF, PNG, or JPEG. Max 10 MB. The file signature (magic bytes) must match the type. |
 | `consent` | string | yes | Must be `"true"` |
 
-**Until Phase 4 (OCR):** PNG and JPEG uploads return `415 UNSUPPORTED_FILE_TYPE`. Only text-based PDFs, pasted text, and samples are accepted. A PDF with no usable text layer is accepted here and then fails the job with `UNREADABLE` (see 8.2).
+**Photos and scans.** PNG and JPEG uploads are accepted and read with OCR, as are PDF pages with no text layer. Two limits apply during the job, not at upload:
+
+- **Very large images:** over 40 megapixels (width × height) end as `FAILED` with `UNREADABLE`. The upload itself still returns `202`.
+- **Too many scanned pages:** a PDF with more than 10 pages needing OCR ends as `FAILED` with `DOCUMENT_TOO_LONG` (see 8.2).
+
+A file OCR finds no usable text in ends as `FAILED` with `UNREADABLE`. Values OCR was unsure about are kept but not flagged — see 4.2.
 
 **Option B: pasted text** (`application/json`)
 
@@ -442,7 +447,7 @@ Headers: `Location: /api/reports/6f1c2a9e-…`
 | 401 | `SESSION_INVALID` | Missing, unknown, or expired token |
 | 404 | `SAMPLE_NOT_FOUND` | Unknown `sampleId` |
 | 413 | `FILE_TOO_LARGE` | File over 10 MB |
-| 415 | `UNSUPPORTED_FILE_TYPE` | Anything other than PDF, PNG, or JPEG. Until Phase 4, also PNG and JPEG. |
+| 415 | `UNSUPPORTED_FILE_TYPE` | Anything other than PDF, PNG, or JPEG |
 | 429 | `RATE_LIMITED` | Upload limit for this IP reached |
 | 429 | `CAPACITY` | Daily LLM cap already reached, so the report is not created |
 | 429 | `BUSY` | Job queue is full, so the report is not created |
@@ -489,6 +494,7 @@ The response shape depends on `status`. Fields that don't apply to the current s
   "error": null,
   "result": {
     "collectedOn": "2026-09-28",
+    "textSource": "TEXT_LAYER",
     "biomarkers": [
       {
         "id": "a1b2c3d4-…",
@@ -544,6 +550,18 @@ The response shape depends on `status`. Fields that don't apply to the current s
 A failed report is still a `200` response. The request succeeded; the processing didn't.
 
 `result.collectedOn` is the sample collection date (`YYYY-MM-DD`) when step 1 can find it on the report, otherwise `null`. Trends use it to date each point.
+
+**`result.textSource`** says how the report's text was obtained:
+
+| Value | Meaning |
+|---|---|
+| `TEXT_LAYER` | All text came from the PDF's text layer, or from pasted text or a sample |
+| `OCR` | All text was read by OCR, from a photo or from pages with no text layer |
+| `MIXED` | Some pages came from a text layer and some from OCR |
+
+`sourceType` can't answer this on its own: a scanned PDF has `sourceType: "PDF"` and `textSource: "OCR"`. A client that doesn't recognise the value should treat it as `OCR`, which is the cautious reading.
+
+**Values OCR was unsure about.** On an `OCR` or `MIXED` report, a value whose characters OCR read with low confidence keeps its `rawValue`, `unit` and `referenceRangeText` exactly as read, but gets `flag: "UNKNOWN"` and `numericValue: null`, and is left out of trends. The same applies to a reference range read with low confidence (`refLow` and `refHigh` become `null`), and to `collectedOn` (it becomes `null`). A misread digit must not produce a confident flag, so an uncertain value is reported as uncertain rather than judged. A client showing an `OCR` or `MIXED` report should tell the reader the values came from OCR and ask them to check each one against the paper report.
 
 **Errors**
 
@@ -805,7 +823,7 @@ Returns aggregated usage numbers for the admin dashboard. It contains counts onl
 }
 ```
 
-`avgProcessingMsBySource` only has a key for source types with at least one processed report in range; `IMAGE` won't appear until Phase 4 ships OCR.
+`avgProcessingMsBySource` only has a key for source types with at least one processed report in range. `IMAGE` appears once an image report has been processed, which is possible from Phase 4 on.
 
 **Errors:**
 - `401 AUTH_REQUIRED`, `401 TOKEN_EXPIRED`, `401 TOKEN_INVALID`.
@@ -861,7 +879,7 @@ The client calls this on page load to wake the backend and to show a "starting u
 | Code | Meaning | Suggested UI message |
 |---|---|---|
 | `UNREADABLE` | No usable text, even after OCR | "We couldn't read text from this file. Try a clearer image." |
-| `DOCUMENT_TOO_LONG` | Extracted text is over the length or page limit | "This document is too long to process. Try a shorter report." |
+| `DOCUMENT_TOO_LONG` | Extracted text is over the length or page limit, or the PDF has more than 10 pages needing OCR | "This document is too long to process. Try a shorter report." |
 | `NO_RESULTS_FOUND` | No lab values survived validation | "We didn't find lab results in this document." |
 | `EXTRACTION_FAILED` | The model returned invalid output twice | "Something went wrong reading the results. Please try again." |
 | `CAPACITY` | Daily LLM cap was reached mid-job | "The demo has hit today's limit. Try again tomorrow." |
@@ -882,6 +900,7 @@ The client can keep these in `client/lib/api-types.ts`. The backend uses matchin
 export type ReportStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
 export type SourceType = "PDF" | "IMAGE" | "TEXT" | "SAMPLE";
 export type Flag = "LOW" | "NORMAL" | "HIGH" | "UNKNOWN";
+export type TextSource = "TEXT_LAYER" | "OCR" | "MIXED";
 
 export interface SessionResponse {
   token: string;
@@ -918,6 +937,7 @@ export interface Biomarker {
 
 export interface ReportResult {
   collectedOn: string | null; // YYYY-MM-DD
+  textSource: TextSource; // treat an unrecognised value as "OCR"
   biomarkers: Biomarker[];
   summary: string;
   highlights: string[];
@@ -1074,7 +1094,7 @@ export interface ProblemDetail {
 
 - **Adding** a new optional field, endpoint, enum value, or error code is a compatible change.
 - **Removing or renaming** a field, changing a type, or changing what a status code means is a breaking change. Bump the version in this document and update the client in the same commit.
-- **Unknown enum values:** the client treats an unknown `flag` as `UNKNOWN`, an unknown `status` as `PROCESSING` (keep polling), and an unknown error `code` as a generic error.
+- **Unknown enum values:** the client treats an unknown `flag` as `UNKNOWN`, an unknown `status` as `PROCESSING` (keep polling), an unknown error `code` as a generic error, and an unknown or missing `textSource` as `OCR` (so the "check these values" note is shown rather than hidden).
 
 ---
 
@@ -1114,6 +1134,13 @@ export interface ProblemDetail {
 ---
 
 ## 11. Changelog
+
+**2.5 (OCR)**
+- **Images are accepted (4.1).** PNG and JPEG uploads no longer return `415 UNSUPPORTED_FILE_TYPE`; they are read with OCR, as are PDF pages with no text layer. An image over 40 megapixels is still accepted at upload and then fails the job with `UNREADABLE`.
+- **New optional field `result.textSource` (4.2, 9.1):** `"TEXT_LAYER" | "OCR" | "MIXED"`. Adding an optional field is a compatible change (9.2). The server always sends it on a `DONE` report; a report created before this version has no stored value and is reported as `TEXT_LAYER`, which is what it was. A client that doesn't recognise the value treats it as `OCR` (9.2).
+- **Low-confidence OCR values (4.2):** on an `OCR` or `MIXED` report, a value, range or date OCR read with low confidence keeps its printed text but gets `flag: "UNKNOWN"` and `numericValue: null` (and `refLow`/`refHigh` or `collectedOn` null). No field changed type; this documents when the server chooses `UNKNOWN`.
+- **`DOCUMENT_TOO_LONG` (8.2)** now also covers a PDF with more than 10 pages needing OCR. No new failure code: OCR failures reuse `UNREADABLE`, `DOCUMENT_TOO_LONG` and `EXTRACTION_FAILED`.
+- **`avgProcessingMsBySource` (6)** can now include `IMAGE`, since image reports exist.
 
 **2.4**
 - **No shape changes.** The `TrendResponse` series `unit` field was already typed `string | null`; this entry only documents behavior, it doesn't change a type.

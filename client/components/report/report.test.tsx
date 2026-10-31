@@ -91,6 +91,7 @@ function report(status: ReportStatus, over: Partial<ReportResponse> = {}): Repor
       status === "DONE"
         ? {
             collectedOn: "2026-09-28",
+            textSource: "TEXT_LAYER",
             biomarkers: BIOMARKERS,
             summary: "Most of your results are in the normal range.",
             highlights: [
