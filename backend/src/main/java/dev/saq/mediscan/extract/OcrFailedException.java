@@ -29,6 +29,15 @@ class OcrFailedException extends RuntimeException {
 		/** The process ended with a non-zero exit code. */
 		EXIT_CODE,
 
+		/**
+		 * The report spent its whole OCR budget, including time waiting for the permit.
+		 *
+		 * <p>Distinct from {@link #TIMEOUT}, which is one page overrunning. This one means the
+		 * report as a whole cannot finish inside the window the client polls for, so the
+		 * remaining pages are not attempted.
+		 */
+		BUDGET_EXHAUSTED,
+
 		/** The job thread was interrupted, almost always a shutdown. */
 		INTERRUPTED
 	}
