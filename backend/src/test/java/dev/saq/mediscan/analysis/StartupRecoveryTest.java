@@ -14,6 +14,7 @@ import dev.saq.mediscan.config.ReportErrorCode;
 import dev.saq.mediscan.report.ReportRepository;
 import dev.saq.mediscan.report.ReportStatus;
 import dev.saq.mediscan.report.ReportStatusService;
+import dev.saq.mediscan.report.TextSource;
 import dev.saq.mediscan.support.PostgresTestBase;
 import dev.saq.mediscan.support.ReportFixtures;
 
@@ -86,7 +87,7 @@ class StartupRecoveryTest extends PostgresTestBase {
 	void leavesTerminalReportsAlone() {
 		UUID done = fixtures.pendingReport(sessionId);
 		statuses.markProcessing(done);
-		statuses.markDone(done, null);
+		statuses.markDone(done, null, TextSource.TEXT_LAYER);
 
 		UUID failed = fixtures.pendingReport(sessionId);
 		statuses.markProcessing(failed);

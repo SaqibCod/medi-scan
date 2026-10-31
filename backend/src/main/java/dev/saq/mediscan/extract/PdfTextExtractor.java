@@ -15,6 +15,7 @@ import dev.saq.mediscan.config.MediScanProperties;
 import dev.saq.mediscan.config.ReportErrorCode;
 import dev.saq.mediscan.config.ReportFailure;
 import dev.saq.mediscan.report.SourceType;
+import dev.saq.mediscan.report.TextSource;
 
 /**
  * Pulls text out of a PDF with PDFBox.
@@ -143,6 +144,9 @@ public class PdfTextExtractor implements TextExtractor {
 			throw new ReportFailure(ReportErrorCode.DOCUMENT_TOO_LONG);
 		}
 
-		return new ExtractedText(text, pageCount, lowTextPages);
+		// TEXT_LAYER unconditionally for now: nothing here runs OCR yet, so every page that
+		// contributed text contributed it from the text layer. The scanned-page fallback
+		// decides between OCR and MIXED (docs/phase-4-lld.md 6.4).
+		return new ExtractedText(text, pageCount, lowTextPages, TextSource.TEXT_LAYER);
 	}
 }

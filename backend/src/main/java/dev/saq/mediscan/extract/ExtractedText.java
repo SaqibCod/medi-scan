@@ -1,5 +1,7 @@
 package dev.saq.mediscan.extract;
 
+import dev.saq.mediscan.report.TextSource;
+
 /**
  * The text pulled out of one source, with what was learned about the document on the way.
  *
@@ -10,13 +12,16 @@ package dev.saq.mediscan.extract;
  * @param text the extracted text, pages joined by a blank line
  * @param pageCount pages in the document; 1 for pasted text and samples
  * @param lowTextPages pages with too little text to be anything but a scan. Phase 4 runs OCR
- *     over exactly these; phase 2 only counts them, so the figure is worth logging
+ *     over exactly these; phase 2 only counted them, so the figure is worth logging
+ * @param textSource how this text was obtained. Travels out of extraction because the client
+ *     has to know whether a number was transcribed by OCR (contract 4.2), and because the
+ *     low-confidence rule only applies when it was
  */
-public record ExtractedText(String text, int pageCount, int lowTextPages) {
+public record ExtractedText(String text, int pageCount, int lowTextPages, TextSource textSource) {
 
-	/** For sources that have no pages: pasted text and samples. */
+	/** For sources that have no pages: pasted text and samples. Never OCR. */
 	static ExtractedText ofPlainText(String text) {
-		return new ExtractedText(text, 1, 0);
+		return new ExtractedText(text, 1, 0, TextSource.TEXT_LAYER);
 	}
 
 	public int charCount() {
@@ -32,6 +37,6 @@ public record ExtractedText(String text, int pageCount, int lowTextPages) {
 	@Override
 	public String toString() {
 		return "ExtractedText[pageCount=" + pageCount + ", lowTextPages=" + lowTextPages
-				+ ", chars=" + text.length() + "]";
+				+ ", textSource=" + textSource + ", chars=" + text.length() + "]";
 	}
 }

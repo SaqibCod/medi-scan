@@ -43,10 +43,13 @@ public record ReportResponse(
 	 * The results of a finished report.
 	 *
 	 * @param collectedOn the specimen collection date, or null when the report printed none
+	 * @param textSource how the text was read. Never null here: a stored null means the report
+	 *     predates phase 4, and the mapper reports that as {@code TEXT_LAYER} (contract 4.2)
 	 * @param counts a tally by flag, so the client need not derive it
 	 */
 	public record ReportResult(
 			LocalDate collectedOn,
+			TextSource textSource,
 			List<Biomarker> biomarkers,
 			String summary,
 			List<String> highlights,

@@ -16,6 +16,7 @@ import dev.saq.mediscan.report.ReportEntity;
 import dev.saq.mediscan.report.ReportRepository;
 import dev.saq.mediscan.report.ReportStatusService;
 import dev.saq.mediscan.report.SourceType;
+import dev.saq.mediscan.report.TextSource;
 import dev.saq.mediscan.session.OwnerRef;
 import dev.saq.mediscan.session.Session;
 import dev.saq.mediscan.session.SessionRepository;
@@ -140,9 +141,20 @@ public class ReportFixtures {
 	 * writing the status column directly. No biomarkers; use {@link #biomarker} to add some.
 	 */
 	public UUID doneReport(UUID sessionId, LocalDate collectedOn) {
+		return doneReport(sessionId, collectedOn, TextSource.TEXT_LAYER);
+	}
+
+	/**
+	 * A {@code DONE} report that records how its text was read.
+	 *
+	 * <p>The overload above is the common case. This one exists for the OCR tests, which need a
+	 * report whose {@code text_source} is {@code OCR} or {@code MIXED} without running Tesseract
+	 * to get one.
+	 */
+	public UUID doneReport(UUID sessionId, LocalDate collectedOn, TextSource textSource) {
 		UUID id = pendingReport(sessionId, SourceType.PDF);
 		reportStatus.markProcessing(id);
-		reportStatus.markDone(id, collectedOn);
+		reportStatus.markDone(id, collectedOn, textSource);
 		return id;
 	}
 
@@ -150,7 +162,7 @@ public class ReportFixtures {
 	public UUID doneUserReport(UUID userId, LocalDate collectedOn) {
 		UUID id = pendingUserReport(userId);
 		reportStatus.markProcessing(id);
-		reportStatus.markDone(id, collectedOn);
+		reportStatus.markDone(id, collectedOn, TextSource.TEXT_LAYER);
 		return id;
 	}
 

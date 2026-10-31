@@ -119,7 +119,7 @@ class ReportStatusServiceTest extends PostgresTestBase {
 	void failureCannotOverwriteDone() {
 		UUID reportId = fixtures.pendingReport(sessionId);
 		statuses.markProcessing(reportId);
-		statuses.markDone(reportId, LocalDate.of(2026, 9, 28));
+		statuses.markDone(reportId, LocalDate.of(2026, 9, 28), TextSource.TEXT_LAYER);
 
 		assertThat(statuses.markFailed(reportId, ReportErrorCode.LLM_UNAVAILABLE)).isFalse();
 
@@ -129,18 +129,20 @@ class ReportStatusServiceTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("marking done stores collectedOn and requires PROCESSING")
+	@DisplayName("marking done stores collectedOn and textSource, and requires PROCESSING")
 	void doneOnlyFromProcessing() {
 		UUID reportId = fixtures.pendingReport(sessionId);
 
-		assertThat(statuses.markDone(reportId, null)).isFalse();
+		assertThat(statuses.markDone(reportId, null, TextSource.TEXT_LAYER)).isFalse();
 
 		statuses.markProcessing(reportId);
-		assertThat(statuses.markDone(reportId, LocalDate.of(2026, 9, 28))).isTrue();
+		assertThat(statuses.markDone(reportId, LocalDate.of(2026, 9, 28), TextSource.OCR))
+				.isTrue();
 
 		ReportEntity report = load(reportId);
 		assertThat(report.getStatus()).isEqualTo(ReportStatus.DONE);
 		assertThat(report.getCollectedOn()).isEqualTo(LocalDate.of(2026, 9, 28));
+		assertThat(report.getTextSource()).isEqualTo(TextSource.OCR);
 		assertThat(report.getFinishedAt()).isNotNull();
 	}
 
@@ -150,8 +152,34 @@ class ReportStatusServiceTest extends PostgresTestBase {
 		UUID reportId = fixtures.pendingReport(sessionId);
 		statuses.markProcessing(reportId);
 
-		assertThat(statuses.markDone(reportId, null)).isTrue();
+		assertThat(statuses.markDone(reportId, null, TextSource.TEXT_LAYER)).isTrue();
 		assertThat(load(reportId).getCollectedOn()).isNull();
+	}
+
+	@Test
+	@DisplayName("every textSource the contract names survives a round trip to the database")
+	void everyTextSourceRoundTrips() {
+		// The column has a check constraint listing the three values. An enum constant the
+		// constraint does not know about would fail here rather than in production.
+		for (TextSource textSource : TextSource.values()) {
+			UUID reportId = fixtures.pendingReport(sessionId);
+			statuses.markProcessing(reportId);
+
+			assertThat(statuses.markDone(reportId, null, textSource)).isTrue();
+			assertThat(load(reportId).getTextSource()).isEqualTo(textSource);
+		}
+	}
+
+	@Test
+	@DisplayName("a failed report stores no textSource at all")
+	void failedReportHasNoTextSource() {
+		// text_source is written only by markDone, so a report that never got there has none.
+		// The API never asks a failed report this question, and the column says so.
+		UUID reportId = fixtures.pendingReport(sessionId);
+		statuses.markProcessing(reportId);
+		statuses.markFailed(reportId, ReportErrorCode.UNREADABLE);
+
+		assertThat(load(reportId).getTextSource()).isNull();
 	}
 
 	@Test
@@ -164,7 +192,7 @@ class ReportStatusServiceTest extends PostgresTestBase {
 
 		UUID done = fixtures.pendingReport(sessionId);
 		statuses.markProcessing(done);
-		statuses.markDone(done, null);
+		statuses.markDone(done, null, TextSource.TEXT_LAYER);
 
 		UUID failed = fixtures.pendingReport(sessionId);
 		statuses.markProcessing(failed);

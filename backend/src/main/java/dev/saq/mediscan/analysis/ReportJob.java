@@ -17,6 +17,7 @@ import dev.saq.mediscan.mask.MaskResult;
 import dev.saq.mediscan.mask.Masker;
 import dev.saq.mediscan.report.ReportResultSaver;
 import dev.saq.mediscan.report.ReportStatusService;
+import dev.saq.mediscan.report.TextSource;
 
 /**
  * Runs one report through the pipeline ({@code LLD} 7).
@@ -82,7 +83,8 @@ public class ReportJob {
 			return Outcome.SKIPPED;
 		}
 
-		String maskedText = extractAndMask(reportId, source);
+		MaskedInput input = extractAndMask(reportId, source);
+		String maskedText = input.maskedText();
 
 		ModelExtraction extracted = extractionStep.run(maskedText);
 		ValidationOutcome validated = validator.validate(extracted, maskedText);
@@ -100,7 +102,8 @@ public class ReportJob {
 		SummaryStep.ReportSummary summary = summaryStep.run(validated.biomarkers());
 
 		boolean saved = saver.saveDone(reportId, maskedText, toRows(validated.biomarkers()),
-				summary.patientSummary(), summary.highlights(), validated.collectedOn());
+				summary.patientSummary(), summary.highlights(), validated.collectedOn(),
+				input.textSource());
 
 		return saved ? Outcome.DONE : Outcome.SKIPPED;
 	}
@@ -110,11 +113,16 @@ public class ReportJob {
 	 *
 	 * <p>A separate method so the unmasked {@link ExtractedText} is unreachable from the rest
 	 * of {@link #run}: the compiler, not a comment, is what keeps it out of the later stages.
+	 *
+	 * <p>Phase 4 needs two things from extraction to outlive this scope - how the text was read,
+	 * and (later) the OCR confidence - so it returns a {@link MaskedInput} rather than a bare
+	 * string. The raw text is still left behind here, which is the whole point of the method.
 	 */
-	private String extractAndMask(UUID reportId, JobSource source) {
+	private MaskedInput extractAndMask(UUID reportId, JobSource source) {
 		ExtractedText extracted = extractors.extract(source);
-		log.info("extract done id={} pages={} lowTextPages={} chars={}",
-				reportId, extracted.pageCount(), extracted.lowTextPages(), extracted.charCount());
+		log.info("extract done id={} pages={} lowTextPages={} textSource={} chars={}",
+				reportId, extracted.pageCount(), extracted.lowTextPages(),
+				extracted.textSource(), extracted.charCount());
 
 		MaskResult masked = masker.mask(extracted.text());
 		log.info("mask done id={} counts={} conflicts={}",
@@ -122,7 +130,22 @@ public class ReportJob {
 
 		observer.maskingCompleted(masked.conflicts());
 
-		return masked.maskedText();
+		return new MaskedInput(masked.maskedText(), extracted.textSource());
+	}
+
+	/**
+	 * What survives extraction: the masked text, and what is known about how it was read.
+	 *
+	 * <p>{@code toString()} hides the text. This record is a method-local result rather than
+	 * anything long-lived, but it holds the masked report and records print their fields
+	 * ({@code backend/CLAUDE.md}, "Records print their fields").
+	 */
+	private record MaskedInput(String maskedText, TextSource textSource) {
+
+		@Override
+		public String toString() {
+			return "MaskedInput[textSource=" + textSource + ", chars=" + maskedText.length() + "]";
+		}
 	}
 
 	private static List<ReportResultSaver.BiomarkerRow> toRows(List<ValidatedBiomarker> markers) {

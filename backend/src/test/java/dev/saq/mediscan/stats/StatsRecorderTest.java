@@ -173,7 +173,11 @@ class StatsRecorderTest extends PostgresTestBase {
 		assertThat(columnsOf("daily_stats"))
 				.containsExactlyInAnyOrder("day", "input_tokens", "output_tokens",
 						"reports_created", "reports_failed", "rate_limit_rejections",
-						"masking_conflicts");
+						"masking_conflicts",
+						// Phase 4. A count of the values the confidence rule marked unclear:
+						// no report id, no value, no confidence score, so the claim this test
+						// makes still holds.
+						"ocr_low_confidence_values");
 		assertThat(columnsOf("daily_failure")).containsExactlyInAnyOrder("day", "code", "count");
 		assertThat(columnsOf("daily_processing"))
 				.containsExactlyInAnyOrder("day", "source_type", "total_ms", "count");
