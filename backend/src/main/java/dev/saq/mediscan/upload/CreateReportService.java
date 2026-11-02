@@ -111,7 +111,7 @@ public class CreateReportService {
 			validator.validateSignature(header, declared);
 
 			tempFile = tempFiles.write(in, maxBytes);
-			return insertAndSubmit(owner, new JobSource.PdfFile(tempFile));
+			return insertAndSubmit(owner, jobSourceFor(declared, tempFile));
 		}
 		catch (IOException ex) {
 			tempFiles.deleteQuietly(tempFile);
@@ -124,6 +124,20 @@ public class CreateReportService {
 			tempFiles.deleteQuietly(tempFile);
 			throw ex;
 		}
+	}
+
+	/**
+	 * The job source for an uploaded file, by the type its signature proved it to be.
+	 *
+	 * <p>Exhaustive over {@link FileType} rather than defaulting to PDF, so adding an accepted
+	 * type stops compiling here instead of quietly being read by the wrong extractor.
+	 */
+	private static JobSource jobSourceFor(FileType type, Path tempFile) {
+		return switch (type) {
+			case PDF -> new JobSource.PdfFile(tempFile);
+			case PNG -> new JobSource.ImageFile(tempFile, JobSource.ImageKind.PNG);
+			case JPEG -> new JobSource.ImageFile(tempFile, JobSource.ImageKind.JPEG);
+		};
 	}
 
 	/** Pasted text or a sample (contract section 4.1, options B and C). */

@@ -40,6 +40,31 @@ public sealed interface JobSource {
 		}
 	}
 
+	/**
+	 * An uploaded photo, already streamed to a temp file.
+	 *
+	 * <p>Like {@link PdfFile}, only the path travels: the original filename is not kept, because
+	 * a photo of a report is routinely named after the patient or the date it was taken.
+	 *
+	 * <p>{@code kind} comes from the signature sniff at upload rather than being re-detected
+	 * here. It decides nothing about how the file is read - the preparer asks {@code ImageIO}
+	 * what the bytes are - but it is worth carrying so a log line can say what was uploaded
+	 * without reopening the file.
+	 */
+	record ImageFile(Path path, ImageKind kind) implements JobSource {
+
+		@Override
+		public SourceType sourceType() {
+			return SourceType.IMAGE;
+		}
+	}
+
+	/** The image formats the API accepts (contract 4.1). */
+	enum ImageKind {
+		PNG,
+		JPEG
+	}
+
 	/** Text pasted by the caller. Held in memory for the life of the job. */
 	record RawText(String text) implements JobSource {
 

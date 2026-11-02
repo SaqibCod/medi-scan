@@ -132,10 +132,14 @@ class OcrGate {
 			return totalBudget.minus(Duration.between(startedAt, clock.instant()));
 		}
 
-		/** Numbers only, for the job's log line. Nothing here is report content. */
-		void logSummary(java.util.UUID reportId) {
-			log.info("ocr report done id={} pages={} waitMs={} ocrMs={}",
-					reportId, pages, waitMs, ocrMs);
+		/**
+		 * Numbers only, for the job's log line. Nothing here is report content.
+		 *
+		 * <p>No report id: extraction is not given one, and the id is already on every line
+		 * through the MDC the request filter sets.
+		 */
+		void logSummary() {
+			log.info("ocr report done pages={} waitMs={} ocrMs={}", pages, waitMs, ocrMs);
 		}
 
 		int pages() {

@@ -21,12 +21,22 @@ import java.util.Map;
  *     this is counted separately (traced 2026-10-18, Phase 3 eval: Gemini occasionally
  *     corrupts a printed en dash or comparator into a stray control character while
  *     transcribing a reference range)
+ * @param lowConfidenceValues how many kept rows the OCR low-confidence rule turned
+ *     {@code UNKNOWN} ({@link OcrDoubts}). The cost of that safety rule, and the eval's unclear
+ *     rate: a row counted here is one the reader is asked to check against their paper report
+ *     rather than one we were willing to flag
+ * @param unlocatedValues how many strings passed the support check and were then found on no OCR
+ *     line. Should be zero: a non-zero figure means the support check and the confidence lookup
+ *     disagree, which would switch the low-confidence rule off for those rows, so it is counted
+ *     rather than left to show up as a mysteriously confident flag
  */
 public record ValidationOutcome(
 		List<ValidatedBiomarker> biomarkers,
 		LocalDate collectedOn,
 		Map<DropReason, Integer> dropsByReason,
-		int rangeTextDiscarded) {
+		int rangeTextDiscarded,
+		int lowConfidenceValues,
+		int unlocatedValues) {
 
 	public ValidationOutcome {
 		biomarkers = List.copyOf(biomarkers);
@@ -67,6 +77,8 @@ public record ValidationOutcome(
 	public String toString() {
 		return "ValidationOutcome[kept=" + biomarkers.size() + ", dropped=" + dropsByReason
 				+ ", rangeTextDiscarded=" + rangeTextDiscarded
+				+ ", lowConfidenceValues=" + lowConfidenceValues
+				+ ", unlocatedValues=" + unlocatedValues
 				+ ", hasCollectedOn=" + (collectedOn != null) + "]";
 	}
 }

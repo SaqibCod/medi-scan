@@ -170,6 +170,11 @@ mediscan:
     # trade speed for accuracy.
     tessdata-dir: ${OCR_TESSDATA_DIR:}
     # 4 is "a single column of variable-sized text", which is what a lab table is.
+    #
+    # Chosen by the phase 4 sweep (2026-11-01, eval/results/ocr-tuning-*.md), not
+    # assumed: 3 was worse on every variant (74% value recovery on scanned PDFs
+    # against 90%), and 6 was indistinguishable from 4 on accuracy but assumes one
+    # uniform block, which is a worse fit for a two-column layout than 4.
     psm: ${OCR_PSM:4}
     # OMP_THREAD_LIMIT. 1 leaves the JVM a CPU on the 2-vCPU box; measured on a
     # rendered page, 2 and 4 threads made no difference beyond run-to-run noise.
@@ -188,7 +193,21 @@ mediscan:
     max-long-edge: 4000
     max-output-bytes: 2097152
     min-page-confidence: 30
-    # The low-confidence rule. The evaluation picks the final value.
+    # The low-confidence rule: below this, a value keeps its printed text but gets
+    # no number and no flag.
+    #
+    # 80 was chosen after the phase 4 sweep (2026-11-01). The measured trade-off at
+    # psm 4, as a share of values OCR *misread* that still sit on a row it read
+    # confidently - the ones that could take a wrong flag:
+    #
+    #   threshold   unclear (cost)   risky (residual)
+    #   80          2-6%             0-50%
+    #   90          8-13%            0% on every variant
+    #
+    # 90 removes the residual risk outright; 80 keeps it, in exchange for marking
+    # roughly a fifth as many values unclear. 80 is the accepted setting, with the
+    # residual recorded in docs/evaluation.md. Raise it to 90 if a dangerous flag
+    # error ever turns up on an OCR case.
     min-value-confidence: 80
   llm:
     # `fake` is accepted only under the local and test profiles; see LlmProviderGuard.

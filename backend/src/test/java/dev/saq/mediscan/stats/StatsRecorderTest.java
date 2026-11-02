@@ -87,6 +87,26 @@ class StatsRecorderTest extends PostgresTestBase {
 	}
 
 	@Test
+	@DisplayName("counts the values OCR made unclear, across reports")
+	void countsLowConfidenceValues() {
+		// What the OCR safety rule costs readers, per day. A rise means photos are being read
+		// worse than they were, and this is the only signal that says so before anyone
+		// complains (docs/phase-4-lld.md section 8).
+		stats.lowConfidenceValuesFound(2);
+		stats.lowConfidenceValuesFound(5);
+
+		assertThat(dailyStat("ocr_low_confidence_values")).isEqualTo(7);
+	}
+
+	@Test
+	@DisplayName("a report with nothing unclear writes no row")
+	void ignoresZeroLowConfidenceValues() {
+		stats.lowConfidenceValuesFound(0);
+
+		assertThat(rowCount("daily_stats")).isZero();
+	}
+
+	@Test
 	@DisplayName("counts rate limit rejections")
 	void countsRateLimitRejections() {
 		stats.recordRateLimitRejection();

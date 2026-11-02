@@ -25,7 +25,7 @@ import dev.saq.mediscan.support.TestProperties;
 class ExtractorRegistryTest {
 
 	private final ExtractorRegistry registry = new ExtractorRegistry(List.of(
-			new PdfTextExtractor(TestProperties.defaults()),
+			TextExtractors.pdfTextLayerOnly(TestProperties.defaults()),
 			new PlainTextExtractor(TestProperties.defaults())));
 
 	@Test

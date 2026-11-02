@@ -28,7 +28,7 @@ import dev.saq.mediscan.config.MediScanProperties;
  * content, and knowing whether the box has 5.3.4 or 5.4.0 is the first question when output
  * changes ({@code docs/phase-4-lld.md} section 13).
  */
-class OcrStartupCheck {
+class OcrStartupCheck implements OcrAvailability {
 
 	private static final Logger log = LoggerFactory.getLogger(OcrStartupCheck.class);
 
@@ -94,7 +94,8 @@ class OcrStartupCheck {
 	}
 
 	/** Whether OCR can be used. False means images are refused as before this phase. */
-	boolean available() {
+	@Override
+	public boolean available() {
 		return available;
 	}
 

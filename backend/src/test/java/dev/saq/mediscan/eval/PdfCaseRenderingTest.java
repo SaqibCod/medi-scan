@@ -15,6 +15,7 @@ import dev.saq.mediscan.config.ReportFailure;
 import dev.saq.mediscan.extract.ExtractedText;
 import dev.saq.mediscan.extract.JobSource;
 import dev.saq.mediscan.extract.PdfTextExtractor;
+import dev.saq.mediscan.extract.TextExtractors;
 import dev.saq.mediscan.support.TestPdfs;
 import dev.saq.mediscan.support.TestProperties;
 
@@ -32,7 +33,10 @@ class PdfCaseRenderingTest {
 
 	private static final String PAGE_BREAK = "[PAGE BREAK]";
 
-	private final PdfTextExtractor extractor = new PdfTextExtractor(TestProperties.defaults());
+	// Text layer only: every PDF case here has one, and a test about whether a rendered table
+	// survives extraction should not depend on whether this machine has Tesseract.
+	private final PdfTextExtractor extractor =
+			TextExtractors.pdfTextLayerOnly(TestProperties.defaults());
 
 	@TempDir
 	Path tempDir;

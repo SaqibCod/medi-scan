@@ -16,12 +16,16 @@ import dev.saq.mediscan.report.TextSource;
  * @param textSource how this text was obtained. Travels out of extraction because the client
  *     has to know whether a number was transcribed by OCR (contract 4.2), and because the
  *     low-confidence rule only applies when it was
+ * @param confidence how sure OCR was about each part of the text, or
+ *     {@link ConfidenceIndex#NONE} when none of it came from OCR. The validator consults this
+ *     before it will put a flag on a number
  */
-public record ExtractedText(String text, int pageCount, int lowTextPages, TextSource textSource) {
+public record ExtractedText(String text, int pageCount, int lowTextPages, TextSource textSource,
+		ConfidenceIndex confidence) {
 
 	/** For sources that have no pages: pasted text and samples. Never OCR. */
 	static ExtractedText ofPlainText(String text) {
-		return new ExtractedText(text, 1, 0, TextSource.TEXT_LAYER);
+		return new ExtractedText(text, 1, 0, TextSource.TEXT_LAYER, ConfidenceIndex.NONE);
 	}
 
 	public int charCount() {
