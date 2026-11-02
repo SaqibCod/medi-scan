@@ -55,6 +55,57 @@ class TsvLineBuilderTest {
 	}
 
 	@Nested
+	@DisplayName("line endings")
+	class LineEndings {
+
+		/**
+		 * The regression that the OCR evaluation found (2026-11-01).
+		 *
+		 * <p>Tesseract writes CRLF on Windows. The text column is the last field on a row, so
+		 * splitting the output on {@code "\n"} alone left a carriage return glued to every word
+		 * - and because {@code TextNormalizer} turns a carriage return into a newline, a lab
+		 * table reached the model as one word per line with the column gaps as leading spaces.
+		 *
+		 * <p>Nothing failed loudly. Values still matched as whole tokens, so the support check
+		 * passed and the extraction looked fine; what broke was every line-shaped thing
+		 * downstream - {@code ResultRowDetector} saw no result rows, so masking protected
+		 * nothing and the confidence lookup had no rows to prefer. The fixtures in the rest of
+		 * this class all used {@code "\n"}, which is why the unit tests were green while real
+		 * OCR was mangled on every developer machine.
+		 */
+		@Test
+		@DisplayName("CRLF output rebuilds the same lines as LF output")
+		void handlesCarriageReturns() {
+			String[] rows = {
+					word(1, 1, 1, 1, 83, 158, "96.0", "Potassium"),
+					word(1, 1, 1, 2, 500, 48, "94.0", "5.4"),
+					word(1, 1, 1, 3, 700, 90, "95.0", "mmol/L") };
+
+			OcrPage unix = TsvLineBuilder.build(HEADER + "\n" + String.join("\n", rows) + "\n");
+			OcrPage windows = TsvLineBuilder.build(
+					HEADER + "\r\n" + String.join("\r\n", rows) + "\r\n");
+
+			assertThat(windows.text()).isEqualTo(unix.text());
+			assertThat(windows.lines()).hasSize(1);
+			assertThat(windows.text()).doesNotContain("\r").doesNotContain("\n");
+		}
+
+		@Test
+		@DisplayName("a word carries no carriage return into its text or its offsets")
+		void wordsAreClean() {
+			OcrPage page = TsvLineBuilder.build(HEADER + "\r\n"
+					+ word(1, 1, 1, 1, 83, 158, "96.0", "Potassium") + "\r\n"
+					+ word(1, 1, 1, 2, 500, 48, "94.0", "5.4") + "\r\n");
+
+			// The offsets are what the confidence lookup reads, so a stray character in a word
+			// shifts every one after it and the wrong characters get blamed for a low score.
+			OcrWord value = page.lines().getFirst().words().get(1);
+			assertThat(value.text()).isEqualTo("5.4");
+			assertThat(page.text().substring(value.start(), value.end())).isEqualTo("5.4");
+		}
+	}
+
+	@Nested
 	@DisplayName("rows kept and dropped")
 	class RowFiltering {
 

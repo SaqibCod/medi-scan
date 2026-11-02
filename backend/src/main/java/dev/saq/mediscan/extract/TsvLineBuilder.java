@@ -106,7 +106,15 @@ final class TsvLineBuilder {
 		List<Row> rows = new ArrayList<>();
 		boolean first = true;
 
-		for (String rawLine : tsv.split("\n", -1)) {
+		// Split on any line break, not just "\n". Tesseract writes CRLF on Windows, and the text
+		// column is the last field on the row - so splitting on "\n" alone leaves a carriage
+		// return glued to every single word. TextNormalizer then turns each one into a newline,
+		// and a lab table arrives at the model as one word per line, with the column gaps as
+		// leading spaces. Values still survive as whole tokens, so nothing downstream fails
+		// loudly: the report is simply read as a vertical list and every result row stops
+		// looking like a result row. Found 2026-11-01 by the OCR evaluation sweep, which is
+		// what it is for. Production is Linux and never saw it; a developer's machine always did.
+		for (String rawLine : tsv.split("\\R", -1)) {
 			if (first) {
 				// The header. Skipped positionally rather than by matching its text, because
 				// a run with no words at all still emits it.
