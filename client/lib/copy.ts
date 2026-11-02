@@ -88,6 +88,23 @@ export const FILE_ACCEPT = FEATURE_OCR ? "application/pdf,image/png,image/jpeg" 
 export const RESULTS_DISCLAIMER_EXTRA =
   "Talk to your doctor about what these results mean for you.";
 
+/**
+ * Above the results table when the text came from OCR (LLD 9.3).
+ *
+ * Not behind `FEATURE_OCR`: this is driven by `result.textSource`, which only says `OCR` or
+ * `MIXED` on a report the server actually read with OCR. A build with the flag off will never
+ * see one, and a build with it on must never hide the note.
+ *
+ * The body is the one thing a reader has to be told. OCR misreads digits in ways that stay
+ * plausible, and the app cannot tell which ones — so it says so, and points at the paper.
+ */
+export const OCR_NOTE = {
+  title: "Read from a photo or scan.",
+  /** When only some pages were scanned, so the reader knows which part to check hardest. */
+  mixedTitle: "Some pages were read from a scan.",
+  body: "OCR can misread numbers. Check each value against your report. Values we weren't sure about are marked unclear.",
+} as const;
+
 /** Under the results table. The one thing a reader most needs to know about a range. */
 export const RANGE_NOTE =
   "Ranges come from your report. Labs use different ranges, so always compare with the one printed on yours.";

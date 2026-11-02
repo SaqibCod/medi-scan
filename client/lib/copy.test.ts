@@ -35,7 +35,7 @@ function switchedStrings(mod: Awaited<ReturnType<typeof loadCopy>>): string[] {
   ];
 }
 
-describe("with OCR off, which is how it ships now", () => {
+describe("with OCR off, which is what a build without tesseract must say", () => {
   it("offers a photo nowhere", async () => {
     const mod = await loadCopy(false);
 
@@ -83,7 +83,7 @@ describe("with OCR off, which is how it ships now", () => {
   });
 });
 
-describe("with OCR on, as Phase 4 will ship it", () => {
+describe("with OCR on, as Phase 4 ships it", () => {
   it("restores the mockup wording", async () => {
     const mod = await loadCopy(true);
 

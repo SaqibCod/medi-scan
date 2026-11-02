@@ -218,6 +218,32 @@ describe("the done view", () => {
 
     expect(screen.queryByRole("link", { name: "Ferritin" })).not.toBeInTheDocument();
   });
+
+  it("says nothing about OCR on a report read from a text layer", async () => {
+    renderReport();
+    await screen.findByText(/Most of your results/);
+
+    expect(screen.queryByText(/OCR can misread/)).not.toBeInTheDocument();
+  });
+
+  it("asks the reader to check the values when the text came from OCR", async () => {
+    // The whole-page version of the note's own unit tests: it has to reach the real results
+    // view from `result.textSource`, above the table the reader is about to read.
+    const scanned = report("DONE");
+    fetchMock.mockImplementation((url: string) =>
+      String(url).includes("/actuator/health")
+        ? Promise.resolve(json(200, { status: "UP" }))
+        : Promise.resolve(
+            json(200, { ...scanned, result: { ...scanned.result!, textSource: "OCR" } }),
+          ),
+    );
+
+    renderReport();
+    await screen.findByText(/Most of your results/);
+
+    expect(screen.getByText("Read from a photo or scan.")).toBeInTheDocument();
+    expect(screen.getByText(/OCR can misread numbers/)).toBeInTheDocument();
+  });
 });
 
 describe("the count tiles", () => {

@@ -89,8 +89,11 @@ test.describe("the failed view", () => {
 
     await page.goto(`/reports/${REPORT_ID}`);
 
-    await expect(page.getByText(/coming soon/)).toBeVisible();
-    await expect(page.getByText(/clearer photo/)).toHaveCount(0);
+    // Phase 4 runs OCR, so the advice is now advice the reader can act on: a clearer photo.
+    // The old "coming soon" line would be a lie about a build that already tried OCR and
+    // still could not read the page (B4 - never promise, and never under-promise either).
+    await expect(page.getByText(/clearer photo/)).toBeVisible();
+    await expect(page.getByText(/coming soon/)).toHaveCount(0);
   });
 });
 
