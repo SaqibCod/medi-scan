@@ -35,14 +35,21 @@ RUN ./mvnw -B -ntp -DskipTests package \
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-noble AS runtime
 
-# OCR native libraries.
+# Tesseract, as a program this image runs - not as a library it links against
+# (phase 4 decision O1, docs/phase-4-lld.md section 13).
 #
-# Installed now, in phase 1, even though OCR is phase 4: adding them later would
-# mean rebuilding this layer and re-verifying the arm64 build at the point where
-# the OCR work itself needs attention. Tess4J binds to the system Tesseract via
-# JNA, so all three are needed - tesseract-ocr for the binary, -eng for the
-# English language data (without it OCR fails at runtime, not at build), and
-# libtesseract-dev for the shared library JNA loads.
+# Two packages, and deliberately only two:
+#   tesseract-ocr     - the `tesseract` command itself, which the backend starts
+#                       as a child process with a timeout and an output cap.
+#   tesseract-ocr-eng - the English model. Without it `tesseract` installs fine
+#                       and then fails on the first page, at runtime, in
+#                       production. OcrStartupCheck refuses to start instead.
+#
+# libtesseract-dev was here for phase 1's planned Tess4J binding and is gone with
+# it. A JNA binding loads native OCR code inside the JVM, where a segfault in it
+# takes the whole server down; a child process can be killed on timeout and its
+# memory returns when it exits. Nothing in the image links against Tesseract any
+# more, so the headers and the static library were pure weight.
 #
 # --no-install-recommends keeps out the X11 and documentation pulls; the apt
 # lists are removed in the same layer so they do not persist in the image.
@@ -50,10 +57,16 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         tesseract-ocr-eng \
-        libtesseract-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && tesseract --version
 
-# Tess4J looks here for language data.
+# Where the distribution puts the models the `tesseract` command reads.
+#
+# The command finds these on its own; setting it explicitly means the child
+# process inherits an unambiguous value rather than depending on the package's
+# compiled-in default, which has moved between Tesseract 4 and 5. Pointing
+# OCR_TESSDATA_DIR at a tessdata_best directory overrides it per process, which
+# is how the slower, more accurate model would be switched on (LLD 6.2).
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # Unprivileged, and owns nothing it does not need to. A pipeline that shells out
