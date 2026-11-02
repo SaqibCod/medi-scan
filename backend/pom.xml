@@ -248,7 +248,15 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<excludedGroups>eval</excludedGroups>
+					<!--
+					  eval: real model calls, run on purpose with -Peval.
+					  ocr-tuning: the phase 4 parameter sweep, minutes of real
+					  Tesseract runs over dozens of rendered pages, run with
+					  -Pocr-tuning. The `ocr` tag is deliberately NOT here - those
+					  integration tests belong in verify and skip themselves with
+					  a message when tesseract is missing (phase-4-lld 12.2).
+					-->
+					<excludedGroups>eval,ocr-tuning</excludedGroups>
 				</configuration>
 			</plugin>
 		</plugins>
@@ -285,6 +293,37 @@
 							-->
 							<includes>
 								<include>**/EvalRunner.java</include>
+								<!--
+								  Phase 4's gate: the same cases read from a
+								  photograph, scored separately from the text
+								  cases (docs/phase-4-lld.md 10.2).
+								-->
+								<include>**/OcrEvalRunner.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!--
+		  The phase 4 OCR parameter sweep (docs/phase-4-lld.md 10.3). Real
+		  Tesseract over every rendered variant at each page-segmentation mode,
+		  which takes minutes and no LLM quota at all - the whole point of
+		  scoring OCR text quality separately is that it costs nothing but time.
+		  Same override reasoning as the eval profile above.
+		-->
+		<profile>
+			<id>ocr-tuning</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration combine.self="override">
+							<groups>ocr-tuning</groups>
+							<includes>
+								<include>**/OcrTuningRun.java</include>
 							</includes>
 						</configuration>
 					</plugin>
