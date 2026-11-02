@@ -134,10 +134,29 @@ public class TempFileStore {
 		}
 	}
 
-	/** Deletes the temp file behind a job source, if it has one. */
+	/**
+	 * Deletes the temp file behind a job source, if it has one.
+	 *
+	 * <p>Exhaustive over {@link JobSource} rather than testing for the one case that has a file.
+	 * {@code CLAUDE.md} rule 2 is that an upload never outlives its job, and a new file-backed
+	 * source added without a branch here would break that silently - which is precisely what
+	 * happened when phase 4 added {@link JobSource.ImageFile} to a method that only knew about
+	 * PDFs, leaving every uploaded photo on disk. A switch over the sealed type makes the
+	 * compiler raise that, instead of a temp-directory assertion three test classes later.
+	 */
 	public void deleteQuietly(JobSource source) {
-		if (source instanceof JobSource.PdfFile(Path path)) {
-			deleteQuietly(path);
+		if (source == null) {
+			return;
+		}
+
+		switch (source) {
+			case JobSource.PdfFile(Path path) -> deleteQuietly(path);
+			case JobSource.ImageFile(Path path, JobSource.ImageKind kind) -> deleteQuietly(path);
+			// Held in memory, so there is nothing on disk to remove.
+			case JobSource.RawText ignored -> {
+			}
+			case JobSource.Sample ignored -> {
+			}
 		}
 	}
 

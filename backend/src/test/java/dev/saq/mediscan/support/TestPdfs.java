@@ -60,18 +60,50 @@ public final class TestPdfs {
 	 * is where it starts working.
 	 */
 	public static byte[] imageOnly() {
-		try (PDDocument document = new PDDocument()) {
-			PDPage page = new PDPage();
-			document.addPage(page);
+		return scannedPages(1);
+	}
 
-			PDImageXObject image = LosslessFactory.createFromImage(document, scanLikeImage());
-			try (PDPageContentStream content = new PDPageContentStream(document, page)) {
-				content.drawImage(image, 40, 400, 520, 360);
+	/**
+	 * A PDF of {@code pages} scanned pages: each carries a raster image and no text at all.
+	 *
+	 * <p>The multi-page form of {@link #imageOnly()}, for the scanned-page fallback. What the
+	 * image shows does not matter to a test using {@code FakeOcrEngine} - the engine is scripted
+	 * - but the pages must really be renderable, because the fallback renders them before it
+	 * calls the engine.
+	 */
+	public static byte[] scannedPages(int pages) {
+		try (PDDocument document = new PDDocument()) {
+			for (int page = 0; page < pages; page++) {
+				addScannedPage(document);
 			}
 			return toBytes(document);
 		}
 		catch (IOException ex) {
-			throw new IllegalStateException("could not build an image-only test PDF", ex);
+			throw new IllegalStateException("could not build a scanned test PDF", ex);
+		}
+	}
+
+	/**
+	 * A PDF whose first pages carry real text and whose last pages are scans.
+	 *
+	 * <p>The {@code MIXED} case: a report printed from a system, with a scanned addendum stapled
+	 * on. Both halves have to come back, in order.
+	 *
+	 * @param textPages one list of lines per text-layer page
+	 * @param scannedPages how many image-only pages follow them
+	 */
+	public static byte[] mixedPages(List<List<String>> textPages, int scannedPages) {
+		try (PDDocument document = new PDDocument()) {
+			for (List<String> lines : textPages) {
+				addTextPage(document, lines);
+			}
+			for (int page = 0; page < scannedPages; page++) {
+				addScannedPage(document);
+			}
+			return toBytes(document);
+		}
+		catch (IOException ex) {
+			throw new IllegalStateException("could not build a mixed test PDF", ex);
 		}
 	}
 
@@ -120,6 +152,17 @@ public final class TestPdfs {
 				content.newLine();
 			}
 			content.endText();
+		}
+	}
+
+	/** One page holding a raster image and nothing a text stripper can return. */
+	private static void addScannedPage(PDDocument document) throws IOException {
+		PDPage page = new PDPage();
+		document.addPage(page);
+
+		PDImageXObject image = LosslessFactory.createFromImage(document, scanLikeImage());
+		try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+			content.drawImage(image, 40, 400, 520, 360);
 		}
 	}
 

@@ -144,11 +144,80 @@ column spacing included. A separate canary test runs a unique fake name and id
 through the whole pipeline and asserts they appear in no log line, no database
 column, no model prompt, and no response body.
 
+## Reading photos and scans (OCR)
+
+A photo of a report, or a PDF whose pages are images, is read with Tesseract
+before anything else happens to it. Three things about that are worth stating
+plainly.
+
+**The image never reaches a model.** Only the OCR text does, and only after
+masking, exactly like text pulled from a PDF. No model in this app sees a
+picture.
+
+**OCR runs outside the server process.** Tesseract is the `tesseract`
+command-line program, started as a child process — not a native library loaded
+into the JVM. The difference matters: a crash in native code inside the server
+takes the whole server down, while a child process can be killed and its memory
+comes back when it exits. The specifics:
+
+- **No shell.** Arguments are passed as a list, so nothing in a file name or a
+  path can be read as a command.
+- **A timeout per page and a budget per report.** A page that overruns is killed
+  (`destroyForcibly`), and the report fails rather than hanging.
+- **Capped output.** The program's stdout is read on a separate thread with a
+  byte limit; past it, the process is killed. Its stderr is drained into a small
+  bounded buffer so a full pipe can't deadlock it, and is never logged.
+- **One page at a time,** under a single permit. The production box has 2 GB of
+  RAM, and OCR is the most memory-hungry step in the pipeline.
+- **An image size limit.** The pixel dimensions are read from the file header
+  *before* anything is decoded, and an image over 40 megapixels is refused as
+  unreadable. A 2 KB file can legitimately claim to be 50,000 × 50,000 pixels;
+  decoding it first to find out is how a decompression bomb wins.
+- **A page limit.** At most 10 pages per report go through OCR.
+- **Nothing from OCR is logged** — not the text, not a word of it, not the file
+  name, not Tesseract's stderr. A page logs its exit code, how long it took, how
+  many words it found, and their mean confidence.
+
+**A value OCR wasn't sure about is never flagged.** This is the one place where
+OCR changes what you see. OCR misreads digits — `5.4` becomes `54`, `0.8`
+becomes `O.8`, a decimal point goes missing — and a wrong number with a
+confident `HIGH` next to it is the worst thing this app could show anyone. So
+Tesseract is asked for a confidence score for every word it reads, and each
+value is checked against the confidence of the characters it actually came from:
+
+- Below the threshold, the value keeps the text as read, but gets no flag
+  (`UNKNOWN`) and no numeric value, and is left out of trend charts.
+- The same applies to a reference range read with low confidence, and to the
+  collection date.
+- The results page says the text came from a photo or scan and asks you to check
+  each value against the paper report.
+
+The cost of that rule is that some perfectly good values come back marked
+unclear. That is the intended trade: unclear is recoverable by looking at your
+report, a confidently wrong flag is not.
+
+**Measured on the evaluation set** (Phase 4, OCR cases rendered from the same 31
+synthetic reports — method in `docs/evaluation.md`):
+
+| | Result |
+|---|---|
+| Dangerous flag errors on OCR cases | _filled in from the Phase 4 run_ |
+| Values marked unclear by the confidence rule | _filled in from the Phase 4 run_ |
+| Value accuracy on matched rows | _filled in from the Phase 4 run_ |
+| Personal-data leaks on OCR cases | _filled in from the Phase 4 run_ |
+| Confidence threshold in use | _filled in from the Phase 4 run_ |
+
+OCR also gives masking a harder job: it can garble a name badly enough that the
+patterns that would have caught it no longer match, which is the case already
+listed under the masking limits above. The evaluation measures leaks on OCR
+cases separately for that reason.
+
 ## What is stored, and for how long
 
 | Data | Stored | Deleted |
 |---|---|---|
 | Uploaded file | Temp file on disk, never the database | In a `finally` block right after text extraction |
+| Images prepared for OCR (a photo converted, or a scanned page rendered) | Temp file on disk, never the database | As soon as that page has been read, and in a `finally` block on failure |
 | Raw extracted text | Memory only — never disk, never the database | When masking finishes |
 | Masked text, values, summary | Database | Guests: 24 hours. Signed-in users: 30 days. |
 | Chat questions and answers | **Never stored**, for guests or users | Discarded after streaming |

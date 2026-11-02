@@ -57,6 +57,10 @@ public class ReportResponseMapper {
 
 		ReportResponse.ReportResult result = new ReportResponse.ReportResult(
 				report.getCollectedOn(),
+				// A stored null is a report from before phase 4, when the only paths into the
+				// pipeline were a PDF text layer, pasted text and samples. TEXT_LAYER is what it
+				// was, so saying so is more accurate than omitting the field (contract 4.2).
+				TextSource.orTextLayer(report.getTextSource()),
 				rows,
 				summary != null ? summary.getPatientSummary() : "",
 				summary != null ? summary.getHighlights() : List.of(),

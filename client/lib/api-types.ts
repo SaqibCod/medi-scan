@@ -10,12 +10,19 @@
  * - Removing or renaming a field, changing a type, or changing what a status code means is
  *   breaking: bump the contract version and update this file in the same commit.
  * - Unknown enum values: treat an unknown `flag` as `UNKNOWN`, an unknown `status` as
- *   `PROCESSING` (keep polling), and an unknown error `code` as a generic error.
+ *   `PROCESSING` (keep polling), an unknown error `code` as a generic error, and an unknown
+ *   or missing `textSource` as `OCR` (the cautious reading — the note gets shown, not hidden).
  */
 
 export type ReportStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
 export type SourceType = "PDF" | "IMAGE" | "TEXT" | "SAMPLE";
 export type Flag = "LOW" | "NORMAL" | "HIGH" | "UNKNOWN";
+
+/**
+ * How the report's text was obtained (contract 4.2). `sourceType` can't answer this on its
+ * own: a scanned PDF is `sourceType: "PDF"` with `textSource: "OCR"`.
+ */
+export type TextSource = "TEXT_LAYER" | "OCR" | "MIXED";
 
 export interface SessionResponse {
   token: string;
@@ -52,6 +59,12 @@ export interface Biomarker {
 
 export interface ReportResult {
   collectedOn: string | null; // YYYY-MM-DD
+  /**
+   * Where the text came from. On an `OCR` or `MIXED` report, low-confidence values keep their
+   * `rawValue` but carry `flag: "UNKNOWN"` and `numericValue: null`. Treat a value this union
+   * doesn't cover as `OCR`.
+   */
+  textSource: TextSource;
   biomarkers: Biomarker[];
   summary: string;
   highlights: string[];

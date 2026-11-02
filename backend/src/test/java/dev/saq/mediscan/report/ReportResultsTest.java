@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 import dev.saq.mediscan.config.ReportErrorCode;
@@ -41,6 +42,10 @@ class ReportResultsTest extends PostgresTestBase {
 
 	@Autowired
 	ReportResultSaver saver;
+
+	/** Only to force a pre-phase-4 row shape, which no production code path can produce. */
+	@Autowired
+	JdbcClient jdbc;
 
 	private String token;
 	private UUID sessionId;
@@ -128,6 +133,7 @@ class ReportResultsTest extends PostgresTestBase {
 				.andExpect(jsonPath("$.error").value(nullValue()))
 
 				.andExpect(jsonPath("$.result.collectedOn").value("2026-09-28"))
+				.andExpect(jsonPath("$.result.textSource").value("TEXT_LAYER"))
 				.andExpect(jsonPath("$.result.biomarkers.length()").value(2))
 				.andExpect(jsonPath("$.result.summary").value("Your LDL cholesterol is high."))
 				.andExpect(jsonPath("$.result.highlights.length()").value(1))
@@ -139,6 +145,42 @@ class ReportResultsTest extends PostgresTestBase {
 				.andExpect(jsonPath("$.result.counts.normal").value(0))
 				.andExpect(jsonPath("$.result.counts.high").value(1))
 				.andExpect(jsonPath("$.result.counts.unknown").value(1));
+	}
+
+	@Test
+	@DisplayName("an OCR report reports textSource OCR")
+	void reportsOcrTextSource() throws Exception {
+		UUID reportId = fixtures.doneReport(sessionId, LocalDate.of(2026, 9, 28), TextSource.OCR);
+
+		mockMvc.perform(get("/api/reports/" + reportId).header("X-Session-Token", token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.textSource").value("OCR"));
+	}
+
+	@Test
+	@DisplayName("a mixed report reports textSource MIXED")
+	void reportsMixedTextSource() throws Exception {
+		UUID reportId = fixtures.doneReport(sessionId, null, TextSource.MIXED);
+
+		mockMvc.perform(get("/api/reports/" + reportId).header("X-Session-Token", token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.textSource").value("MIXED"));
+	}
+
+	@Test
+	@DisplayName("a report stored before phase 4 reports TEXT_LAYER rather than null")
+	void nullTextSourceReportsTextLayer() throws Exception {
+		// Every report that existed before this phase was a PDF text layer, pasted text or a
+		// sample - there was no OCR path to have produced it. So the honest answer for a null
+		// column is TEXT_LAYER, not a null the client would have to interpret (contract 4.2).
+		UUID reportId = fixtures.doneReport(sessionId, LocalDate.of(2026, 9, 28));
+		jdbc.sql("update report set text_source = null where id = :id")
+				.param("id", reportId)
+				.update();
+
+		mockMvc.perform(get("/api/reports/" + reportId).header("X-Session-Token", token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.textSource").value("TEXT_LAYER"));
 	}
 
 	@Test
@@ -196,7 +238,7 @@ class ReportResultsTest extends PostgresTestBase {
 		saver.saveDone(reportId, "Glucose 99 mg/dL 70-100", List.of(
 				new ReportResultSaver.BiomarkerRow(0, "Glucose", "glucose", "glucose", "99",
 						99.0, "mg/dL", "70-100", 70.0, 100.0, Flag.NORMAL)),
-				"Everything is in range.", List.of(), null);
+				"Everything is in range.", List.of(), null, TextSource.TEXT_LAYER);
 
 		mockMvc.perform(get("/api/reports/" + reportId).header("X-Session-Token", token))
 				.andExpect(jsonPath("$.result.collectedOn").value(nullValue()))
@@ -349,7 +391,7 @@ class ReportResultsTest extends PostgresTestBase {
 								null, null, Flag.UNKNOWN)),
 				"Your LDL cholesterol is high.",
 				List.of("LDL Cholesterol is 162 mg/dL, above the reference range of <100."),
-				LocalDate.of(2026, 9, 28));
+				LocalDate.of(2026, 9, 28), TextSource.TEXT_LAYER);
 
 		return reportId;
 	}

@@ -131,6 +131,7 @@ export function doneReport() {
     error: null,
     result: {
       collectedOn: "2026-09-28",
+      textSource: "TEXT_LAYER",
       biomarkers: [
         row("b1", "Total Cholesterol", "238", "<200", "HIGH", "total-cholesterol"),
         row("b2", "LDL Cholesterol", "162", "<100", "HIGH", "ldl-cholesterol"),
@@ -174,6 +175,21 @@ function row(
 /** The same report, still being read. */
 export function processingReport(status: "PENDING" | "PROCESSING" = "PROCESSING") {
   return { ...doneReport(), status, result: null };
+}
+
+/**
+ * The same results, read from a photo instead of a text layer (phase 4).
+ *
+ * `sourceType` changes too: a photo really was uploaded. The pair is the point — the client
+ * cannot infer one from the other, which is why `textSource` exists at all (contract 4.2).
+ */
+export function scannedReport(textSource: "OCR" | "MIXED" = "OCR") {
+  const base = doneReport();
+  return {
+    ...base,
+    sourceType: textSource === "OCR" ? "IMAGE" : "PDF",
+    result: { ...base.result, textSource },
+  };
 }
 
 /** The same report, failed with the given code. */

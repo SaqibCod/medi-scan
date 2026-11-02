@@ -233,17 +233,32 @@ class CreateReportTest extends PostgresTestBase {
 	// --- file type and signature -------------------------------------------
 
 	@Test
-	@DisplayName("a PNG is 415 UNSUPPORTED_FILE_TYPE until phase 4")
-	void refusesPng() throws Exception {
+	@DisplayName("a PNG is accepted from phase 4, and recorded as an IMAGE")
+	void acceptsPng() throws Exception {
 		byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x11, 0x22 };
 		MockMultipartFile file = new MockMultipartFile("file", "scan.png",
 				MediaType.IMAGE_PNG_VALUE, png);
 
-		// Declared consistently and a genuine PNG. The only thing wrong with it is that no
-		// extractor can read an image yet (contract section 4.1).
+		// Phase 4 registered an extractor that claims IMAGE, so the registry now finds one and
+		// the upload is accepted (contract 2.5, section 4.1). These bytes are not a decodable
+		// image, so the job will fail with UNREADABLE - which is a job outcome, not an upload
+		// error, and is exactly how the contract says an unreadable photo behaves.
 		mockMvc.perform(upload(file))
-				.andExpect(status().isUnsupportedMediaType())
-				.andExpect(jsonPath("$.code").value("UNSUPPORTED_FILE_TYPE"));
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.sourceType").value("IMAGE"))
+				.andExpect(jsonPath("$.status").value("PENDING"));
+	}
+
+	@Test
+	@DisplayName("a JPEG is accepted too")
+	void acceptsJpeg() throws Exception {
+		byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10 };
+		MockMultipartFile file = new MockMultipartFile("file", "photo.jpg",
+				MediaType.IMAGE_JPEG_VALUE, jpeg);
+
+		mockMvc.perform(upload(file))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.sourceType").value("IMAGE"));
 	}
 
 	@Test
@@ -330,15 +345,17 @@ class CreateReportTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("a rejected PNG leaves no temp file behind")
-	void rejectedPngLeavesNoTempFile() throws Exception {
-		byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2 };
+	@DisplayName("a PNG whose signature does not match leaves no temp file behind")
+	void mismatchedPngLeavesNoTempFile() throws Exception {
+		// Declared PNG, actually not. Phase 4 accepts images, so the type is no longer what
+		// rejects this - the signature sniff is, and it still runs before the file is written.
 		MockMultipartFile file = new MockMultipartFile("file", "scan.png",
-				MediaType.IMAGE_PNG_VALUE, png);
+				MediaType.IMAGE_PNG_VALUE, "not a png at all".getBytes());
 
-		mockMvc.perform(upload(file)).andExpect(status().isUnsupportedMediaType());
+		mockMvc.perform(upload(file))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("FILE_SIGNATURE_MISMATCH"));
 
-		// The signature is checked before the file is written, so there was never a file.
 		assertThat(tempFileCount()).isZero();
 	}
 

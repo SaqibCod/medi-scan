@@ -49,7 +49,8 @@ Each report's data changes form as it moves through the pipeline.
 | # | Stage | Data form | Where it lives | Contains personal data? | Lifetime |
 |---|---|---|---|---|---|
 | 1 | Upload | File bytes (PDF/image) or text | Temp file on EC2 disk | Possibly | Deleted right after step 2, even on failure |
-| 2 | Extraction | Raw text (String) | JVM memory only | Possibly | Dropped right after step 3 |
+| 1b | OCR preparation | Prepared grayscale PNG (images and scanned pages only) | Temp file on EC2 disk, and a decoded image in JVM memory while it is written | Possibly | Deleted as soon as the page is OCR'd, even on failure |
+| 2 | Extraction | Raw text (String), plus per-word OCR confidence when OCR ran | JVM memory only | Possibly | Dropped right after step 3 (confidence is kept until validation, step 5) |
 | 3 | Masking | Masked text | JVM memory until the report is DONE, then the `report_text` table | No (best-effort) | Report lifetime |
 | 4 | Step-1 LLM | Extraction JSON from the model | JVM memory only | No | Dropped after step 5 |
 | 5 | Validation | Validated biomarker rows + `collected_on` | `biomarker`, `report` tables | No | Report lifetime |
@@ -383,18 +384,19 @@ flowchart TD
     S["Job starts<br/>status = PROCESSING"] --> T{"Source type?"}
     T -->|"text / sample"| RT["Use text as is"]
     T -->|"PDF"| PDF["PDFBox text extraction"]
-    T -->|"image"| OCR["Tesseract OCR<br/>one job at a time"]
+    T -->|"image"| PREP["Check pixel size from the header<br/>EXIF rotate, grayscale, scale<br/>write a temp PNG"]
+    PREP --> OCR["tesseract child process<br/>one at a time, TSV out<br/>text + per-word confidence"]
     PDF --> CHK{"Enough text<br/>on each page?"}
     CHK -->|"yes"| RT
-    CHK -->|"no, scanned"| RENDER["Render page at 300 DPI"] --> OCR
+    CHK -->|"no, scanned"| RENDER["Render page at 300 DPI, grayscale"] --> OCR
     OCR --> RT
-    RT --> DEL["Delete temp file"]
+    RT --> DEL["Delete temp files"]
     DEL --> MASK["Mask personal data<br/>regex + OpenNLP"]
     MASK --> INT["Value integrity check"]
     INT --> CAP{"Daily LLM cap<br/>reached?"}
     CAP -->|"yes"| FAIL["status = FAILED<br/>error = CAPACITY"]
     CAP -->|"no"| L1["Step-1 LLM call<br/>biomarkers + collection date"]
-    L1 --> V["Validate in code<br/>value in source, parse numbers,<br/>recompute flags, parse date"]
+    L1 --> V["Validate in code<br/>value in source, parse numbers,<br/>recompute flags, parse date,<br/>low-confidence OCR values → UNKNOWN"]
     V --> L2["Step-2 LLM call<br/>summary from validated data"]
     L2 --> SAVE[("One transaction:<br/>report_text + biomarkers +<br/>collected_on + report_summary")]
     SAVE --> DONE["status = DONE"]
@@ -405,8 +407,13 @@ flowchart TD
 **Step details**
 
 1. **Extraction.** The job picks a path by source type. Scanned PDF pages are detected per page (for example, fewer than 50 characters of text) so mixed PDFs work too. OCR is guarded by a semaphore with one permit.
-   - **Until the Phase 4 OCR fallback exists:** a PDF with no usable text layer has nowhere to fall back to, so the job fails with `UNREADABLE`. Image uploads don't reach the job at all — they are rejected at upload with `415 UNSUPPORTED_FILE_TYPE` (contract 4.1).
-2. **Temp file deletion.** Happens right after extraction in a `finally` block.
+   - **How OCR runs.** The `tesseract` program is started as a child process, with its arguments as a list and no shell, and asked for TSV on stdout. One run gives both the text and a confidence for every word. The process gets a per-page timeout and the report gets a whole-OCR time budget; its stdout is capped, and it is killed if it exceeds either. Nothing about it reaches the log but the exit code, the timing, the word count and the mean confidence.
+   - **Images.** The pixel size is read from the file header before anything is decoded, so a small file that would expand to gigabytes never gets decoded: over the pixel cap is `UNREADABLE`. The image is then EXIF-rotated, converted to grayscale, scaled into the range Tesseract reads best, and written as a temp PNG. Images are never sent to a model — only the OCR text, after masking.
+   - **Scanned and mixed PDFs.** Each low-text page is rendered at 300 DPI in grayscale and OCR'd in place, so page order is kept. More low-text pages than the OCR page limit is `DOCUMENT_TOO_LONG`. A page whose mean confidence is below the floor counts as empty rather than feeding garbage to the model. The length rules then apply to the combined text as before.
+   - **Which text came from where.** The report stores `text_source`: `TEXT_LAYER` when no page was OCR'd, `OCR` when every page with text was, `MIXED` otherwise. It is written in the final transaction with `DONE`, so a failed report has none. A report created before Phase 4 has none either, and the API reports it as `TEXT_LAYER`, which is what it was.
+   - **When OCR is off** (`OCR_ENABLED=false`, or the `local` profile with no `tesseract` on the box): images are rejected at upload with `415 UNSUPPORTED_FILE_TYPE`, and a PDF with no usable text layer has nowhere to fall back to, so the job fails with `UNREADABLE`.
+   - **No new failure codes.** An unreadable or over-large image is `UNREADABLE`, too many scanned pages is `DOCUMENT_TOO_LONG`, and a timeout, an output overrun or a non-zero exit is `EXTRACTION_FAILED`.
+2. **Temp file deletion.** Happens right after extraction in a `finally` block. This covers the prepared PNGs and rendered pages as well as the upload itself.
 3. **Masking.**
    - Regex rules run first, then OpenNLP.
    - Date masking only applies next to birth-date labels ("DOB", "Date of Birth"), so the collection date survives for trends.
@@ -421,6 +428,7 @@ flowchart TD
    - Rows whose `rawValue` isn't in the masked text are dropped.
    - Numbers are re-parsed from the raw strings, and flags are recomputed.
    - `collectedOn` is kept only if it parses as a real date that appears in the masked text and isn't in the future. Otherwise it's `null`.
+   - **On an OCR or mixed report,** each surviving value is looked up in the per-word confidence from the OCR run. A value whose characters were read below the confidence threshold keeps its printed text but gets `UNKNOWN` and no `numericValue`, so it never reaches a trend line. A low-confidence reference range loses `refLow` and `refHigh` (and so also gives `UNKNOWN`), and a low-confidence collection date becomes `null`. The count of such rows is recorded as a number in the daily stats. A misread digit must not produce a confident flag.
    - If zero rows survive, the job fails with `NO_RESULTS_FOUND`.
 7. **Step-2 LLM call.** Input is only the validated biomarker list as JSON. The model writes the summary and picks highlights only from rows flagged `LOW` or `HIGH`.
 8. **Saving.** The masked text, the biomarkers, `collected_on`, the summary, and `status = DONE` are all written in one transaction at the end, so a report is never left with biomarkers but no summary. Until that transaction commits, the masked text exists only in JVM memory, which means **a report that fails stores no text at all**.
@@ -694,6 +702,7 @@ flowchart TD
 - Raw session tokens or refresh tokens (hashes only); access tokens (not stored at all)
 - Any token in logs, including in exception messages and request logging
 - Any report content in logs. Logs hold ids, status changes, error codes, token counts, and timings only.
+- OCR output, Tesseract's stdout or stderr, and file names. An OCR page logs its exit code, duration, word count and mean confidence, and nothing else.
 
 ---
 

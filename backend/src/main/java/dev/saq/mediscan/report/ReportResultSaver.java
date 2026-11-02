@@ -48,11 +48,12 @@ public class ReportResultSaver {
 	 */
 	@Transactional
 	public boolean saveDone(UUID reportId, String maskedText, List<BiomarkerRow> biomarkers,
-			String patientSummary, List<String> highlights, LocalDate collectedOn) {
+			String patientSummary, List<String> highlights, LocalDate collectedOn,
+			TextSource textSource) {
 
 		// Conditional on PROCESSING. A deleted report fails here, before any child row is
 		// inserted (LLD 7.2).
-		if (!statuses.markDone(reportId, collectedOn)) {
+		if (!statuses.markDone(reportId, collectedOn, textSource)) {
 			log.info("report vanished before save id={}", reportId);
 			return false;
 		}

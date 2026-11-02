@@ -301,9 +301,24 @@ class EvalRunner extends PostgresTestBase {
 		return TestPdfs.withText(linesOf(evalCase.reportText()));
 	}
 
+	/**
+	 * Repeats {@code block} until the text is over the document limit <em>and stays over it</em>.
+	 *
+	 * <p>The margin is the point. Stopping at the first length past {@code max-text-chars}
+	 * overshot by one 208-character block, and {@code TextNormalizer} - which runs before the
+	 * length check - then removed about 770 characters by collapsing the runs of blank lines
+	 * this repetition creates. The text arrived at the check at 49,438 characters against a
+	 * 50,000 limit, so the case did not fail as its answer key expects: it went to the model
+	 * instead, as a 49 KB prompt. A case that silently stopped testing the thing it was written
+	 * to test is exactly what an evaluation exists to not have (found 2026-11-02).
+	 *
+	 * <p>10% past the limit is far more than normalisation can remove, and still nowhere near
+	 * large enough to be slow to build.
+	 */
 	private String repeatPastLimit(String block) {
+		int target = maxTextChars + maxTextChars / 10;
 		StringBuilder repeated = new StringBuilder(block);
-		while (repeated.length() <= maxTextChars) {
+		while (repeated.length() <= target) {
 			repeated.append('\n').append(block);
 		}
 		return repeated.toString();

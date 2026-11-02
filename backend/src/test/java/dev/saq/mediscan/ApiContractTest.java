@@ -96,6 +96,23 @@ class ApiContractTest extends PostgresTestBase {
 	}
 
 	@Test
+	@DisplayName("a DONE report's result has exactly the documented fields")
+	void doneResultFields() throws Exception {
+		UUID reportId = fixtures.doneReport(sessionId, java.time.LocalDate.of(2026, 9, 28));
+		fixtures.biomarker(reportId, 0, "LDL", "ldl", "ldl-cholesterol", 140.0, "mg/dL",
+				0.0, 100.0, Flag.HIGH);
+
+		JsonNode result = JSON.readTree(fetch(reportId)).get("result");
+
+		// Contract section 4.2 and 9.1. textSource was added in 2.5; an extra field here is an
+		// undocumented API change, and a missing one breaks the client's typed ReportResult.
+		assertThat(fieldsOf(result)).containsExactlyInAnyOrder(
+				"collectedOn", "textSource", "biomarkers", "summary", "highlights", "counts");
+		assertThat(fieldsOf(result.get("counts")))
+				.containsExactlyInAnyOrder("total", "low", "normal", "high", "unknown");
+	}
+
+	@Test
 	@DisplayName("GET /api/samples has exactly the documented fields")
 	void sampleResponseFields() throws Exception {
 		String body = mockMvc.perform(get("/api/samples"))
@@ -308,13 +325,20 @@ class ApiContractTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("the contract version was bumped for the 2.4 changes")
+	@DisplayName("the contract version was bumped for the 2.5 OCR changes")
 	void contractVersionIsCurrent() throws Exception {
 		String contract = readContract();
 
-		// Phase 6b documents behavior only - the point cap, the null-unit series, the
-		// empty-page rule, and the IMAGE-absent note - no field was renamed or retyped.
-		assertThat(contract).contains("**Version:** 2.4");
+		// Phase 4 adds one optional field and widens one failure code's meaning, which 9.2
+		// makes a compatible change - hence a minor bump rather than 3.0.
+		assertThat(contract).contains("**Version:** 2.5");
+		assertThat(section(contract, "**2.5 (OCR)**", "**2.4**"))
+				.contains("textSource")
+				.contains("DOCUMENT_TOO_LONG")
+				.contains("UNREADABLE");
+
+		// Phase 6b's entry is still there, one level further down. It documents behavior only -
+		// the point cap, the null-unit series, the empty-page rule - with no field renamed.
 		assertThat(section(contract, "**2.4**", "**2.3**"))
 				.contains("100 most recent points")
 				.contains("empty `items` list")

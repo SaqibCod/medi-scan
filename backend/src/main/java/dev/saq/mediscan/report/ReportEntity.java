@@ -59,6 +59,13 @@ public class ReportEntity {
 	@Column(name = "collected_on")
 	private LocalDate collectedOn;
 
+	// How the text was read. Written with DONE and never updated, so it is null on every
+	// report that failed and on every report created before phase 4. Read through
+	// TextSource.orTextLayer, which turns that null into the fact it represents.
+	@Enumerated(EnumType.STRING)
+	@Column(name = "text_source")
+	private TextSource textSource;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -127,6 +134,14 @@ public class ReportEntity {
 
 	public LocalDate getCollectedOn() {
 		return collectedOn;
+	}
+
+	/**
+	 * How the text was read, as stored: null for a failed report and for anything created
+	 * before phase 4. Callers that answer the API use {@link TextSource#orTextLayer}.
+	 */
+	public TextSource getTextSource() {
+		return textSource;
 	}
 
 	public Instant getCreatedAt() {

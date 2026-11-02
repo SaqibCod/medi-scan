@@ -75,6 +75,18 @@ public class StatsRecorder implements LlmGateway.TokenRecorder, ReportJob.Pipeli
 		addToDailyStats("masking_conflicts", conflicts);
 	}
 
+	@Override
+	public void lowConfidenceValuesFound(int count) {
+		if (count <= 0) {
+			return;
+		}
+		// What the OCR safety rule costs readers, as one number per day. A rise means photos
+		// are being read worse than they were - a degraded install, a bad --psm, or simply
+		// poorer uploads - and it is the only signal that says so before anyone complains
+		// (docs/phase-4-lld.md section 8).
+		addToDailyStats("ocr_low_confidence_values", count);
+	}
+
 	// --- job outcomes --------------------------------------------------------
 
 	@Override

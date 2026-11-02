@@ -159,18 +159,29 @@ class ReportEndToEndTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("a PNG is refused at upload, before any job exists")
-	void pngIsRefused() throws Exception {
+	@DisplayName("a PNG that is not a decodable image is accepted, then fails as UNREADABLE")
+	void undecodablePngFailsInTheJob() throws Exception {
+		// Phase 4 accepts images, so this is no longer an upload error. A PNG signature with
+		// nothing usable behind it is a job outcome instead: the preparer cannot read a header
+		// from it, which the contract calls UNREADABLE (4.1, 8.2).
 		byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2 };
 		MockMultipartFile file = new MockMultipartFile("file", "scan.png",
 				MediaType.IMAGE_PNG_VALUE, png);
 
-		mockMvc.perform(multipart("/api/reports")
+		String body = mockMvc.perform(multipart("/api/reports")
 				.file(file)
 				.param("consent", "true")
 				.header("X-Session-Token", token))
-				.andExpect(status().isUnsupportedMediaType())
-				.andExpect(jsonPath("$.code").value("UNSUPPORTED_FILE_TYPE"));
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.sourceType").value("IMAGE"))
+				.andReturn().getResponse().getContentAsString();
+
+		UUID reportId = UUID.fromString(
+				body.replaceAll(".*\"id\"\\s*:\\s*\"([^\"]+)\".*", "$1"));
+		awaitStatus(reportId, "FAILED");
+
+		mockMvc.perform(get("/api/reports/" + reportId).header("X-Session-Token", token))
+				.andExpect(jsonPath("$.error.code").value("UNREADABLE"));
 	}
 
 	@Test

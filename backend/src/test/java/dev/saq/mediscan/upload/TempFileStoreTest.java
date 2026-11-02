@@ -131,6 +131,25 @@ class TempFileStoreTest {
 		// Sources with no file must be a no-op, not a failure.
 		store.deleteQuietly(new JobSource.RawText("pasted"));
 		store.deleteQuietly(new JobSource.Sample("cbc", "sample text"));
+		store.deleteQuietly((JobSource) null);
+	}
+
+	@Test
+	@DisplayName("deleteQuietly removes the photo behind an image source")
+	void deletesAnUploadedImage() throws IOException {
+		// Regression: phase 4 added ImageFile while this method still only knew about PDFs, so
+		// every uploaded photo stayed in the temp directory after its job finished - a direct
+		// break of CLAUDE.md rule 2. The switch is exhaustive now, so the next source added
+		// will not compile without a decision here; this pins the behaviour as well.
+		TempFileStore store = store();
+
+		for (JobSource.ImageKind kind : JobSource.ImageKind.values()) {
+			Path file = store.create();
+
+			store.deleteQuietly(new JobSource.ImageFile(file, kind));
+
+			assertThat(file).as("an uploaded %s must not outlive its job", kind).doesNotExist();
+		}
 	}
 
 	@Test

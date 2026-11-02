@@ -129,6 +129,134 @@ The phrase `you have` is on the list as a diagnosis marker; here it is plainly
 descriptive. Read and accepted as a false positive of the phrase list, not a
 problem with the summary.
 
+## Phase 4: the OCR sweep
+
+OCR text quality is measured **without the model**. A value that never made it
+into the OCR text cannot be recovered by any model, and one that did will pass
+the support check, so the quality of the OCR text bounds the quality of the whole
+run — and bounding it costs no API quota, which is what made a parameter sweep
+affordable (LLD 10.3).
+
+Cases are not re-keyed. `OcrCaseRenderer` renders the **existing** `report.txt`
+of ten cases into six shapes of file — clean scan, phone photo, low-res, rotated
+with an EXIF tag, scanned PDF, mixed PDF — so every answer key is reused
+unchanged and a disagreement cannot be explained away as a different report.
+Rendering is seeded per case, so the same case produces the same image on every
+run.
+
+**Accepted run: `eval/results/ocr-tuning-20261102-031437.md`**, Tesseract 5.4.0
+locally with the system `eng` model, 10 cases × 6 variants × 3 modes, 246 s.
+(`eval/results/` is gitignored, so the numbers that matter are reproduced here;
+re-run with `./mvnw test -Pocr-tuning`. Two earlier runs on 2026-11-01 are
+superseded — they are the evidence for findings 1 and 2 below, not measurements
+of the shipped pipeline.)
+
+| Setting | Chosen | Why |
+|---|---|---|
+| `ocr.psm` | **4** | psm 3 was worse on every variant (74% value recovery on scanned PDFs against 90%). psm 6 tied with 4 on accuracy but assumes one uniform block, a worse fit for a two-column lab layout. |
+| `ocr.min-value-confidence` | **80** | See the residual risk below. |
+| tessdata | system `eng` | `tessdata_best` was not installed, so it was not measured. Open item. |
+
+Value recovery at psm 4, monospace: clean scan 94%, low-res 91%, rotated 91%,
+scanned PDF 90%, mixed PDF 90%, phone photo 82%.
+
+### The threshold trade-off, and the residual risk
+
+Two numbers decide this, both measured over the values OCR got **wrong**:
+
+- **unclear@T** — of the values OCR read correctly, the share the threshold
+  refuses to flag. The cost, paid by every reader of a photo.
+- **risky@T** — of the values OCR read *wrongly*, the share sitting on a row it
+  read confidently anyway. These are the candidates for a confident wrong flag.
+
+| Threshold | unclear (cost) | risky (residual) |
+|---|---|---|
+| 80 | 2–6% | 0–50% |
+| 90 | 8–13% | **0% on every variant** |
+
+**80 is the accepted setting.** It is not the safest one: 90 drives the residual
+to zero on every variant, and 80 does not. The accepted position is that the
+absolute numbers are small — on clean scans it is 2 of the 4 values OCR misread
+— and that marking roughly a fifth as many values unclear is worth that. This is
+recorded as accepted risk rather than as a clean result: if a dangerous flag
+error ever appears on an OCR case, raise the threshold to 90 first.
+
+### Text cases after Phase 4: no regression
+
+Re-run on 2026-11-02 (`eval/results/20261102-062844/`), 31/31 cases, **0 real model calls** —
+entirely from the response cache, so this measures the pipeline rather than the model's mood.
+Every figure matches the committed baseline: row recall and precision 100%, unit, range,
+numeric, date and status accuracy 100%, flag accuracy 100%, **dangerous flag errors 0**,
+invented numbers 0, injection case not followed, and the same two known `NAME` leaks plus the
+one known `ADDRESS` gap. Nothing in Phase 4 moved a text-case number.
+
+Status accuracy returning 100% is the part worth naming: it includes `too-long` failing with
+`DOCUMENT_TOO_LONG` again, which it had quietly stopped doing (findings item 3).
+
+### The full-pipeline OCR gate
+
+`OcrEvalRunner` runs the same ten cases as photographs through the entire real pipeline and
+applies LLD 10.4's two limits — zero dangerous flag errors, zero in-scope leaks — scored
+**separately** from the text cases, because OCR loses roughly one value in ten and a recall
+limit here would fail for a property of photographs rather than a defect.
+
+**Status as of 2026-11-02: the pipeline is proven on OCR, the gate is not yet scored.**
+
+One case has a complete, scored run — `eval/results/ocr-eval-20261102-084128.md`:
+
+| case | textSource | matched / expected | unclear | dangerous flag errors | leaks | ms |
+|---|---|---:|---:|---:|---:|---:|
+| `boundary-values` | OCR | 4 / 4 | 0 | **0** | **0** | 903 |
+
+That is the whole path working end to end on a photograph: render → OCR → masking → the real
+model → validation → flags, with every expected row recovered, nothing marked unclear, no
+dangerous flag error and no planted PII escaping. It is **not** the gate: one case of ten, and
+the written report says so in a banner above the figures.
+
+The remaining nine are blocked on provider capacity (findings item 6) — `gemini-3.8-flash`
+answers a listing call in 0.44 s but 503s or hangs on generation, so those cases fail with
+`LLM_UNAVAILABLE`. Three safety checks keep that from being reported as a clean sheet, and all
+three run **before** the two gate limits are applied:
+
+1. at least one matched row exists, or the run measured nothing;
+2. no case failed with a provider-side code — `LLM_UNAVAILABLE`, `CAPACITY` or
+   `EXTRACTION_FAILED`, as distinct from `UNREADABLE` and `DOCUMENT_TOO_LONG`, which are real
+   verdicts about a document;
+3. the run was not stopped early by the call budget.
+
+A run that trips any of them fails with that reason instead of two reassuring zeroes, and the
+report is stamped `NOT A VALID GATE RESULT` — including for a filtered investigation run like
+the one above.
+
+### Findings from the sweep
+
+1. **A CRLF bug in `TsvLineBuilder`, found by this sweep and fixed.** Tesseract
+   writes CRLF on Windows and the text column is the last field on a row, so
+   splitting its TSV on `"\n"` left a carriage return glued to every word.
+   `TextNormalizer` then turned each into a newline, and a lab table reached the
+   model as one word per line. Nothing failed loudly — values still matched as
+   whole tokens — but no line looked like a result row, so masking protected
+   nothing and the confidence lookup had no rows to prefer. Planted PII surviving
+   OCR verbatim went from 47% to ~100% once it was fixed, which is the privacy
+   half of the same bug. Production (Linux) never saw it; every developer machine
+   did.
+
+2. **Tesseract's global binarisation loses the dark side of an unevenly lit
+   page.** A synthetic lighting ramp down to 70% brightness made 6 of 10 cases
+   unreadable; running `tesseract` by hand on one returns only the bright-hand
+   column. The page is perfectly legible to a person. This is the evidence that
+   would justify revisiting O8's "no thresholding in Java" — adaptive
+   thresholding is the standard fix. The committed phone-photo variant uses a
+   gentler 85% ramp so it measures digit accuracy rather than binarisation.
+
+3. **Proportional fonts cost far more than monospace.** A proportional clean scan
+   marks 53% of values unclear at threshold 90 (32% at 80), against 9% for
+   monospace. Worth knowing before a lab that prints proportional turns up.
+
+4. **Comparators are the weak class.** `≥5.0` was read as `25.0` — the comparator
+   lost and the digit kept, which is exactly the shape the confidence rule exists
+   to catch. `≤` is routinely read as `<`.
+
 ## Known limits
 
 Measured, not estimated. The same two limits are recorded as approved

@@ -6,6 +6,7 @@ import { Disclaimer } from "@/components/shell/disclaimer";
 import { RESULTS_DISCLAIMER_EXTRA } from "@/lib/copy";
 import { CountTiles, filterLabel, type CountFilter } from "./count-tiles";
 import { GuestExpiryNote } from "./guest-expiry-note";
+import { OcrNote } from "./ocr-note";
 import { ReportHeader } from "./report-header";
 import { ResultsTable } from "./results-table";
 import { SummaryCard } from "./summary-card";
@@ -47,6 +48,8 @@ export function ResultsView({
       <SummaryCard result={result} />
 
       <CountTiles counts={result.counts} value={filter} onChange={setFilter} />
+
+      <OcrNote textSource={result.textSource} />
 
       <ResultsTable
         biomarkers={shown}

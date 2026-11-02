@@ -87,17 +87,23 @@ public class ReportStatusService {
 	 * child rows are inserted, so a report deleted mid-job fails this check and the whole
 	 * transaction rolls back rather than inserting orphans.
 	 *
+	 * <p>{@code textSource} is written here, with {@code DONE}, rather than when extraction
+	 * finished. A report that fails therefore stores none at all, which matches how the rest of
+	 * a failed report is stored: nothing but the failure code.
+	 *
 	 * @return {@code true} when the report was still {@code PROCESSING} and is now
 	 *     {@code DONE}; {@code false} means the caller must roll back
 	 */
-	public boolean markDone(UUID reportId, LocalDate collectedOn) {
+	public boolean markDone(UUID reportId, LocalDate collectedOn, TextSource textSource) {
 		int updated = jdbc.sql("""
 				update report
-				   set status = 'DONE', collected_on = :collectedOn, finished_at = :now
+				   set status = 'DONE', collected_on = :collectedOn,
+				       text_source = :textSource, finished_at = :now
 				 where id = :id and status = 'PROCESSING'
 				""")
 				.param("id", reportId)
 				.param("collectedOn", collectedOn)
+				.param("textSource", textSource == null ? null : textSource.name())
 				.param("now", SqlTime.utc(Instant.now(clock)))
 				.update();
 		return updated == 1;

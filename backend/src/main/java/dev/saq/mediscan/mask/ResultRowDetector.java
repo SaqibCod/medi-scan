@@ -121,8 +121,15 @@ public final class ResultRowDetector {
 		return new ProtectedSpans(rows);
 	}
 
-	/** Whether one line looks like it carries a lab result. */
-	static boolean isResultRow(String line) {
+	/**
+	 * Whether one line looks like it carries a lab result.
+	 *
+	 * <p>Public because the low-confidence rule needs the same judgement: it reads a value's OCR
+	 * confidence from the result rows the value appears on, and "result row" has to mean the
+	 * same thing there as it does here. The predicate is passed into {@code ConfidenceIndex}
+	 * rather than called from it, so {@code extract} does not gain a dependency on this package.
+	 */
+	public static boolean isResultRow(String line) {
 		if (!NUMBER.matcher(line).find()) {
 			return false;
 		}

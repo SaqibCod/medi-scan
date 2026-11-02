@@ -1,5 +1,6 @@
 package dev.saq.mediscan.session;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -26,10 +27,23 @@ public class SessionService {
 
 	private final SessionRepository repository;
 	private final Duration ttl;
+	private final Clock clock;
 
-	public SessionService(SessionRepository repository, MediScanProperties properties) {
+	/**
+	 * @param clock the application clock, not {@code Instant.now()}. A session's {@code
+	 *     expires_at} is written here and read by {@code RetentionJob}, which has always taken
+	 *     its time from this bean; writing from the system clock while the sweep reads from the
+	 *     injected one means the two disagree about when "now" is, and the sweep then deletes
+	 *     live sessions. Harmless in production, where they are the same instant - but it is the
+	 *     same defect that deleted the evaluation's own data mid-run
+	 *     ({@code backend/CLAUDE.md}, "Time")
+	 */
+	public SessionService(SessionRepository repository, MediScanProperties properties,
+			Clock clock) {
+
 		this.repository = repository;
 		this.ttl = Duration.ofHours(properties.session().ttlHours());
+		this.clock = clock;
 	}
 
 	/**
@@ -39,7 +53,7 @@ public class SessionService {
 	public SessionResponse create() {
 		String token = SecureTokens.newToken();
 
-		Instant now = Instant.now();
+		Instant now = Instant.now(clock);
 		Instant expiresAt = now.plus(ttl);
 
 		Session session = new Session(UUID.randomUUID(), SecureTokens.hash(token), now, expiresAt);
@@ -61,6 +75,6 @@ public class SessionService {
 		if (token == null || token.isBlank()) {
 			return Optional.empty();
 		}
-		return repository.findActiveByTokenHash(SecureTokens.hash(token), Instant.now());
+		return repository.findActiveByTokenHash(SecureTokens.hash(token), Instant.now(clock));
 	}
 }

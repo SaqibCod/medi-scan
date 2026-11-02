@@ -9,6 +9,7 @@ import {
   problem,
   processingReport,
   reportIs,
+  scannedReport,
   watchRequests,
 } from "./support";
 
@@ -238,38 +239,91 @@ test.describe("every upload refusal", () => {
   });
 });
 
-test.describe("photos, while OCR is off", () => {
-  test("show the notice, send nothing, and offer pasting", async ({ page }) => {
+test.describe("photos, with OCR on", () => {
+  /**
+   * A PNG that really is one: the signature, then a minimal 1x1 IHDR/IDAT/IEND.
+   *
+   * The browser only needs it to look like a PNG to the client-side checks, and the server is
+   * intercepted - but writing a real one keeps the test honest about what was sent, and a
+   * deliberately broken file would be testing the refusal path by accident.
+   */
+  function smallPng(): Buffer {
+    return Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+  }
+
+  test("a photo is accepted, sent, and the results say it was read from one", async ({ page }) => {
     await landingReady(page);
     const hosts = watchRequests(page);
-
-    let uploadAttempts = 0;
-    await page.route(`${API}/api/reports`, (route) => {
-      uploadAttempts += 1;
-      return route.fulfill({ status: 202, body: "{}" });
-    });
-
+    await acceptsUpload(page, [processingReport("PENDING"), scannedReport("OCR")]);
     await page.goto("/");
 
-    // The photo input is the phone tile's; the others carry accept="application/pdf".
-    await page.locator('#upload input[accept*="image/"]').setInputFiles({
+    // Addressed by its label rather than its `accept`: with OCR on, every input in the panel
+    // takes an image, so `accept*="image/"` no longer picks out the phone tile.
+    await page.getByLabel("Take a photo").setInputFiles({
       name: "report.png",
       mimeType: "image/png",
-      buffer: Buffer.from("\x89PNG\r\n\x1a\n", "latin1"),
+      buffer: smallPng(),
     });
 
-    await expect(page.getByText("Photos are coming soon.")).toBeVisible();
-    expect(uploadAttempts).toBe(0);
-
-    await page.getByRole("button", { name: "Paste text instead" }).click();
-    await expect(page.getByRole("tab", { name: "Paste text" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    // The phase-3 notice must be gone: offering a photo and then refusing it was the whole
+    // thing the flag existed to prevent, and so is refusing one the build can now read.
     await expect(page.getByText("Photos are coming soon.")).toHaveCount(0);
 
-    expect([...hosts].every((host) => host === "localhost:3210" || host.startsWith("localhost"))).toBe(
-      true,
+    await tickConsent(page);
+    await analyze(page).click();
+
+    await expect(page).toHaveURL(new RegExp(`/reports/${REPORT_ID}$`));
+    await expect(page.getByRole("heading", { name: /Your report/ })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // The reader is told their numbers came off a photograph, and asked to check them.
+    await expect(page.getByText("Read from a photo or scan.")).toBeVisible();
+    await expect(page.getByText(/OCR can misread numbers/)).toBeVisible();
+
+    // The image itself never leaves for anywhere but our own API.
+    expect([...hosts].every((host) => host.startsWith("localhost"))).toBe(true);
+  });
+
+  test("a mixed report names the part that was scanned", async ({ page }) => {
+    await landingReady(page);
+    await reportIs(page, scannedReport("MIXED"));
+    await page.goto(`/reports/${REPORT_ID}`);
+
+    await expect(page.getByText("Some pages were read from a scan.")).toBeVisible();
+    await expect(page.getByText("Read from a photo or scan.")).toHaveCount(0);
+  });
+
+  test("a text-layer report carries no OCR notice", async ({ page }) => {
+    await landingReady(page);
+    await reportIs(page, doneReport());
+    await page.goto(`/reports/${REPORT_ID}`);
+
+    await expect(page.getByText("Total Cholesterol").first()).toBeVisible();
+    await expect(page.getByText(/OCR can misread/)).toHaveCount(0);
+  });
+
+  test("the drop zone offers photos in words as well as in its accept attribute", async ({
+    page,
+  }) => {
+    await landingReady(page);
+    await page.goto("/");
+
+    // B4's rule, now running the other way: the build can read a photo, so the copy must say
+    // so rather than still promising it "soon".
+    // Counted rather than asserted visible: the drop zone's hint and the landing page's upload
+    // fact both carry this line, and which of the two is on screen depends on the viewport.
+    // What matters here is that neither says "coming soon" any more.
+    await expect(page.getByText("PDF · PNG · JPEG — up to 10 MB")).toHaveCount(2);
+    await expect(page.getByText(/photos coming soon/)).toHaveCount(0);
+
+    // And the picker really offers them, which is the other half of the same promise.
+    await expect(page.getByLabel("Choose file")).toHaveAttribute(
+      "accept",
+      "application/pdf,image/png,image/jpeg",
     );
   });
 });

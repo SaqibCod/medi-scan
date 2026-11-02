@@ -120,9 +120,11 @@ test("pasted text reaches a result", async ({ page }) => {
   await page.screenshot({ path: "e2e/__screenshots__/live--pasted.png", fullPage: true });
 });
 
-test("an image-only PDF fails as UNREADABLE with the OCR-off copy", async ({ page }) => {
-  // A valid PDF with a page and no text operators at all: nothing for PDFBox to extract,
-  // which is exactly the scanned-report case until OCR lands.
+test("a blank scanned PDF fails as UNREADABLE even after OCR", async ({ page }) => {
+  // A valid PDF with a page and no text operators at all: nothing for PDFBox to extract, so
+  // phase 4 renders the page and runs OCR over it. The page is a grey rectangle, so OCR finds
+  // nothing either - which is the case worth testing, because a page OCR makes nothing of
+  // must count as empty rather than feeding noise to the model.
   const imageOnly = [
     "%PDF-1.4",
     "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
@@ -147,8 +149,11 @@ test("an image-only PDF fails as UNREADABLE with the OCR-off copy", async ({ pag
   await waitForSettled(page);
 
   await expect(page.getByRole("heading", { name: /We couldn't read text from this file/ })).toBeVisible();
-  await expect(page.getByText(/coming soon/)).toBeVisible();
-  await expect(page.getByText(/clearer photo/)).toHaveCount(0);
+  // Phase 4: OCR ran and still found nothing on this page, so the advice is a clearer photo
+  // rather than "coming soon". A real backend without tesseract on its PATH fails the same way
+  // for a different reason, which is why the heading, not the body, is the stable assertion.
+  await expect(page.getByText(/clearer photo/)).toBeVisible();
+  await expect(page.getByText(/coming soon/)).toHaveCount(0);
   await expect(page.getByText(/UNREADABLE · report/)).toBeVisible();
 
   await page.screenshot({ path: "e2e/__screenshots__/live--unreadable.png", fullPage: true });

@@ -87,6 +87,26 @@ class StatsRecorderTest extends PostgresTestBase {
 	}
 
 	@Test
+	@DisplayName("counts the values OCR made unclear, across reports")
+	void countsLowConfidenceValues() {
+		// What the OCR safety rule costs readers, per day. A rise means photos are being read
+		// worse than they were, and this is the only signal that says so before anyone
+		// complains (docs/phase-4-lld.md section 8).
+		stats.lowConfidenceValuesFound(2);
+		stats.lowConfidenceValuesFound(5);
+
+		assertThat(dailyStat("ocr_low_confidence_values")).isEqualTo(7);
+	}
+
+	@Test
+	@DisplayName("a report with nothing unclear writes no row")
+	void ignoresZeroLowConfidenceValues() {
+		stats.lowConfidenceValuesFound(0);
+
+		assertThat(rowCount("daily_stats")).isZero();
+	}
+
+	@Test
 	@DisplayName("counts rate limit rejections")
 	void countsRateLimitRejections() {
 		stats.recordRateLimitRejection();
@@ -173,7 +193,11 @@ class StatsRecorderTest extends PostgresTestBase {
 		assertThat(columnsOf("daily_stats"))
 				.containsExactlyInAnyOrder("day", "input_tokens", "output_tokens",
 						"reports_created", "reports_failed", "rate_limit_rejections",
-						"masking_conflicts");
+						"masking_conflicts",
+						// Phase 4. A count of the values the confidence rule marked unclear:
+						// no report id, no value, no confidence score, so the claim this test
+						// makes still holds.
+						"ocr_low_confidence_values");
 		assertThat(columnsOf("daily_failure")).containsExactlyInAnyOrder("day", "code", "count");
 		assertThat(columnsOf("daily_processing"))
 				.containsExactlyInAnyOrder("day", "source_type", "total_ms", "count");

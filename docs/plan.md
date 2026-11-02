@@ -66,7 +66,7 @@ Anyone can use the app as a guest with no login. Signing in with Google is optio
 | Frontend | Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query, Recharts |
 | Design system | `docs/design-system/` is the styling source of truth: tokens for every colour, space, radius, shadow and type style, and one usage note per component. Geist and Geist Mono are self-hosted through `next/font` — no runtime request to Google Fonts. Icons come only from the project's own `Icon` set; there is no Lucide and no other icon library. shadcn/ui is used only for behaviour primitives (the mobile menu sheet and the toaster), fully restyled with the tokens. |
 | Backend | Java 21, Spring Boot, Spring AI, Spring Data JPA, Actuator |
-| Document parsing | Apache PDFBox (PDF text and page rendering), Tess4J / Tesseract (OCR) |
+| Document parsing | Apache PDFBox (PDF text and page rendering), Tesseract for OCR — the `tesseract` command-line program run as a child process, **not** Tess4J (see 4.2) |
 | PII masking | Regex rules + Apache OpenNLP name finder |
 | LLM | Gemini free tier by default; OpenAI as an optional provider. Both sit behind a provider interface and are chosen in config. |
 | Embeddings | One fixed embedding model that never changes, separate from the chat provider |
@@ -98,7 +98,7 @@ Caddy (TLS, Let's Encrypt)  --  EC2 t4g.small (Docker)
 Spring Boot API
     |- Validation: file type, magic bytes, size
     |- Async job (status: PENDING -> PROCESSING -> DONE / FAILED)
-    |    |- Text extraction: PDFBox -> OCR fallback for scanned pages / Tess4J for images / raw text
+    |    |- Text extraction: PDFBox -> `tesseract` child process for scanned pages and images / raw text
     |    |- PII masking: regex + OpenNLP, then check that lab values are intact
     |    |- Step 1: structured extraction -> typed Java objects
     |    |- Validation: values must appear in source text; flags recomputed in code
@@ -127,8 +127,10 @@ PostgreSQL + pgvector (Neon)
 
 ### 4.2 Text extraction
 - **Text-based PDFs:** PDFBox text extraction.
-- **Scanned PDFs:** if a page yields almost no text (below a character threshold), render it to an image with PDFBox at about 300 DPI and run OCR on it.
-- **Images:** Tess4J OCR, with an image size cap and one OCR job at a time to protect memory.
+- **Scanned PDFs:** if a page yields almost no text (below a character threshold), render it to an image with PDFBox at about 300 DPI and run OCR on it. At most 10 such pages per report; more is `DOCUMENT_TOO_LONG`.
+- **Images:** OCR, with an image size cap and one OCR job at a time to protect memory. The pixel size is read from the file header before anything is decoded, so a small file that would expand to gigabytes is refused as `UNREADABLE` rather than decoded.
+- **How OCR runs:** Tesseract is the `tesseract` command-line program, started as a **child process** with its arguments as a list and no shell. It is never loaded into the JVM through JNA/Tess4J, because a crash in native code inside the JVM takes the whole server down, while a child process can be killed and its memory is returned when it exits. Each page has a timeout, each report has a whole-OCR time budget, and the process's output is capped. A timeout or an output overrun fails the report with `EXTRACTION_FAILED`.
+- **Which text came from where:** the report records whether its text came from the PDF text layer, from OCR, or from both (`result.textSource` in the API). The results page uses it to ask the reader to check OCR-read values against the paper report.
 - **Raw text:** used as is.
 
 ### 4.3 PII masking
@@ -186,6 +188,7 @@ record ExtractionResult(List<Biomarker> biomarkers) {}
   - `NORMAL` when it falls inside them.
   - `UNKNOWN` when the value is qualitative or the range can't be parsed (for example, ranges that depend on sex or age).
 - **No critical flag:** `CRITICAL` is deliberately left out. Critical values use separate cutoffs that can't be worked out from a reference range.
+- **Low-confidence OCR values:** on a report whose text came from OCR, each value is checked against the per-word confidence Tesseract reported for the characters it was read from. A value below the confidence threshold keeps its printed text but gets `UNKNOWN` and no `numericValue`, and is left out of trends. The same applies to a reference range or a collection date read with low confidence. OCR turns `5.4` into `54` often enough that a confident flag on a doubtful number is the worst failure this app can have, so an uncertain value is reported as uncertain instead of judged.
 
 **Step 2: summary.** A second LLM call receives only the validated biomarker list, not the raw text:
 
@@ -467,6 +470,10 @@ RATE_LIMIT_UPLOADS_PER_HOUR=10
 RATE_LIMIT_SESSIONS_PER_HOUR=20    # per IP; api-contract.md 1.6
 GLOBAL_DAILY_LLM_CALLS=500
 UPLOAD_TEMP_DIR=                   # blank uses the default under the system temp directory
+OCR_ENABLED=true                   # false rejects images with 415 and skips the scanned-page fallback
+OCR_COMMAND=tesseract              # path to the tesseract program
+OCR_TESSDATA_DIR=                  # blank uses the system tessdata; set to use tessdata_best
+OCR_PSM=4                          # Tesseract page segmentation mode
 RETENTION_HOURS=24                 # guest sessions
 USER_RETENTION_DAYS=30             # signed-in users' reports
 INACTIVE_ACCOUNT_DAYS=180
@@ -544,7 +551,8 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 | Prompt injection via report text | Delimiters, no tools, schema validation, injection tests |
 | LLM cost or quota limits | Free-tier default, Postgres-backed daily cap, caching, OpenAI off by default |
 | Free-tier LLM data use | Synthetic-data framing, masking before every call, documented in SECURITY.md |
-| OCR memory pressure | 2 GB instance, heap cap, swap, image size cap, one OCR job at a time |
+| OCR memory pressure | 2 GB instance, heap cap, swap, image size cap read from the header before decoding, one OCR job at a time, OCR in a child process that can be killed on timeout |
+| OCR misreads a number and the app flags it confidently | Per-word confidence from the same OCR run; a low-confidence value gets `UNKNOWN` and no number; the results page says the text came from OCR; measured on OCR cases in the eval set with a zero target for dangerous flag errors |
 | Slow processing / HTTP timeouts | Background jobs with status polling |
 | Unauthorized report access | UUIDs, one owner per report, ownership check on every endpoint, authorization tests |
 | Token theft through XSS (tokens in browser storage) | Strict CSP, no raw HTML rendering, 15-minute access tokens, refresh rotation with reuse detection |
@@ -561,7 +569,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 Phase 7 is split into 7a to 7d (see item 8), and **7a and 7b are built before phases 4 and 5**. The frontend foundation — tokens, components, the shell, the API client — is what every later screen is drawn on, and OCR and chat both need a UI to be worth anything. Building it now also means the design system is ported once, against the design docs, rather than retrofitted onto screens that already exist. 7b follows immediately because it is what turns that foundation into something a visitor can actually use, and because OCR and chat both hang off screens it builds: the upload panel and the report page.
 
-The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is 7b.**
+The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is Phase 4 (OCR).**
 
 1. **Foundation (Phase 1) — done:**
    - Monorepo setup.
@@ -587,7 +595,7 @@ The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Pha
 
    Built here, before the pipeline work that follows, because every later phase reads or writes reports through the owner model. Chat in particular would otherwise be built against guest-only ownership and rewritten. No frontend work: the sign-in UI ships with phase 7.
 4. **Evaluation (Phase 3) — done:** the synthetic test set and the scoring runner, built before OCR so every later change is measured. Method and baseline: `docs/evaluation.md`.
-5. **OCR (Phase 4):** Tess4J for images and the scanned-PDF fallback, feeding the same pipeline.
+5. **OCR (Phase 4) — current:** the `tesseract` command-line program, run as a child process, for images and the scanned-PDF fallback, feeding the same pipeline. Values OCR read with low confidence are never flagged (4.2, 4.4). Low-level design: `docs/phase-4-lld.md`.
 6. **Chat (Phase 5):**
    - Curated biomarker content and embeddings.
    - Report-context chat with RAG and SSE.
@@ -600,7 +608,7 @@ The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Pha
    - `GET /api/admin/stats`.
 8. **Frontend (Phase 7),** split into four parts. The design system (`docs/design-system/`) and the approved mockups (`docs/ui/`) are the reference for all four.
    - **7a — Foundation:** design tokens and the two themes, the 19 design-system components, the app shell, the API client, the lazy guest session, the backend wake check, banners, inline notices and toasts, the six system screens, and the privacy page. Low-level design: `docs/phase-7a-lld.md`.
-   - **7b — The product:** landing page, the upload panel, samples, report processing, the results and failed states, and the biomarker explainer page. Low-level design: `docs/phase-7b-lld.md`.
+   - **7b — The product — done:** landing page, the upload panel, samples, report processing, the results and failed states, and the biomarker explainer page. Low-level design: `docs/phase-7b-lld.md`.
    - **7c — Accounts:** Sign in with Google, auto sign-in, token refresh, cross-tab logout, the CSP entries Google needs, My reports, Account, and Trends.
    - **7d — Admin and polish:** the admin dashboard, the accessibility pass, performance, SEO and metadata.
 

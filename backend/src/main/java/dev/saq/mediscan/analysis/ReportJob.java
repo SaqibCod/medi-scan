@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import dev.saq.mediscan.config.ReportErrorCode;
 import dev.saq.mediscan.config.ReportFailure;
+import dev.saq.mediscan.extract.ConfidenceIndex;
 import dev.saq.mediscan.extract.ExtractedText;
 import dev.saq.mediscan.extract.ExtractorRegistry;
 import dev.saq.mediscan.extract.JobSource;
@@ -17,6 +18,7 @@ import dev.saq.mediscan.mask.MaskResult;
 import dev.saq.mediscan.mask.Masker;
 import dev.saq.mediscan.report.ReportResultSaver;
 import dev.saq.mediscan.report.ReportStatusService;
+import dev.saq.mediscan.report.TextSource;
 
 /**
  * Runs one report through the pipeline ({@code LLD} 7).
@@ -64,8 +66,7 @@ public class ReportJob {
 		this.validator = validator;
 		this.summaryStep = summaryStep;
 		this.saver = saver;
-		this.observer = observer.getIfAvailable(() -> conflicts -> {
-		});
+		this.observer = observer.getIfAvailable(() -> PipelineObserver.NONE);
 	}
 
 	/**
@@ -82,14 +83,20 @@ public class ReportJob {
 			return Outcome.SKIPPED;
 		}
 
-		String maskedText = extractAndMask(reportId, source);
+		MaskedInput input = extractAndMask(reportId, source);
+		String maskedText = input.maskedText();
 
 		ModelExtraction extracted = extractionStep.run(maskedText);
-		ValidationOutcome validated = validator.validate(extracted, maskedText);
+		ValidationOutcome validated =
+				validator.validate(extracted, maskedText, input.confidence());
 
-		log.info("validate done id={} kept={} dropped={} rangeTextDiscarded={}",
+		log.info("validate done id={} kept={} dropped={} rangeTextDiscarded={} "
+				+ "lowConfidenceValues={} unlocatedValues={}",
 				reportId, validated.biomarkers().size(), validated.dropsByReason(),
-				validated.rangeTextDiscarded());
+				validated.rangeTextDiscarded(), validated.lowConfidenceValues(),
+				validated.unlocatedValues());
+
+		observer.lowConfidenceValuesFound(validated.lowConfidenceValues());
 
 		if (validated.isEmpty()) {
 			// A readable document with nothing in it that survived checking. Distinct from
@@ -100,7 +107,8 @@ public class ReportJob {
 		SummaryStep.ReportSummary summary = summaryStep.run(validated.biomarkers());
 
 		boolean saved = saver.saveDone(reportId, maskedText, toRows(validated.biomarkers()),
-				summary.patientSummary(), summary.highlights(), validated.collectedOn());
+				summary.patientSummary(), summary.highlights(), validated.collectedOn(),
+				input.textSource());
 
 		return saved ? Outcome.DONE : Outcome.SKIPPED;
 	}
@@ -110,11 +118,16 @@ public class ReportJob {
 	 *
 	 * <p>A separate method so the unmasked {@link ExtractedText} is unreachable from the rest
 	 * of {@link #run}: the compiler, not a comment, is what keeps it out of the later stages.
+	 *
+	 * <p>Phase 4 needs two things from extraction to outlive this scope - how the text was read,
+	 * and (later) the OCR confidence - so it returns a {@link MaskedInput} rather than a bare
+	 * string. The raw text is still left behind here, which is the whole point of the method.
 	 */
-	private String extractAndMask(UUID reportId, JobSource source) {
+	private MaskedInput extractAndMask(UUID reportId, JobSource source) {
 		ExtractedText extracted = extractors.extract(source);
-		log.info("extract done id={} pages={} lowTextPages={} chars={}",
-				reportId, extracted.pageCount(), extracted.lowTextPages(), extracted.charCount());
+		log.info("extract done id={} pages={} lowTextPages={} textSource={} chars={}",
+				reportId, extracted.pageCount(), extracted.lowTextPages(),
+				extracted.textSource(), extracted.charCount());
 
 		MaskResult masked = masker.mask(extracted.text());
 		log.info("mask done id={} counts={} conflicts={}",
@@ -122,7 +135,30 @@ public class ReportJob {
 
 		observer.maskingCompleted(masked.conflicts());
 
-		return masked.maskedText();
+		return new MaskedInput(masked.maskedText(), extracted.textSource(),
+				extracted.confidence());
+	}
+
+	/**
+	 * What survives extraction: the masked text, and what is known about how it was read.
+	 *
+	 * <p>The confidence index outlives the raw text deliberately, and it is safe for it to:
+	 * it holds OCR's lines, which for a result row are byte-identical to the masked text's, and
+	 * it is only ever asked about a value the model already transcribed. Nothing can read the
+	 * unmasked parts of the report back out of it.
+	 *
+	 * <p>{@code toString()} hides the text. This record is a method-local result rather than
+	 * anything long-lived, but it holds the masked report and records print their fields
+	 * ({@code backend/CLAUDE.md}, "Records print their fields").
+	 */
+	private record MaskedInput(String maskedText, TextSource textSource,
+			ConfidenceIndex confidence) {
+
+		@Override
+		public String toString() {
+			return "MaskedInput[textSource=" + textSource + ", chars=" + maskedText.length()
+					+ ", confidence=" + confidence + "]";
+		}
 	}
 
 	private static List<ReportResultSaver.BiomarkerRow> toRows(List<ValidatedBiomarker> markers) {
@@ -157,6 +193,27 @@ public class ReportJob {
 	 */
 	public interface PipelineObserver {
 
+		/** Counts nothing, for when no stats recorder is present (its unit tests, and tests). */
+		PipelineObserver NONE = new PipelineObserver() {
+
+			@Override
+			public void maskingCompleted(int conflicts) {
+			}
+
+			@Override
+			public void lowConfidenceValuesFound(int count) {
+			}
+		};
+
 		void maskingCompleted(int conflicts);
+
+		/**
+		 * How many rows the OCR low-confidence rule turned {@code UNKNOWN} on this report.
+		 *
+		 * <p>A count, never which rows. It is the only measure of what the rule costs readers,
+		 * and a sudden rise in it is how a degraded OCR install or a bad {@code --psm} choice
+		 * announces itself ({@code docs/phase-4-lld.md} section 8).
+		 */
+		void lowConfidenceValuesFound(int count);
 	}
 }
