@@ -370,10 +370,28 @@ The tests in section 9.
 
 ---
 
-## 15. Open items for the final report
+## 15. Approved deviations from this design
 
-- The chosen `--psm`, model, and confidence threshold, with the tuning table.
-- The OCR evaluation numbers, especially dangerous flag errors, unclear rate, and leaks.
-- OCR time per page and report, locally and in the 2-CPU / 2 GB container.
-- Whether EXIF needed a new library.
-- Anything that should change before Phase 5 (chat), for example OCR text quality issues that will affect chat answers.
+Recorded as the 6a and 6b LLDs record theirs: what the design said, what the code does, and why. The code cites these numbers in its comments, so the numbers are load-bearing.
+
+| # | Design as first written | What the implementation does | Why | Section |
+|---|---|---|---|---|
+| D7 | A `rawValue`'s confidence is the minimum over the OCR words overlapping any occurrence of it **on a result row** (section 5, last paragraph). A value found on no result row has no confidence. | Result rows are searched first and win. If the value appears on no result row, **every** line is searched as a fallback, and that confidence is used. Only a value found on no OCR line at all returns nothing — and the caller treats *that* as doubtful, not trusted, counting it as `unlocatedValues`. | Two gaps in the original rule, both failing unsafely. A value printed on a line `ResultRowDetector` does not classify as a result row (a one-off result in prose, a footnote repeating a figure) would have had *no* confidence, and "no confidence" had no defined behaviour; the natural reading — leave the flag alone — is exactly backwards, because an unlocated value is one we know least about. A measured confidence from a non-result line is strictly better informed than no information, and a value that cannot be located anywhere means the support check and the confidence lookup have diverged, which is a bug in our code rather than a property of the report. Counting it makes that visible instead of silently switching the rule off for the affected rows. | 5, 7 |
+
+**Section 5's open choice, resolved.** The design left the masking-offset problem open ("pick the simpler correct approach after reading the Phase 2 masker code, and show it at approval point 2"). The choice is the **line-based lookup**, not an offset map threaded through the masker: `ResultRowDetector` protects whole lines and `Masker` refuses any span overlapping a protected one, so a result row is byte-identical before and after masking. Searching for a value inside a line therefore needs no translation between the raw and masked texts at all. `ConfidenceIndexTest.survivesMasking` runs the real masker over real OCR output to check that claim rather than assuming it.
+
+**A gap in this record.** D1–D6 were agreed in a working session whose transcript was lost before they were written down, so their numbers are reserved here rather than reconstructed — D7 keeps its number so the citation in `ConfidenceIndex` stays accurate. The deviations the committed code visibly contains, any of which may be among them, are: the subsampled decode and the `ocr.max-decoded-bytes` / `min-long-edge` / `max-long-edge` properties that section 6.1 and section 11 do not list; EXIF orientation read with the JDK alone, so this phase adds no dependency (section 6.1 step 2 asked before adding one), with the mirrored orientations 2, 4, 5 and 7 treated as upright; `ValueTokenMatcher` extracted so the support check and the confidence lookup cannot disagree about what an occurrence is; and the mapping from an OCR failure reason to a report error code (a non-zero exit is `UNREADABLE`, while a timeout, an output-cap kill or an exhausted budget is `EXTRACTION_FAILED`). These need renumbering once their original numbers are confirmed.
+
+---
+
+## 16. Open items for the final report
+
+Answered as of 2026-11-02. The numbers are in `docs/evaluation.md` ("Phase 4: the OCR sweep") and `eval/results/ocr-tuning-*.md`; everything found along the way that is not fixed inline is in `docs/phase-4-findings.md`.
+
+- **The chosen `--psm`, model, and confidence threshold, with the tuning table.** `--psm 4`, the system `eng` model, threshold **80**. The table is in `eval/results/`; psm 3 was worse on every variant, psm 6 tied with 4 on accuracy but assumes a uniform block. The threshold is the one open risk: 90 drives the dangerous-candidate share to zero on every variant and 80 does not. 80 was chosen anyway, for a fifth of the unclear-rate cost, and that is recorded as accepted risk rather than a clean result.
+- **`tessdata_best` was not measured.** It is not installed, and LLD 10.3 lists it as a variable to sweep. Still open: install it and re-run the sweep if the unclear rate or the comparator misreads turn out to matter in practice.
+- **The OCR evaluation numbers.** The OCR-only sweep is complete. The full-pipeline OCR gate (`OcrEvalRunner`) is written and runs, but the Gemini free tier allows ~20 requests a day against the ~20 this needs, so it has not yet had a complete clean run — see the report for the status of the run that was made.
+- **OCR time per page and report.** About 0.7–1.3 s per page locally (Tesseract 5.4.0, 300 DPI Letter page, one thread). **Not yet measured in the 2-CPU / 2 GB container** — still open, and the figure that matters for the 150 s per-report budget.
+- **Whether EXIF needed a new library.** No. The orientation tag is read from the JPEG's APP1 segment through the JDK's own metadata tree, so this phase adds no dependency. `OcrCaseRendererTest` round-trips the payload through the same parser production uses.
+- **The image (section 13), measured 2026-11-02.** `docker buildx build --platform linux/arm64` succeeds. The image ships **Tesseract 5.3.4** with leptonica 1.82.0 (Ubuntu 24.04 "noble"), `eng` present, and `TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata` matches where the package actually puts the model — both confirmed by running `tesseract --version` and `--list-langs` inside the built arm64 image. Dropping `libtesseract-dev`, which was only ever there for the Tess4J binding O1 replaced, removes **24 packages** (a whole dev toolchain: `libcurl4-openssl-dev`, `libarchive-dev`, `nettle-dev`, `libleptonica-dev`, …) and **31.7 MB**: measured like-for-like as two minimal arm64 images off the same base, 164.6 MB with the package against 132.9 MB without.
+- **Anything that should change before Phase 5 (chat).** Two things. First, OCR loses roughly one value in ten even on a clean scan, and chat answers are grounded in the stored report — a chat answer about a value that OCR dropped will be answering about a report the reader can see has that value. Second, Tesseract's global binarisation loses the darker half of an unevenly lit page (see the evaluation doc); until that is addressed, a photographed report can reach chat with half its rows missing and nothing in the data saying so.
