@@ -96,9 +96,26 @@ public class ReportFixtures {
 		return sessionService.findActive(token).orElseThrow().getId();
 	}
 
+	/**
+	 * Now, by the clock the application is using.
+	 *
+	 * <p>Not {@code Instant.now()}. These rows carry expiry dates and the retention sweep reads
+	 * the injected clock, so a fixture that writes from the system clock while the application
+	 * reads from another is writing rows that are already expired from the application's point
+	 * of view. In every ordinary profile the two are the same instant and nothing changes; under
+	 * the {@code eval} profile, which pins the clock a year ahead so collection dates stay
+	 * plausible, it was the difference between a run finishing and the sweep deleting the run's
+	 * own sessions out from under it mid-case (found 2026-11-02, as a {@code NoSuchElement} from
+	 * {@code EvalRunner.readOutcome} once one case got slow enough for the 60-second sweep to
+	 * fire).
+	 */
+	private Instant now() {
+		return Instant.now(clock);
+	}
+
 	/** A live guest session, expiring in 24 hours. */
 	public UUID session() {
-		Instant now = Instant.now();
+		Instant now = now();
 		UUID id = UUID.randomUUID();
 		sessions.save(new Session(id, uniqueHash(id), now, now.plus(24, ChronoUnit.HOURS)));
 		return id;
@@ -110,7 +127,7 @@ public class ReportFixtures {
 	}
 
 	public UUID pendingReport(UUID sessionId, SourceType sourceType) {
-		Instant now = Instant.now();
+		Instant now = now();
 		UUID id = UUID.randomUUID();
 		reports.save(new ReportEntity(id, new OwnerRef.Guest(sessionId), sourceType, now,
 				now.plus(24, ChronoUnit.HOURS)));
@@ -119,7 +136,7 @@ public class ReportFixtures {
 
 	/** A {@code PENDING} report owned by a signed-in user, with the 30-day user expiry. */
 	public UUID pendingUserReport(UUID userId) {
-		Instant now = Instant.now();
+		Instant now = now();
 		UUID id = UUID.randomUUID();
 		reports.save(new ReportEntity(id, new OwnerRef.User(userId), SourceType.SAMPLE, now,
 				now.plus(30, ChronoUnit.DAYS)));
@@ -128,7 +145,7 @@ public class ReportFixtures {
 
 	/** A report that has already expired, for retention and visibility tests. */
 	public UUID expiredReport(UUID sessionId) {
-		Instant now = Instant.now();
+		Instant now = now();
 		UUID id = UUID.randomUUID();
 		reports.save(new ReportEntity(id, new OwnerRef.Guest(sessionId), SourceType.SAMPLE,
 				now.minus(48, ChronoUnit.HOURS), now.minus(1, ChronoUnit.HOURS)));
