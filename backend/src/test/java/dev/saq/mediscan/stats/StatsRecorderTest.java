@@ -197,7 +197,13 @@ class StatsRecorderTest extends PostgresTestBase {
 						// Phase 4. A count of the values the confidence rule marked unclear:
 						// no report id, no value, no confidence score, so the claim this test
 						// makes still holds.
-						"ocr_low_confidence_values");
+						"ocr_low_confidence_values",
+						// Phase 5. Five counts of how chat behaved, and nothing about what was
+						// asked or answered - no report id, no question, no answer, no slug.
+						// Chat text is never written to any table (CLAUDE.md rule 9), so this
+						// is the one place chat leaves a trace at all, and it is five integers.
+						"chat_answers", "chat_cache_hits", "chat_declined",
+						"chat_not_in_context", "chat_number_stops");
 		assertThat(columnsOf("daily_failure")).containsExactlyInAnyOrder("day", "code", "count");
 		assertThat(columnsOf("daily_processing"))
 				.containsExactlyInAnyOrder("day", "source_type", "total_ms", "count");
