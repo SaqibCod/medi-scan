@@ -159,6 +159,41 @@
 		</dependency>
 
 		<!--
+		  Gemini text embeddings for chat RAG (phase 5).
+
+		  The starter above already brings the *autoconfiguration* for this -
+		  spring-ai-autoconfigure-model-google-genai carries the embedding config as
+		  well as the chat config - and only the model jar is missing, which is why
+		  this is the bare module rather than a second starter.
+
+		  Same API-key route as chat: GoogleGenAiEmbeddingConnectionDetails accepts
+		  an apiKey and a com.google.genai.Client, so it reuses the timeout-carrying
+		  client bean from GeminiClientConfig. No Google Cloud project is involved.
+
+		  The model must be set explicitly. Spring AI 2.0.1 still defaults to
+		  text-embedding-004, which the API no longer offers at all.
+
+		  Version comes from the Spring AI BOM above.
+		-->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-google-genai-embedding</artifactId>
+		</dependency>
+
+		<!--
+		  The chat answer cache (phase 5, LLD C8).
+
+		  In memory, bounded and expiring, which is the whole requirement: a cached
+		  answer must never outlive its report and must never reach a disk. Caffeine
+		  gives size and TTL eviction without a cache server. Version managed by the
+		  Spring Boot BOM.
+		-->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+
+		<!--
 		  PDF text extraction (phase 2) and, from phase 4, rendering scanned pages
 		  for OCR. `pdfbox` pulls in `pdfbox-io`, which is where IOUtils and the
 		  temp-file stream cache live.

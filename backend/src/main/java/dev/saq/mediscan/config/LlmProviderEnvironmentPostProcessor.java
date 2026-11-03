@@ -1,5 +1,6 @@
 package dev.saq.mediscan.config;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.boot.EnvironmentPostProcessor;
@@ -33,6 +34,32 @@ public class LlmProviderEnvironmentPostProcessor implements EnvironmentPostProce
 
 	private static final String PROVIDER_PROPERTY = "mediscan.llm.provider";
 	private static final String SPRING_AI_CHAT_PROPERTY = "spring.ai.model.chat";
+
+	/**
+	 * Phase 5. Note the {@code .text} suffix: Spring AI gates the Google text-embedding
+	 * autoconfiguration on {@code spring.ai.model.embedding.text}, not on
+	 * {@code spring.ai.model.embedding}. Setting the shorter key would look right, change
+	 * nothing, and leave the real embedding client trying to build itself without a key.
+	 */
+	private static final String SPRING_AI_EMBEDDING_PROPERTY = "spring.ai.model.embedding.text";
+
+	/**
+	 * The embedding <em>connection</em> autoconfiguration, which the property above does not
+	 * reach.
+	 *
+	 * <p>It is gated only on the Google SDK being on the classpath, so it runs even with the
+	 * embedding model switched off - and it asserts a Google Cloud {@code project-id} whenever
+	 * its own API key property is blank, which under the fake provider it always is. The result
+	 * is a context that refuses to start with "Google GenAI project-id must be set!" in a test
+	 * suite that was never going to call Google. Excluding it is the narrowest fix: the real
+	 * provider supplies this bean itself from {@code GeminiClientConfig}.
+	 */
+	private static final String EMBEDDING_CONNECTION_AUTOCONFIGURATION =
+			"org.springframework.ai.model.google.genai.autoconfigure.embedding."
+					+ "GoogleGenAiEmbeddingConnectionAutoConfiguration";
+
+	private static final String EXCLUDE_PROPERTY = "spring.autoconfigure.exclude";
+
 	private static final String FAKE_PROVIDER = "fake";
 
 	@Override
@@ -42,17 +69,32 @@ public class LlmProviderEnvironmentPostProcessor implements EnvironmentPostProce
 			return;
 		}
 
-		// An explicit setting wins. Someone deliberately pointing the fake provider at a real
-		// chat model - to compare them side by side, say - should not be silently overridden.
-		if (environment.containsProperty(SPRING_AI_CHAT_PROPERTY)) {
+		Map<String, Object> disabled = new LinkedHashMap<>();
+
+		// An explicit setting wins, for either kind. Someone deliberately pointing the fake
+		// provider at a real chat model - to compare them side by side, say - should not be
+		// silently overridden.
+		if (!environment.containsProperty(SPRING_AI_CHAT_PROPERTY)) {
+			disabled.put(SPRING_AI_CHAT_PROPERTY, "none");
+		}
+		if (!environment.containsProperty(SPRING_AI_EMBEDDING_PROPERTY)) {
+			disabled.put(SPRING_AI_EMBEDDING_PROPERTY, "none");
+		}
+		if (!environment.containsProperty(EXCLUDE_PROPERTY)) {
+			// Set rather than appended: nothing else in this application excludes an
+			// autoconfiguration, and a property source cannot merge into a list anyway - the
+			// highest-precedence source wins the whole value. If an exclusion is ever added
+			// elsewhere, this has to become part of that list rather than a second source.
+			disabled.put(EXCLUDE_PROPERTY, EMBEDDING_CONNECTION_AUTOCONFIGURATION);
+		}
+		if (disabled.isEmpty()) {
 			return;
 		}
 
 		// Added last so anything with higher precedence (command line, system properties)
 		// still takes effect.
 		environment.getPropertySources().addLast(new MapPropertySource(
-				"mediscanFakeLlmProvider",
-				Map.of(SPRING_AI_CHAT_PROPERTY, "none")));
+				"mediscanFakeLlmProvider", disabled));
 	}
 
 	@Override

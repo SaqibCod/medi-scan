@@ -30,13 +30,20 @@ public class PromptTemplates {
 	/** The current version of each prompt. Bump the filename, not the contents. */
 	private static final Map<LlmPurpose, String> FILES = Map.of(
 			LlmPurpose.EXTRACT, "extract-v1.txt",
-			LlmPurpose.SUMMARY, "summary-v1.txt");
+			LlmPurpose.SUMMARY, "summary-v1.txt",
+			LlmPurpose.CHAT, "chat-v1.txt");
 
 	private final Map<LlmPurpose, String> prompts = new EnumMap<>(LlmPurpose.class);
 	private final Map<LlmPurpose, String> versions = new EnumMap<>(LlmPurpose.class);
 
 	public PromptTemplates() {
 		for (LlmPurpose purpose : LlmPurpose.values()) {
+			// EMBED sends text to be vectorised and has no instructions at all. Asked rather
+			// than inferred from a missing map entry, so a purpose that genuinely forgot its
+			// prompt file still fails loudly below.
+			if (!purpose.hasPrompt()) {
+				continue;
+			}
 			String file = FILES.get(purpose);
 			if (file == null) {
 				throw new IllegalStateException("no prompt file declared for " + purpose);
@@ -47,14 +54,30 @@ public class PromptTemplates {
 		}
 	}
 
-	/** The system prompt for {@code purpose}. */
+	/**
+	 * The system prompt for {@code purpose}.
+	 *
+	 * @throws IllegalArgumentException for a purpose that sends no prompt. Returning null would
+	 *     reach the provider as an empty system message, and a model with no instructions
+	 *     produces confident nonsense rather than an error
+	 */
 	public String systemPrompt(LlmPurpose purpose) {
-		return prompts.get(purpose);
+		String prompt = prompts.get(purpose);
+		if (prompt == null) {
+			throw new IllegalArgumentException(purpose + " sends no system prompt");
+		}
+		return prompt;
 	}
 
-	/** The prompt version, for the usage record and for correlating an eval run. */
+	/**
+	 * The prompt version, for the usage record and for correlating an eval run.
+	 *
+	 * @return {@code "none"} for a purpose that sends no prompt, rather than null - this value
+	 *     goes straight into a log line, and {@code prompt=null} reads like a bug in the
+	 *     logging rather than a call that legitimately has no prompt
+	 */
 	public String version(LlmPurpose purpose) {
-		return versions.get(purpose);
+		return versions.getOrDefault(purpose, "none");
 	}
 
 	/**

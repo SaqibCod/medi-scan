@@ -32,7 +32,64 @@ public final class TestProperties {
 				new MediScanProperties.Retention(900_000L, 90, 30, 180),
 				new MediScanProperties.History(20, 50),
 				new MediScanProperties.Trends(100, 2, 200),
-				new MediScanProperties.Admin(14, 90));
+				new MediScanProperties.Admin(14, 90),
+				defaultChat(),
+				defaultEmbedding(),
+				defaultRag());
+	}
+
+	/**
+	 * The chat defaults from {@code application.yml}, with the test profile's short waits.
+	 *
+	 * <p>The ping interval and stream timeout are cut deliberately: a test asserting that
+	 * pings appear should not wait fifteen seconds for one, and a test asserting the timeout
+	 * should not wait a minute.
+	 */
+	public static MediScanProperties.Chat defaultChat() {
+		return new MediScanProperties.Chat("fake-model", 400, 0.2, 1500, 1000,
+				Duration.ofHours(1), 500, Duration.ofMillis(200), Duration.ofSeconds(10));
+	}
+
+	/** The embedding defaults. 768 has to match {@code vector_store.embedding}. */
+	public static MediScanProperties.Embedding defaultEmbedding() {
+		return new MediScanProperties.Embedding("fake-embedding", 768, 16, 2);
+	}
+
+	/** Retrieval defaults. Nothing in the fixtures is reviewed, so the gate is off. */
+	public static MediScanProperties.Rag defaultRag() {
+		return new MediScanProperties.Rag(4, 0.6, false, false);
+	}
+
+	/** Swaps in a whole chat block, for the tests that drive the endpoint and the cache. */
+	public static MediScanProperties withChat(MediScanProperties.Chat chat) {
+		MediScanProperties base = defaults();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(), base.jobs(), base.extract(), base.ocr(), base.llm(), base.mask(),
+				base.retention(), base.history(), base.trends(), base.admin(), chat,
+				base.embedding(), base.rag());
+	}
+
+	/** Swaps in a whole retrieval block, for the tuning and retriever tests. */
+	public static MediScanProperties withRag(int topK, double minSimilarity,
+			boolean requireReviewed) {
+
+		MediScanProperties base = defaults();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(), base.jobs(), base.extract(), base.ocr(), base.llm(), base.mask(),
+				base.retention(), base.history(), base.trends(), base.admin(), base.chat(),
+				base.embedding(),
+				new MediScanProperties.Rag(topK, minSimilarity, requireReviewed, false));
+	}
+
+	/** Swaps in a whole embedding block, for the indexer tests. */
+	public static MediScanProperties withEmbedding(String model, int dimensions, int batchSize) {
+		MediScanProperties base = defaults();
+		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
+				base.upload(), base.jobs(), base.extract(), base.ocr(), base.llm(), base.mask(),
+				base.retention(), base.history(), base.trends(), base.admin(), base.chat(),
+				new MediScanProperties.Embedding(model, dimensions, batchSize,
+						base.embedding().maxTransientRetries()),
+				base.rag());
 	}
 
 	/** The OCR defaults from {@code application.yml}. */
@@ -99,7 +156,7 @@ public final class TestProperties {
 				base.upload(),
 				new MediScanProperties.Jobs(workers, queueCapacity, base.jobs().shutdownGrace()),
 				base.extract(), base.ocr(), base.llm(), base.mask(), base.retention(),
-				base.history(), base.trends(), base.admin());
+				base.history(), base.trends(), base.admin(), base.chat(), base.embedding(), base.rag());
 	}
 
 	public static MediScanProperties withHistory(int defaultSize, int maxSize) {
@@ -107,7 +164,7 @@ public final class TestProperties {
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
 				base.upload(), base.jobs(), base.extract(), base.ocr(), base.llm(), base.mask(),
 				base.retention(), new MediScanProperties.History(defaultSize, maxSize),
-				base.trends(), base.admin());
+				base.trends(), base.admin(), base.chat(), base.embedding(), base.rag());
 	}
 
 	public static MediScanProperties withTrends(int pointCap, int markerMinReports, int markerCap) {
@@ -116,7 +173,7 @@ public final class TestProperties {
 				base.upload(), base.jobs(), base.extract(), base.ocr(), base.llm(), base.mask(),
 				base.retention(), base.history(),
 				new MediScanProperties.Trends(pointCap, markerMinReports, markerCap),
-				base.admin());
+				base.admin(), base.chat(), base.embedding(), base.rag());
 	}
 
 	public static MediScanProperties withAdmin(int defaultDays, int maxDays) {
@@ -124,7 +181,8 @@ public final class TestProperties {
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
 				base.upload(), base.jobs(), base.extract(), base.ocr(), base.llm(), base.mask(),
 				base.retention(), base.history(), base.trends(),
-				new MediScanProperties.Admin(defaultDays, maxDays));
+				new MediScanProperties.Admin(defaultDays, maxDays),
+				base.chat(), base.embedding(), base.rag());
 	}
 
 	public static MediScanProperties withOpenNlp(boolean enabled, double minProbability) {
@@ -148,7 +206,7 @@ public final class TestProperties {
 		MediScanProperties base = defaults();
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
 				base.upload(), base.jobs(), base.extract(), ocr, base.llm(), base.mask(),
-				base.retention(), base.history(), base.trends(), base.admin());
+				base.retention(), base.history(), base.trends(), base.admin(), base.chat(), base.embedding(), base.rag());
 	}
 
 	public static MediScanProperties withOcrEnabled(boolean enabled) {
@@ -213,7 +271,7 @@ public final class TestProperties {
 
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
 				base.upload(), base.jobs(), base.extract(), base.ocr(), llm, base.mask(),
-				base.retention(), base.history(), base.trends(), base.admin());
+				base.retention(), base.history(), base.trends(), base.admin(), base.chat(), base.embedding(), base.rag());
 	}
 
 	private static MediScanProperties copyWith(MediScanProperties base,
@@ -223,6 +281,6 @@ public final class TestProperties {
 
 		return new MediScanProperties(base.allowedOrigin(), base.session(), base.ratelimit(),
 				upload, base.jobs(), extract, base.ocr(), base.llm(), mask, base.retention(),
-				base.history(), base.trends(), base.admin());
+				base.history(), base.trends(), base.admin(), base.chat(), base.embedding(), base.rag());
 	}
 }

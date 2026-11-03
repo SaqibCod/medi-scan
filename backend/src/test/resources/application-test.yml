@@ -40,6 +40,29 @@ mediscan:
       # JWT_SIGNING_KEYS and are never shared between environments.
       signing-keys: "test-k1:bWVkaS1zY2FuLXRlc3Qtc2lnbmluZy1rZXktbm8xISE=,test-k2:bWVkaS1zY2FuLXRlc3Qtc2lnbmluZy1rZXktbm8yISE="
       current-kid: test-k2
+  chat:
+    model: fake-model
+    # High for the same reason as the limits above: the shared in-memory bucket
+    # must not run out part-way through the suite. ChatRateLimitTest lowers it.
+    rate-per-hour: 1000
+    # Short, so a test asserting that pings appear does not wait 15 seconds for
+    # one, and a test asserting the timeout does not wait a minute.
+    ping-interval: 200ms
+    stream-timeout: 10s
+  embedding:
+    # FakeEmbeddingModel stands in; no test reaches a real embedding API. The
+    # width still has to match vector_store.embedding, because the vectors go
+    # into the real column in a real Postgres.
+    model: fake-embedding
+    dimensions: 768
+  rag:
+    # Nothing in the test fixtures is reviewed, and an indexer that skipped
+    # every page would make the retrieval tests vacuous.
+    require-reviewed: false
+    # Off: embedding takes from the daily cap, so a startup index would spend
+    # budget that LlmGatewayTest and the capacity tests then measure.
+    # ContentIndexerTest drives the indexer directly instead.
+    index-on-startup: false
 
 logging:
   level:

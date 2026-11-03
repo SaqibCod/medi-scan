@@ -36,6 +36,13 @@ spring:
     google:
       genai:
         api-key: ${GEMINI_API_KEY:}
+        embedding:
+          text:
+            # Phase 5. The model is also set per request by EmbeddingGateway,
+            # for the same reason the chat model is (see below): one source of
+            # truth, so the model recorded in content_index is true by
+            # construction. This default is kept in step.
+            model: ${EMBEDDING_MODEL:gemini-embedding-001}
         chat:
           # `chat.model`, not the `chat.options.*` nesting: the latter is
           # deprecated in Spring AI 2.0 (its own configuration metadata names
@@ -256,6 +263,61 @@ mediscan:
     # Contract section 6.
     default-days: 14
     max-days: 90
+  chat:
+    # The chat model, deliberately its own property rather than reusing
+    # mediscan.llm.model. Extraction and summary are measured by the phase 3
+    # evaluation, whose committed baseline names the model it ran against, so
+    # one variable driving both would move the pipeline's model as a side
+    # effect of picking a chat model.
+    #
+    # gemini-3.6-flash, not the 3.8-flash the pipeline uses: on 2026-11-03,
+    # 3.8-flash, 3.7-flash and gemini-flash-latest all answered a models
+    # listing but returned 503 "experiencing high demand" on every generation
+    # attempt (3/3), which is phase 4 findings item 6 still unresolved.
+    # 3.6-flash answers in about a second and accepts thinkingBudget 0.
+    model: ${CHAT_MODEL:gemini-3.6-flash}
+    # The prompt asks for at most 120 words; this is the hard ceiling behind it.
+    max-output-tokens: 400
+    # Not 0, unlike the pipeline's two steps. An explanation reads better with a
+    # little sampling, and what keeps the numbers honest is the guard, not the
+    # temperature.
+    temperature: 0.2
+    history-token-budget: 1500
+    # Per caller per hour, keyed by user id when signed in (contract 1.6).
+    rate-per-hour: ${RATE_LIMIT_CHAT_PER_HOUR:30}
+    cache-ttl: 1h
+    cache-max-entries: 500
+    # Also the disconnect detector: the Servlet API raises no event when a
+    # client goes away, so a failed write is the only signal there is.
+    ping-interval: 15s
+    stream-timeout: 60s
+  embedding:
+    # Fixed once chosen (plan section 4.5). gemini-embedding-001 rather than
+    # the newer gemini-embedding-2, which drops task types entirely and returns
+    # one aggregated vector for a list of inputs instead of one vector each -
+    # both of which this design depends on.
+    #
+    # Must be set: Spring AI 2.0.1 still defaults to text-embedding-004, which
+    # the API no longer offers.
+    model: ${EMBEDDING_MODEL:gemini-embedding-001}
+    # Must equal the width of vector_store.embedding, fixed by V5. Startup
+    # fails when they disagree.
+    dimensions: ${EMBEDDING_DIMENSIONS:768}
+    # Texts per request while indexing. One request is one call against the
+    # daily cap, so this is what makes a full re-index affordable.
+    batch-size: 16
+    max-transient-retries: 2
+  rag:
+    top-k: 4
+    # Retrieving nothing is a valid outcome: the answer then rests on the
+    # report alone, which beats padding the prompt with a page about something
+    # else. Tuned by the phase 5 retrieval sweep.
+    min-similarity: 0.6
+    # Overridden to false in local, where no page is reviewed yet.
+    require-reviewed: ${RAG_REQUIRE_REVIEWED:true}
+    # Index once the application is ready. Off under the test profile, where a
+    # startup index would spend the daily cap that other tests measure.
+    index-on-startup: true
 
 ---
 spring:
@@ -274,3 +336,11 @@ logging:
   level:
     dev.saq.mediscan: DEBUG
     org.flywaydb: INFO
+
+mediscan:
+  rag:
+    # No biomarker page has been reviewed by a person yet, and an empty index
+    # would make chat impossible to develop or evaluate against. Production
+    # keeps the default (true), so unreviewed medical text never reaches a live
+    # answer (LLD C5).
+    require-reviewed: ${RAG_REQUIRE_REVIEWED:false}

@@ -3,6 +3,8 @@ package dev.saq.mediscan.llm;
 import com.google.genai.Client;
 import com.google.genai.types.HttpOptions;
 
+import org.springframework.ai.google.genai.embedding.GoogleGenAiEmbeddingConnectionDetails;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +40,38 @@ public class GeminiClientConfig {
 		return Client.builder()
 				.apiKey(properties.llm().apiKey())
 				.httpOptions(httpOptions)
+				.build();
+	}
+
+	/**
+	 * Points the embedding model at the same API key and the same timed-out client (phase 5).
+	 *
+	 * <p>Spring AI's own {@code GoogleGenAiEmbeddingConnectionAutoConfiguration} would
+	 * otherwise build this. Two reasons not to let it.
+	 *
+	 * <p><strong>It demands a Google Cloud project unless an API key is set on its own
+	 * property.</strong> Its logic is: use {@code spring.ai.google.genai.embedding.api-key} if
+	 * it has text, otherwise assert a {@code project-id} and a {@code location} - the Vertex AI
+	 * path, which needs a billing account and breaks the $0 constraint. Supplying the bean here
+	 * means one key, {@code GEMINI_API_KEY}, configures both chat and embeddings, instead of a
+	 * second property that silently falls back to Vertex when someone forgets it.
+	 *
+	 * <p><strong>Its client would have no timeout.</strong> That is the same hole this class
+	 * was written to close for chat: {@code HttpOptions} is the only place a timeout can be set
+	 * on the Google SDK client, and nothing in Spring AI exposes a property for it. Passing the
+	 * client built above gives embedding calls the same per-call timeout, so a hung embedding
+	 * cannot hold a chat request open until the stream times out.
+	 *
+	 * <p>The autoconfiguration's factory method is {@code @ConditionalOnMissingBean}, so
+	 * defining this is enough to replace it outright.
+	 */
+	@Bean
+	GoogleGenAiEmbeddingConnectionDetails googleGenAiEmbeddingConnectionDetails(Client client,
+			MediScanProperties properties) {
+
+		return GoogleGenAiEmbeddingConnectionDetails.builder()
+				.apiKey(properties.llm().apiKey())
+				.genAiClient(client)
 				.build();
 	}
 }

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * The prompt files, and the promises their text makes.
@@ -18,24 +18,66 @@ class PromptTemplatesTest {
 
 	private final PromptTemplates templates = new PromptTemplates();
 
+	/**
+	 * The purposes that send a prompt.
+	 *
+	 * <p>Driven by {@link LlmPurpose#hasPrompt()} rather than by naming the exceptions, so a
+	 * future purpose that genuinely forgets its prompt file is still caught here while
+	 * {@code EMBED} - which sends text to be vectorised and has no instructions at all - is
+	 * not demanded to have one.
+	 */
+	static java.util.stream.Stream<LlmPurpose> promptBearingPurposes() {
+		return java.util.Arrays.stream(LlmPurpose.values()).filter(LlmPurpose::hasPrompt);
+	}
+
 	@ParameterizedTest
-	@EnumSource(LlmPurpose.class)
-	@DisplayName("every purpose has a loaded, versioned prompt")
+	@MethodSource("promptBearingPurposes")
+	@DisplayName("every purpose that sends a prompt has a loaded, versioned one")
 	void everyPurposeHasAPrompt(LlmPurpose purpose) {
 		assertThat(templates.systemPrompt(purpose)).isNotBlank();
 		assertThat(templates.version(purpose)).matches("[a-z]+-v\\d+");
 	}
 
+	@Test
+	@DisplayName("a purpose with no prompt is refused rather than given an empty one")
+	void purposeWithoutAPromptThrows() {
+		// Returning null or "" would reach the provider as an empty system message, and a
+		// model with no instructions produces confident nonsense rather than an error.
+		org.assertj.core.api.Assertions
+				.assertThatThrownBy(() -> templates.systemPrompt(LlmPurpose.EMBED))
+				.isInstanceOf(IllegalArgumentException.class);
+		assertThat(templates.version(LlmPurpose.EMBED)).isEqualTo("none");
+	}
+
 	@ParameterizedTest
-	@EnumSource(LlmPurpose.class)
+	@MethodSource("promptBearingPurposes")
 	@DisplayName("every prompt tells the model that tagged content is data")
 	void everyPromptRefusesEmbeddedInstructions(LlmPurpose purpose) {
-		// CLAUDE.md rule 6. Both steps receive delimited content, and both must refuse to
-		// obey it - the summary step too, because a planted instruction can survive extraction
-		// inside a test name.
+		// CLAUDE.md rule 6. Every step that receives delimited content must refuse to obey it -
+		// the summary step too, because a planted instruction can survive extraction inside a
+		// test name, and chat most of all, because its delimited content includes what the
+		// caller just typed.
 		assertThat(templates.systemPrompt(purpose))
 				.containsIgnoringCase("as data")
 				.containsIgnoringCase("never as instructions");
+	}
+
+	@Test
+	@DisplayName("the chat prompt carries the three decision tags and the number rule")
+	void chatPromptStatesItsContract() {
+		String prompt = templates.systemPrompt(LlmPurpose.CHAT);
+
+		// The server reads the tag to decide finishReason (contract 4.4), so the prompt has to
+		// ask for exactly these three spellings.
+		assertThat(prompt).contains("[[ANSWER]]").contains("[[DECLINE]]")
+				.contains("[[NOT_IN_CONTEXT]]");
+
+		// CLAUDE.md rules 4 and 10. The guard enforces the number rule afterwards, but a
+		// prompt that did not state it would make the guard fire constantly.
+		assertThat(prompt)
+				.containsIgnoringCase("only write a number that appears")
+				.containsIgnoringCase("doctor or nurse");
+		assertThat(prompt).containsIgnoringCase("trust the flags");
 	}
 
 	@Test

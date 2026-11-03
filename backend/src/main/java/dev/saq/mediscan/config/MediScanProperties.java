@@ -43,7 +43,10 @@ public record MediScanProperties(
 		@Valid @NotNull Retention retention,
 		@Valid @NotNull History history,
 		@Valid @NotNull Trends trends,
-		@Valid @NotNull Admin admin) {
+		@Valid @NotNull Admin admin,
+		@Valid @NotNull Chat chat,
+		@Valid @NotNull Embedding embedding,
+		@Valid @NotNull Rag rag) {
 
 	/**
 	 * @param ttlHours how long a guest session, and the reports it owns, live for
@@ -257,5 +260,83 @@ public record MediScanProperties(
 	 * @param maxDays largest accepted {@code days}; over this is {@code 400 VALIDATION_ERROR}
 	 */
 	public record Admin(@Positive int defaultDays, @Positive int maxDays) {
+	}
+
+	/**
+	 * {@code POST /api/reports/{id}/chat} (contract section 4.4, LLD 11).
+	 *
+	 * @param model the chat model. <strong>Its own property, not {@code mediscan.llm.model}.</strong>
+	 *     Those two steps are measured by the Phase 3 evaluation and its committed baseline
+	 *     names the model it ran against; repointing one variable at both would move the
+	 *     pipeline's model as a side effect of choosing a chat model. They are also chosen on
+	 *     different criteria - extraction wants the most accurate transcriber, chat wants the
+	 *     one that follows the decision-tag rule and actually answers
+	 * @param maxOutputTokens ceiling on one answer, so a runaway response cannot spend the
+	 *     budget. The prompt asks for 120 words, which is well inside this
+	 * @param temperature low but not zero: an answer reads better than a transcription, and the
+	 *     number guard - not sampling - is what keeps the figures honest
+	 * @param historyTokenBudget history is trimmed to about this, oldest turns dropped first
+	 * @param ratePerHour chat messages per caller per hour, keyed by user id when signed in and
+	 *     by IP otherwise (contract section 1.6)
+	 * @param cacheTtl how long a cached answer lives
+	 * @param cacheMaxEntries entries held before the oldest are evicted
+	 * @param pingInterval gap between {@code : ping} comment lines. These keep proxies from
+	 *     closing an idle stream and are also the only way this app learns a client has gone:
+	 *     the Servlet API raises no disconnect event, so a failed write is the signal
+	 * @param streamTimeout longest one answer may take before the stream is closed
+	 */
+	public record Chat(
+			@NotNull String model,
+			@Positive int maxOutputTokens,
+			double temperature,
+			@Positive int historyTokenBudget,
+			@Positive int ratePerHour,
+			@NotNull Duration cacheTtl,
+			@Positive int cacheMaxEntries,
+			@NotNull Duration pingInterval,
+			@NotNull Duration streamTimeout) {
+	}
+
+	/**
+	 * The embedding model behind chat retrieval (LLD C2).
+	 *
+	 * @param model fixed once chosen. Changing it invalidates every stored vector, because
+	 *     vectors from two models are not comparable, so {@code ContentIndexer} re-embeds
+	 *     everything when this differs from what {@code content_index} recorded
+	 * @param dimensions the vector width requested from the API. Must equal the width of
+	 *     {@code vector_store.embedding}, which a migration fixed; startup fails when they
+	 *     disagree rather than writing vectors the column will reject one page in
+	 * @param batchSize texts sent per embedding request while indexing. One request is one call
+	 *     against the daily cap, so batching is what keeps a full re-index affordable
+	 * @param maxTransientRetries retries after a 429, a 5xx or a timeout
+	 */
+	public record Embedding(
+			@NotNull String model,
+			@Positive int dimensions,
+			@Positive int batchSize,
+			@Min(0) int maxTransientRetries) {
+	}
+
+	/**
+	 * Retrieval settings (LLD 6.2, 11).
+	 *
+	 * @param topK chunks retrieved for one question
+	 * @param minSimilarity cosine similarity a chunk must reach to be used at all. Retrieving
+	 *     nothing is a valid outcome - the answer then rests on the report alone, which is
+	 *     better than padding the prompt with a page about something else
+	 * @param requireReviewed when true, a page whose {@code reviewedOn} is null is not indexed.
+	 *     True in {@code prod} so unreviewed medical text cannot reach a live answer; false in
+	 *     {@code local}, where nothing is reviewed yet and an empty index would make chat
+	 *     untestable
+	 * @param indexOnStartup whether to index when the application becomes ready. Off under the
+	 *     test profile: embedding is a model call and comes out of the daily cap, so a startup
+	 *     index would spend the budget every test class measures - and the indexing tests call
+	 *     the indexer directly anyway, which is both faster and more precise
+	 */
+	public record Rag(
+			@Positive int topK,
+			double minSimilarity,
+			boolean requireReviewed,
+			boolean indexOnStartup) {
 	}
 }
