@@ -325,13 +325,22 @@ class ApiContractTest extends PostgresTestBase {
 	}
 
 	@Test
-	@DisplayName("the contract version was bumped for the 2.5 OCR changes")
+	@DisplayName("the contract version was bumped for the 2.6 chat changes")
 	void contractVersionIsCurrent() throws Exception {
 		String contract = readContract();
 
-		// Phase 4 adds one optional field and widens one failure code's meaning, which 9.2
-		// makes a compatible change - hence a minor bump rather than 3.0.
-		assertThat(contract).contains("**Version:** 2.5");
+		// Phase 5 changes no shape at all: the chat endpoint was fully specified in 1.0 and is
+		// only now implemented. The bump records three clarifications to 4.4 - what COMPLETE
+		// covers, when the cache applies, and that typed text is masked - so a reader can tell
+		// the documented behaviour apart from what was merely assumed.
+		assertThat(contract).contains("**Version:** 2.6");
+		assertThat(section(contract, "**2.6 (chat)**", "**2.5 (OCR)**"))
+				.contains("No shape changes")
+				.contains("COMPLETE")
+				.contains("meta.cached")
+				.contains("masked");
+
+		// Phase 4's entry is still there, one level further down.
 		assertThat(section(contract, "**2.5 (OCR)**", "**2.4**"))
 				.contains("textSource")
 				.contains("DOCUMENT_TOO_LONG")
