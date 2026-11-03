@@ -510,23 +510,64 @@ sequenceDiagram
     B->>A: POST /api/reports/{id}/chat { question, history }
     A->>A: Authenticate, chat rate limit (per user or per IP)
     A->>D: Load report by id + owner, require status DONE
-    A->>A: Check Caffeine cache (reportId + normalized question)
+    A->>A: Mask the question and each history turn
+    A->>A: Check Caffeine cache (only when history is empty)
     alt cache hit
         A-->>B: SSE meta (cached), tokens, sources, done
     else cache miss
-        A->>D: Increment daily LLM cap
-        A->>E: Embed question
+        A->>D: Increment daily LLM cap (embed)
+        A->>E: Embed the masked question
         A->>D: Top 4 biomarker page chunks by similarity
         A->>D: Load masked text + biomarkers
+        A->>D: Increment daily LLM cap (chat)
         A->>L: Prompt = rules + report + results + references + last 6 turns + question
         A-->>B: SSE meta
         L-->>A: Token stream
+        A->>A: Read the decision tag, then check each sentence
         A-->>B: SSE token events
         A-->>B: SSE sources, then done with finishReason
         A->>D: Update daily stats (token counts)
-        A->>A: Store answer in cache
+        A->>A: Store answer in cache (only when history was empty)
     end
 ```
+
+**Five things happen between the model and the browser.** They are what makes a
+streamed answer safe to show, and they are listed in the order they run.
+
+1. **Typed text is masked first.** The question and every history turn go through
+   the same personal-data rules as report text — email, phone, SSN, identifier
+   and date-of-birth patterns — before anything else looks at them. There is no
+   name model on this path: a typed question rarely carries the labels the name
+   rules need, and running the model over it would mangle test names. Nothing
+   typed is logged or stored, masked or not.
+2. **A decision tag opens every answer.** The model is told to start with exactly
+   one of `[[ANSWER]]`, `[[DECLINE]]` or `[[NOT_IN_CONTEXT]]`. The server reads
+   it, strips it, and maps it to the `finishReason` the contract requires.
+   A missing tag is treated as `[[ANSWER]]` and counted. The tag never reaches
+   the browser, and a tag repeated later in the text is removed too.
+3. **The answer is buffered into sentences, not forwarded token by token.**
+   A sentence ends at `.`, `!` or `?` followed by a space or newline, at a blank
+   line, or at the end of the stream. A decimal point inside a number is not a
+   sentence end, and a list item counts as one sentence.
+4. **Every sentence passes a number guard before it is sent.** The allowed set is
+   built from this report: the numbers in its values and printed reference
+   ranges, the numbers in its masked text, the flag counts, the collection date,
+   and small list markers. A sentence holding any other number stops the answer —
+   the model stream is cancelled, one closing `token` event explains that, and
+   `sources` and `done {COMPLETE}` still follow. A stopped answer is never
+   cached. Only the count is logged, never the sentence. The curated pages carry
+   no numeric ranges, so they add nothing to the allowed set.
+5. **The cache is for first questions only.** A question arrives with an empty
+   `history` or it does not. If it does, the normalized question is looked up
+   before any quota is spent, and a hit replays the stored answer with
+   `meta.cached = true` at no model and no embedding cost. If it does not, the
+   model answers. That is why **the embedding call only happens on a cache
+   miss**: the lookup is a string key, not a vector search.
+
+The guard catches an invented *number*. It cannot catch a wrong *word* — calling
+a normal value high. The prompt tells the model to trust the flags in
+`<results>` rather than judge values itself, and the chat evaluation measures
+flag contradictions directly (`docs/evaluation.md`).
 
 **Prompt layout** (in this order):
 
@@ -535,7 +576,13 @@ sequenceDiagram
 3. **Validated results:** `<results>` biomarker JSON `</results>`. The model is told to trust these flags over its own reading.
 4. **Reference pages:** `<reference>` the retrieved chunks, each with its page slug `</reference>`.
 5. **Recent history:** the last 6 turns from the client, capped at about 1,500 tokens.
-6. **The question.**
+6. **The question**, masked.
+
+**Delimiters hold.** `<` and `>` are escaped inside every data block, so no
+report, chunk, history turn or question can close a tag and start giving
+instructions. The model has no tools, so the worst an injected instruction can
+do is change the words of one answer — and that answer still passes the number
+guard before any of it is sent.
 
 **Event format:** `meta`, `token`, `sources`, `done` (with `finishReason`), and `error` are defined in `docs/api-contract.md` section 4.4.
 
@@ -633,19 +680,26 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    F["content/biomarkers/*.md<br/>bundled in the backend image"] --> H["Hash each file"]
-    H --> CMP{"Hash already<br/>in vector_store?"}
+    F["biomarkers/pages/*.md<br/>bundled in the backend image"] --> R{"reviewedOn set,<br/>or require-reviewed off?"}
+    R -->|"no"| SKIPR["Skip the page"]
+    R -->|"yes"| H["Hash each file"]
+    H --> CMP{"Same hash, model<br/>and size in content_index?"}
     CMP -->|"yes"| SKIP["Skip"]
-    CMP -->|"no"| CH["Split by heading<br/>~500 tokens per chunk"]
+    CMP -->|"no"| CH["Split by H2 heading<br/>~500 tokens per chunk"]
     CH --> EMB["Embed chunks"]
     EMB --> DEL["Delete old chunks for this slug"]
-    DEL --> INS[("Insert into vector_store<br/>metadata: slug, heading, hash")]
+    DEL --> INS[("Insert into vector_store<br/>metadata: slug, title, heading, chunkIndex")]
+    INS --> UPD[("Upsert content_index<br/>hash, model, dimensions, chunk count")]
 ```
 
 **Details**
-- **Startup cost:** content is only re-embedded when a file changes, so restarts don't spend embedding quota.
-- **One source of truth:** the frontend's static pages and the backend's RAG index read the same markdown folder. A small build step copies it into the backend image.
-- **No report data:** `vector_store` only ever holds reference content, so retention doesn't need to touch it.
+- **Startup cost:** content is only re-embedded when a file changes, so restarts don't spend embedding quota. A second start of an unchanged build embeds nothing.
+- **What "changed" means:** `content_index` stores each page's content hash together with the embedding model id and the vector size. A page is re-embedded when its hash differs; **every** page is re-embedded when the model or the size differs, because vectors from two models are not comparable. A page whose file has gone has its chunks deleted.
+- **One source of truth:** `client/content/biomarkers/` is the source. `scripts/sync-biomarker-content.sh` copies the pages and `index.json` into `backend/src/main/resources/biomarkers/`, and a test fails if the two copies differ byte for byte. The backend Docker build only sees `backend/`, so the copy has to exist; the test is what keeps it honest. This is the same arrangement `index.json` already uses.
+- **Only reviewed content in production:** `rag.require-reviewed` is true in `prod` and false in `local`. With it on, a page whose `reviewedOn` is null is not indexed at all, so unreviewed medical text can never reach a live answer. Locally everything is indexed, which is what makes the chat evaluation runnable before review.
+- **Indexing never blocks startup.** It runs after the application is ready, on a single thread. A failure — quota, network, a bad file — logs a WARN and leaves the existing index in place. Chat keeps working with whatever is indexed, including nothing.
+- **Counts only in the logs:** pages scanned, pages skipped, pages embedded, chunks written. Never a chunk, a heading body, or a vector.
+- **No report data:** `vector_store` only ever holds reference content, so retention doesn't need to touch it and it has no owner column.
 
 ### 9.2 Retention cleanup
 

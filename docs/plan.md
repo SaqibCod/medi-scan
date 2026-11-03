@@ -206,6 +206,9 @@ record ReportSummary(String patientSummary, List<String> highlights) {}
 - **Grounding:** answers use only the report and the retrieved pages. If the answer isn't there, the app says so.
 - **Medical advice:** diagnosis and treatment questions are declined with a pointer to a clinician.
 - **Streaming:** answers stream to the browser over Server-Sent Events.
+- **Decision tag:** the model opens every answer with exactly one of `[[ANSWER]]`, `[[DECLINE]]` or `[[NOT_IN_CONTEXT]]`. The server reads that tag, strips it, and maps it to the `finishReason` the contract puts on the `done` event. The tag is the only way the server can know by the end of a stream which of the three an answer was, short of grading the text with a second model. A missing tag counts as `[[ANSWER]]` and the count is logged; a tag repeated later in the text is removed. Nothing in the tag ever reaches the browser.
+- **Sentence gate and number guard:** tokens from the model are buffered into whole sentences rather than forwarded one by one, and each sentence is checked before it is sent. The allowed numbers are built from this report — the values and printed ranges, the numbers in the masked text, the flag counts, the collection date, and small list markers. A sentence quoting anything else stops the answer: the model stream is cancelled, one closing `token` event says the answer was stopped, and `sources` and `done {COMPLETE}` still follow. This is the rule that makes "never invent a number" enforceable rather than hopeful, and the price is a short buffering delay instead of a per-token trickle. The curated pages state no numeric ranges, so retrieved text never widens the allowed set.
+- **Cache for first questions:** an answer to a question sent with no history is cached in memory, keyed by report id, the normalized question, the prompt version and the model. A hit replays it with `cached: true` and costs no model call and no embedding call. Questions with history are never cached, because the answer depends on the conversation. Most repeats in practice are the four suggested questions on the report page, which is exactly what this catches. The cache is memory only, holds no report or user identity beyond the id, and is dropped when the report is deleted or expires.
 
 ### 4.6 Prompt-injection defense
 - Report text is wrapped in clear delimiters (for example `<report>...</report>`), and the system prompt says that content inside them is data only.
@@ -461,13 +464,15 @@ OPENAI_API_KEY=                    # optional, leave empty to disable
 OPENAI_CHAT_MODEL=<small, low-cost model>
 EMBEDDING_PROVIDER=gemini          # fixed once chosen
 EMBEDDING_MODEL=<embedding model>
-EMBEDDING_DIMENSIONS=<must match the pgvector column>
+EMBEDDING_DIMENSIONS=768           # must match the pgvector column; changing it needs a migration
+RAG_REQUIRE_REVIEWED=true          # index only pages with reviewedOn set; false in local
 DATABASE_URL=jdbc:postgresql://localhost:5433/mediscan   # 5433 avoids a natively installed Postgres on 5432
 DATABASE_USER=
 DATABASE_PASSWORD=
 ALLOWED_ORIGIN=http://localhost:3000
 RATE_LIMIT_UPLOADS_PER_HOUR=10
 RATE_LIMIT_SESSIONS_PER_HOUR=20    # per IP; api-contract.md 1.6
+RATE_LIMIT_CHAT_PER_HOUR=30        # per user or IP; api-contract.md 1.6
 GLOBAL_DAILY_LLM_CALLS=500
 UPLOAD_TEMP_DIR=                   # blank uses the default under the system temp directory
 OCR_ENABLED=true                   # false rejects images with 415 and skips the scanned-page fallback
@@ -492,6 +497,10 @@ DOMAIN=api.example.duckdns.org     # used by Caddy for TLS
 NEXT_PUBLIC_API_URL=http://localhost:8080
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 ```
+
+**The embedding settings are fixed once chosen.** `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` are written into the `content_index` table alongside each page's hash, and the vector size is fixed by the `vector_store` column. Changing either one re-embeds every page, and changing the size also needs a new migration. The app refuses to start if the configured size and the column disagree.
+
+**Chat settings with no environment variable** — the output token limit, temperature, history budget, cache TTL and size, ping interval, stream timeout, `rag.top-k` and `rag.min-similarity` — are properties with defaults in `application.yml`, listed in `docs/phase-5-lld.md` section 11. They are tuning knobs, not deployment configuration, so they are not in this file.
 
 **Google setup (free):** create an OAuth "Web application" client in Google Cloud console. Add `http://localhost:3000` and the Vercel URL as authorized JavaScript origins. No client secret is needed for the ID token flow.
 
@@ -569,7 +578,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 Phase 7 is split into 7a to 7d (see item 8), and **7a and 7b are built before phases 4 and 5**. The frontend foundation — tokens, components, the shell, the API client — is what every later screen is drawn on, and OCR and chat both need a UI to be worth anything. Building it now also means the design system is ported once, against the design docs, rather than retrofitted onto screens that already exist. 7b follows immediately because it is what turns that foundation into something a visitor can actually use, and because OCR and chat both hang off screens it builds: the upload panel and the report page.
 
-The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is Phase 4 (OCR).**
+The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is Phase 5 (chat).**
 
 1. **Foundation (Phase 1) — done:**
    - Monorepo setup.
@@ -595,13 +604,16 @@ The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Pha
 
    Built here, before the pipeline work that follows, because every later phase reads or writes reports through the owner model. Chat in particular would otherwise be built against guest-only ownership and rewritten. No frontend work: the sign-in UI ships with phase 7.
 4. **Evaluation (Phase 3) — done:** the synthetic test set and the scoring runner, built before OCR so every later change is measured. Method and baseline: `docs/evaluation.md`.
-5. **OCR (Phase 4) — current:** the `tesseract` command-line program, run as a child process, for images and the scanned-PDF fallback, feeding the same pipeline. Values OCR read with low confidence are never flagged (4.2, 4.4). Low-level design: `docs/phase-4-lld.md`.
-6. **Chat (Phase 5):**
+5. **OCR (Phase 4) — done:** the `tesseract` command-line program, run as a child process, for images and the scanned-PDF fallback, feeding the same pipeline. Values OCR read with low confidence are never flagged (4.2, 4.4). Low-level design: `docs/phase-4-lld.md`; results in `docs/evaluation.md`.
+6. **Chat (Phase 5) — current:**
    - Curated biomarker content and embeddings.
    - Report-context chat with RAG and SSE.
-   - Prompt-injection defenses.
+   - Prompt-injection defenses, the decision tag, and the number guard (4.5).
    - Rate limits and the Postgres daily cap.
    - Caching and token logging.
+   - The chat panel on the report page from 7b.
+
+   Low-level design: `docs/phase-5-lld.md`.
 7. **History, trends, and admin stats (Phase 6b) — done:**
    - `GET /api/reports` (history list).
    - `GET /api/trends` and `GET /api/trends/markers`.

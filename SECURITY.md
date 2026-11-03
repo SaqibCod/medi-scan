@@ -212,6 +212,64 @@ patterns that would have caught it no longer match, which is the case already
 listed under the masking limits above. The evaluation measures leaks on OCR
 cases separately for that reason.
 
+## Asking questions about a report (chat)
+
+Chat is the one place where you type something into Medi-Scan rather than
+uploading it, and the one place where a model's words go straight to your
+screen. Five things about it are worth stating plainly.
+
+**Nothing you type is kept.** Not the question, not the answer, not the
+conversation. There is no chat table, no chat column, and no log line that
+contains any of it — not even at debug level, and not inside an error message.
+The conversation lives in your browser tab and in the server's memory for as
+long as the answer takes to write. Reload the page and it is gone, which is what
+the "Not saved" tag on the panel means. Because nothing is stored, the server
+has no history of its own: your browser sends the last few turns back with each
+question, and the server caps how many it will accept.
+
+**What the model is given, and nothing else.** One request carries: the masked
+report text, the list of values after they were checked in code, up to four
+short passages from our own biomarker pages, the recent turns, and your
+question. No image, no original file, no name, no account, no report id. The
+model has no tools and nothing it can call — it returns text and that is all.
+Everything that came from outside sits inside delimiters with `<` and `>`
+escaped, so no report, page or question can close a tag and start issuing
+instructions. A report that contains "ignore your instructions" is a test case
+in our evaluation set, not a surprise.
+
+**What you type is masked too.** The question and every turn of history go
+through the same personal-data patterns as report text — email, phone, SSN,
+identifier and date-of-birth shapes — before the prompt is built. If you type
+your phone number into a question, the model does not see it. This is a second
+line, not a licence: masking is best-effort here exactly as it is everywhere
+else on this page, so still don't type anything you would mind publishing.
+
+**Every sentence is checked for invented numbers before you see it.** This is
+the defence that matters most. A model that cheerfully says "normal is under
+130" has invented a clinical cutoff, and a reader has no way to tell that from a
+number copied off their own report. So answers are not streamed to you a token
+at a time. They are buffered into whole sentences, and each sentence is checked
+against the numbers that are actually allowed: the values and reference ranges
+printed on your report, the numbers in its text, the counts, and the collection
+date. A sentence quoting anything else stops the answer there — you get a line
+saying so instead of the rest. The curated biomarker pages deliberately state no
+numeric ranges at all, so retrieved text can never widen that set.
+
+The honest limit: the guard catches a wrong *number*, not a wrong *word*. It
+cannot tell that a normal value has been described as high. The flags come from
+code and the model is told to trust them rather than judge values itself, and
+the chat evaluation measures how often an answer contradicts a flag.
+
+**Diagnosis and treatment questions are declined.** The model is told to start
+an answer with one of three markers — a normal answer, a refusal, or "that isn't
+in your report". The server reads that marker, removes it, and uses it to label
+the answer in the UI; it never reaches your browser as text. Ask whether you
+have a condition, which drug to take, what dose, or how urgent something is, and
+you get a short note pointing at a doctor or nurse, plus whatever the report
+does say. The evaluation measures that refusal rate against a target of 100%,
+and measures over-refusal on ordinary questions too, because a demo that refuses
+everything is not safe, just useless.
+
 ## What is stored, and for how long
 
 | Data | Stored | Deleted |
@@ -344,6 +402,13 @@ is useless without the owner's credential — someone else's report returns 404,
 not 403, so a leaked URL confirms nothing. `/reports/` is excluded in
 `robots.txt` and report pages carry `noindex`.
 
+A chat conversation is held the same way, and more strictly: it is React state
+belonging to one report in one tab, never written to `localStorage` or
+`sessionStorage`, never put in a URL or a page title, and never logged to the
+console. It does not survive a reload, and two tabs showing the same report do
+not share one. The panel says "Not saved" because that is literally true on both
+ends of the connection.
+
 An uploaded file stays a `File` object in memory until the request is sent, is
 never read into storage, and the file input is reset afterwards. The browser
 makes no third-party requests: the only origins it ever contacts are the site
@@ -403,8 +468,9 @@ filters by the caller's owner id, and **someone else's report returns 404, not
 
 ## No medical advice
 
-Diagnosis and treatment questions are declined with a pointer to a clinician.
-There is deliberately **no `CRITICAL` flag**: critical values use separate
+Diagnosis and treatment questions are declined with a pointer to a clinician —
+in the summary, and in chat, where the refusal is measured (see the chat section
+above). There is deliberately **no `CRITICAL` flag**: critical values use separate
 cutoffs that cannot be derived from a reference range, and inventing one would
 be the most dangerous thing this app could do.
 

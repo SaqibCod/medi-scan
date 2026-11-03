@@ -2,7 +2,7 @@
 
 This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v3 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
 
-**Version:** 2.5 (OCR: images accepted, new `result.textSource`; no breaking change)
+**Version:** 2.6 (chat: three clarifications to 4.4; no shape change)
 
 ---
 
@@ -655,6 +655,12 @@ data: {"finishReason":"COMPLETE"}
 | `done` | `{ finishReason }` | `COMPLETE`, `DECLINED` (diagnosis or treatment question), or `NOT_IN_CONTEXT` (answer not in the report or pages) |
 | `error` | `{ code, message }` | Stream ends after this. Codes: `LLM_UNAVAILABLE`, `CAPACITY`, `INTERNAL_ERROR`. |
 
+**`finishReason: "COMPLETE"` also covers an answer the server cut short.** Every sentence is checked before it is sent, and an answer that quotes a number which is not on the report or its results is stopped there. The stream still ends normally: a final `token` event says in plain words that the answer was stopped, then `sources`, then `done` with `COMPLETE`. A stopped answer is not an error and needs no special case in the client. The guard is a server-side rule, not a field.
+
+**The cache only holds answers to first questions.** `meta.cached` can be `true` only for a request sent with an empty `history`. A question with history is always answered by the model, so a follow-up is never served an answer built for a different conversation. Cache keys always start with the report id, so an entry can never cross owners, and entries are dropped when the report is deleted or expires. The cache is memory only and is never written to the database.
+
+**Typed text is masked before the model sees it.** The server runs `question` and every `history[].content` through its personal-data rules (email, phone, SSN, identifier and date-of-birth patterns) while building the prompt. The request and response shapes are unchanged — this is stated so there is no doubt about what reaches the model. Nothing typed is logged or stored either way.
+
 **Chat history is never stored,** for guests or signed-in users.
 
 **Keep-alive.** The server sends an SSE comment line (`: ping`) every 15 seconds while the model is thinking, so proxies don't close the connection.
@@ -1134,6 +1140,13 @@ export interface ProblemDetail {
 ---
 
 ## 11. Changelog
+
+**2.6 (chat)**
+- **No shape changes.** No endpoint, field, enum, error code or SSE event changed. `POST /api/reports/{id}/chat` (4.4) is built in Phase 5 exactly as it was already specified: the event order `meta`, `token`…, `sources`, `done`, an `error` event replacing `sources` and `done` on a mid-stream failure, the `: ping` keep-alive, and the six before-the-stream error codes as JSON Problem Details.
+- **`finishReason: "COMPLETE"` covers a guarded stop (4.4).** The server checks each sentence before sending it and stops an answer that quotes a number which is not on the report. The stream still ends `sources` then `done` with `COMPLETE`, so no enum value was added.
+- **`meta.cached` is limited to first questions (4.4).** Only a request with an empty `history` can be answered from the cache.
+- **Typed text is masked before the model sees it (4.4).** `question` and `history[].content` go through the personal-data rules on the way into the prompt. No field changed type or meaning.
+- **Every endpoint in this document now has a handler.** The "not available yet" notes in 2.3 are spent: 4.5, section 5 and section 6 shipped in Phase 6b, images in Phase 4, and chat here.
 
 **2.5 (OCR)**
 - **Images are accepted (4.1).** PNG and JPEG uploads no longer return `415 UNSUPPORTED_FILE_TYPE`; they are read with OCR, as are PDF pages with no text layer. An image over 40 megapixels is still accepted at upload and then fails the job with `UNREADABLE`.
