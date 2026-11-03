@@ -95,6 +95,15 @@ class CachingLlmProviderTest {
 			return "fake";
 		}
 
+		/** This double exists to count structured calls; nothing here streams. */
+		@Override
+		public reactor.core.publisher.Flux<dev.saq.mediscan.llm.LlmStreamChunk> stream(
+				LlmRequest request) {
+
+			throw new UnsupportedOperationException(
+					"CountingDelegate is for the text evaluation and does not stream");
+		}
+
 		@Override
 		public String model() {
 			return "fake-model";

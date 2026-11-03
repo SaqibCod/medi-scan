@@ -23,6 +23,20 @@ public interface LlmProvider {
 	String model();
 
 	/**
+	 * The model used for {@code purpose}.
+	 *
+	 * <p>Chat is configured separately from the pipeline ({@code mediscan.chat.model} rather
+	 * than {@code mediscan.llm.model}), because the two are chosen on different grounds and
+	 * because the committed Phase 3 baseline names the model extraction ran against - moving
+	 * one variable should not move both. Without this method the usage log would report the
+	 * pipeline's model for every chat call, which is exactly the kind of quietly wrong log
+	 * line that cost two days in Phase 3.
+	 */
+	default String model(LlmPurpose purpose) {
+		return model();
+	}
+
+	/**
 	 * Calls the model and parses the response into {@code outputType}.
 	 *
 	 * @throws LlmException.InvalidLlmOutputException when the response is not parseable
@@ -31,5 +45,16 @@ public interface LlmProvider {
 	 */
 	<T> LlmResult<T> structured(LlmRequest request, Class<T> outputType);
 
-	// Phase 5 adds streaming for chat: Flux<String> stream(LlmRequest request).
+	/**
+	 * Streams an answer, for chat (phase 5).
+	 *
+	 * <p>Cold: nothing is sent until the returned {@link Flux} is subscribed to, and cancelling
+	 * that subscription must stop the underlying HTTP call. Both matter for quota - a stream
+	 * nobody is reading still costs tokens - and cancellation is how the number guard stops an
+	 * answer it has decided not to send.
+	 *
+	 * <p>Failures arrive as {@code onError} with the same three {@link LlmException} kinds
+	 * {@link #structured} throws, so the gateway maps them in one place.
+	 */
+	reactor.core.publisher.Flux<LlmStreamChunk> stream(LlmRequest request);
 }

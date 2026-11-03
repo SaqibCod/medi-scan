@@ -19,6 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import dev.saq.mediscan.config.MediScanProperties;
+import reactor.core.publisher.Flux;
 
 /**
  * Gemini, through Spring AI's Google GenAI module and a Google AI Studio API key.
@@ -76,10 +77,12 @@ public class GeminiProvider implements LlmProvider {
 
 	private final ChatModel chatModel;
 	private final String model;
+	private final String conversationModel;
 
 	public GeminiProvider(ChatModel chatModel, MediScanProperties properties) {
 		this.chatModel = chatModel;
 		this.model = properties.llm().model();
+		this.conversationModel = properties.chat().model();
 	}
 
 	@Override
@@ -90,6 +93,20 @@ public class GeminiProvider implements LlmProvider {
 	@Override
 	public String model() {
 		return model;
+	}
+
+	/**
+	 * The pipeline model for extraction and summary, the chat model for chat.
+	 *
+	 * <p>Two properties on purpose. The Phase 3 baseline names the model extraction was
+	 * measured against, so choosing a chat model must not move it - and on 2026-11-03 that
+	 * mattered in practice: {@code gemini-3.8-flash}, which the pipeline uses, answered a
+	 * models listing but returned 503 on every generation attempt, while
+	 * {@code gemini-3.6-flash} answered in about a second.
+	 */
+	@Override
+	public String model(LlmPurpose purpose) {
+		return purpose == LlmPurpose.CHAT ? conversationModel : model;
 	}
 
 	@Override
@@ -133,6 +150,67 @@ public class GeminiProvider implements LlmProvider {
 		T value = parse(converter, text);
 
 		return new LlmResult<>(value, inputTokens(response), outputTokens(response), latencyMs);
+	}
+
+	/**
+	 * Streams a chat answer.
+	 *
+	 * <p><strong>Thinking is off.</strong> {@code thinkingBudget(0)} rather than the
+	 * {@code thinkingLevel(LOW)} the pipeline uses, and it is not interchangeable: the two
+	 * options are mutually exclusive, and which one a model accepts differs by model line.
+	 * Verified live on 2026-11-03 - {@code gemini-3.6-flash} accepts {@code thinkingBudget: 0}
+	 * and reports {@code thoughtsTokenCount=0}, while {@code thinkingLevel: MINIMAL} is
+	 * rejected outright by {@code gemini-3.8-flash}. Thinking tokens cost latency the reader
+	 * watches and budget the demo does not have, and Phase 3 found they also eat the output
+	 * allowance before the visible answer finishes.
+	 *
+	 * <p><strong>The Flux is cold and cancellable.</strong> Spring AI's streaming call does not
+	 * start until subscription, and disposing the subscription closes the underlying call -
+	 * which is what stops the model mid-answer when the number guard rejects a sentence or the
+	 * reader closes the tab.
+	 *
+	 * <p>Errors are classified by {@link #classify}, the same mapping {@link #structured} uses,
+	 * so a 429 is transient here for exactly the reason it is transient there.
+	 */
+	@Override
+	public Flux<LlmStreamChunk> stream(LlmRequest request) {
+		GoogleGenAiChatOptions options = (GoogleGenAiChatOptions) GoogleGenAiChatOptions.builder()
+				.model(model(request.purpose()))
+				.maxOutputTokens(request.maxOutputTokens())
+				.temperature(request.temperature())
+				.thinkingBudget(0)
+				.build();
+
+		List<Message> messages = List.of(
+				new SystemMessage(request.systemPrompt()),
+				new UserMessage(request.userContent()));
+
+		return Flux.defer(() -> chatModel.stream(new Prompt(messages, options)))
+				.map(GeminiProvider::toChunk)
+				.onErrorMap(RuntimeException.class, GeminiProvider::classify);
+	}
+
+	/**
+	 * One provider chunk, flattened.
+	 *
+	 * <p>Usage is cumulative on every chunk and the finish reason arrives on the last, so this
+	 * copies both through unchanged and lets the gateway read the final one. A null text is
+	 * normal on that last chunk.
+	 */
+	private static LlmStreamChunk toChunk(ChatResponse response) {
+		Generation generation = response.getResult();
+		String text = "";
+		String finishReason = null;
+
+		if (generation != null) {
+			AssistantMessage output = generation.getOutput();
+			text = output != null && output.getText() != null ? output.getText() : "";
+			var metadata = generation.getMetadata();
+			String reason = metadata != null ? metadata.getFinishReason() : null;
+			finishReason = reason == null || reason.isBlank() ? null : reason;
+		}
+
+		return new LlmStreamChunk(text, inputTokens(response), outputTokens(response), finishReason);
 	}
 
 	private ChatResponse call(Prompt prompt) {

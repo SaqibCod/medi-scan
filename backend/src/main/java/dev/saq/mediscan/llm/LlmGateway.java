@@ -2,6 +2,7 @@ package dev.saq.mediscan.llm;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 import dev.saq.mediscan.config.MediScanProperties;
 import dev.saq.mediscan.config.ReportErrorCode;
 import dev.saq.mediscan.config.ReportFailure;
+import reactor.core.publisher.Flux;
 
 /**
  * The only way into the {@code llm} package from the pipeline.
@@ -141,6 +143,72 @@ public class LlmGateway {
 				throw new ReportFailure(ReportErrorCode.LLM_UNAVAILABLE);
 			}
 		}
+	}
+
+	/**
+	 * Streams a chat answer, with the cap taken and usage logged (phase 5).
+	 *
+	 * <p><strong>No retries, unlike {@link #structured}.</strong> A retry would start the
+	 * answer again, and by the time a stream fails some of it has usually been sent to the
+	 * reader already - a second attempt would either duplicate text or contradict it. A failed
+	 * stream becomes an SSE {@code error} event instead (contract 4.4), which is honest about
+	 * what happened and leaves the partial answer on screen.
+	 *
+	 * <p>The cap is taken once, when something subscribes - not when this method is called.
+	 * That matters because the returned {@link Flux} is cold: building it must cost nothing, or
+	 * a request refused later for some other reason would still have spent budget.
+	 *
+	 * <p>Usage is logged from the final chunk, where the provider puts its totals. Token counts
+	 * are cumulative on every chunk, so summing them would multiply a short answer's cost by
+	 * its chunk count.
+	 *
+	 * @throws LlmException.CapacityLlmException through the {@code Flux} when the daily cap is
+	 *     reached
+	 */
+	public Flux<LlmStreamChunk> streamChat(String systemPrompt, String userContent,
+			double temperature, int maxOutputTokens) {
+
+		LlmRequest request = new LlmRequest(LlmPurpose.CHAT, systemPrompt, userContent,
+				temperature, maxOutputTokens);
+		String promptVersion = prompts.version(LlmPurpose.CHAT);
+		String model = provider.model(LlmPurpose.CHAT);
+
+		return Flux.defer(() -> {
+			if (!capGuard.tryAcquire()) {
+				usageLogger.recordCapReached(LlmPurpose.CHAT, capGuard.usedToday(), capGuard.cap());
+				return Flux.error(new LlmException.CapacityLlmException("daily cap reached"));
+			}
+
+			long startedAt = System.nanoTime();
+			AtomicReference<LlmStreamChunk> last = new AtomicReference<>();
+
+			return provider.stream(request)
+					.doOnNext(last::set)
+					.doOnComplete(() -> recordStreamSuccess(promptVersion, model, startedAt,
+							last.get()))
+					.doOnError(failure -> usageLogger.recordFailure(LlmPurpose.CHAT, provider.id(),
+							model, promptVersion, 1,
+							(System.nanoTime() - startedAt) / 1_000_000, failure));
+		});
+	}
+
+	/**
+	 * Logs what a finished stream cost.
+	 *
+	 * <p>Reads the last chunk, which carries the provider's totals. A stream that ended without
+	 * one - cancelled by the guard, or by a reader closing the tab - still logs, with zeros, so
+	 * the cap entry it already spent is not invisible in the log.
+	 */
+	private void recordStreamSuccess(String promptVersion, String model, long startedAt,
+			LlmStreamChunk last) {
+
+		long latencyMs = (System.nanoTime() - startedAt) / 1_000_000;
+		int inputTokens = last != null ? last.inputTokens() : 0;
+		int outputTokens = last != null ? last.outputTokens() : 0;
+
+		usageLogger.recordSuccess(LlmPurpose.CHAT, provider.id(), model, promptVersion, 1,
+				new LlmResult<>(null, inputTokens, outputTokens, latencyMs));
+		tokenRecorder.recordTokens(inputTokens, outputTokens);
 	}
 
 	/** The common case: parsing succeeded, so the value is valid. */

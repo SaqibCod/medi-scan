@@ -129,6 +129,15 @@ class RecordingLlmProviderTest {
 				return "fake-model";
 			}
 
+			/** Scripted single-shot answers only; nothing in this test streams. */
+			@Override
+			public reactor.core.publisher.Flux<dev.saq.mediscan.llm.LlmStreamChunk> stream(
+					LlmRequest request) {
+
+				throw new UnsupportedOperationException(
+						"this scripted provider is for the text evaluation and does not stream");
+			}
+
 			@Override
 			public <T> LlmResult<T> structured(LlmRequest request, Class<T> outputType) {
 				return queue.poll().respond();

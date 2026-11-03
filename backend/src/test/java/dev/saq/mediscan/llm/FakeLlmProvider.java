@@ -14,6 +14,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
+import reactor.core.publisher.Flux;
+
 /**
  * A scripted {@link LlmProvider} for tests and local development.
  *
@@ -62,6 +64,32 @@ public class FakeLlmProvider implements LlmProvider {
 
 		/** Block until {@code release} is counted down, then return {@code value}. */
 		record Block(CountDownLatch release, Object value) implements Script {
+		}
+	}
+
+	/**
+	 * What a streamed call should do (phase 5).
+	 *
+	 * <p>Separate from {@link Script} because a stream can fail <em>part way</em>, which a
+	 * single-shot call cannot, and that case is the one the contract has an opinion about: the
+	 * client must get an {@code error} event and no {@code done}.
+	 */
+	public sealed interface StreamScript {
+
+		/** Emit each piece in order, then finish normally. */
+		record Emit(List<String> pieces) implements StreamScript {
+		}
+
+		/** Emit each piece with a pause between, so pings and cancellation can be observed. */
+		record EmitSlowly(List<String> pieces, Duration gap) implements StreamScript {
+		}
+
+		/** Emit some pieces, then fail. The mid-stream case. */
+		record FailAfter(List<String> pieces, RuntimeException failure) implements StreamScript {
+		}
+
+		/** Fail before emitting anything, as a provider that is down would. */
+		record FailImmediately(RuntimeException failure) implements StreamScript {
 		}
 	}
 
@@ -115,7 +143,7 @@ public class FakeLlmProvider implements LlmProvider {
 
 	private final Map<LlmPurpose, Script> standing = new EnumMap<>(LlmPurpose.class);
 
-	/** Clears all scripts, recorded requests and counters. */
+	/** Clears all scripts, recorded requests and counters, streaming included. */
 	public synchronized void reset() {
 		scripts.values().forEach(Deque::clear);
 		standing.clear();
@@ -123,6 +151,11 @@ public class FakeLlmProvider implements LlmProvider {
 			received.clear();
 		}
 		callCount = 0;
+		// Streaming state too. Leaving it out let one test's queued stream be consumed by the
+		// next, which fails as a confusing assertion about text the second test never wrote.
+		streamScripts.clear();
+		cancels.set(0);
+		streamStarts.set(0);
 	}
 
 	// --- assertions ---------------------------------------------------------
@@ -192,6 +225,87 @@ public class FakeLlmProvider implements LlmProvider {
 			}
 		};
 	}
+
+	// --- streaming (phase 5) -------------------------------------------------
+
+	/** Queues one streamed answer. Consumed in order, like the single-shot scripts. */
+	public synchronized FakeLlmProvider queueStream(StreamScript script) {
+		streamScripts.addLast(script);
+		return this;
+	}
+
+	/** The common case: one answer, emitted in the given pieces. */
+	public FakeLlmProvider streamPieces(String... pieces) {
+		return queueStream(new StreamScript.Emit(List.of(pieces)));
+	}
+
+	/** Streams in flight that have been cancelled, which is what disconnect tests assert on. */
+	public int cancelCount() {
+		return cancels.get();
+	}
+
+	/** Streams that were subscribed to at all. */
+	public int streamCount() {
+		return streamStarts.get();
+	}
+
+	@Override
+	public Flux<LlmStreamChunk> stream(LlmRequest request) {
+		// Everything inside the defer, including taking the script and recording the request.
+		// The real provider sends nothing until subscription, so a fake that consumed its
+		// script when the Flux was merely built would let a stream nobody read swallow the
+		// next test's answer - and would record a request that was never made.
+		return Flux.defer(() -> {
+			synchronized (received) {
+				received.add(request);
+			}
+
+			StreamScript script = nextStream();
+			if (script == null) {
+				return Flux.error(new IllegalStateException(
+						"FakeLlmProvider has no stream queued; the test under-specified itself"));
+			}
+
+			streamStarts.incrementAndGet();
+			return switch (script) {
+				case StreamScript.Emit(List<String> pieces) -> Flux.fromIterable(chunks(pieces));
+				case StreamScript.EmitSlowly(List<String> pieces, Duration gap) ->
+						Flux.fromIterable(chunks(pieces))
+								.delayElements(gap);
+				case StreamScript.FailAfter(List<String> pieces, RuntimeException failure) ->
+						Flux.fromIterable(textChunks(pieces))
+								.concatWith(Flux.error(failure));
+				case StreamScript.FailImmediately(RuntimeException failure) ->
+						Flux.error(failure);
+			};
+		})
+		// doOnCancel, not doFinally: the disconnect and guard-stop tests need to tell a
+		// cancelled stream from one that simply ended.
+		.doOnCancel(cancels::incrementAndGet);
+	}
+
+	/** Text pieces plus a final chunk carrying usage and a finish reason, as Gemini does. */
+	private static List<LlmStreamChunk> chunks(List<String> pieces) {
+		List<LlmStreamChunk> chunks = new ArrayList<>(textChunks(pieces));
+		chunks.add(new LlmStreamChunk("", 1200, 180, "STOP"));
+		return chunks;
+	}
+
+	private static List<LlmStreamChunk> textChunks(List<String> pieces) {
+		return pieces.stream().map(LlmStreamChunk::text).toList();
+	}
+
+	private synchronized StreamScript nextStream() {
+		return streamScripts.pollFirst();
+	}
+
+	private final Deque<StreamScript> streamScripts = new ArrayDeque<>();
+
+	private final java.util.concurrent.atomic.AtomicInteger cancels =
+			new java.util.concurrent.atomic.AtomicInteger();
+
+	private final java.util.concurrent.atomic.AtomicInteger streamStarts =
+			new java.util.concurrent.atomic.AtomicInteger();
 
 	private synchronized Script next(LlmPurpose purpose) {
 		Script queued = scripts.get(purpose).pollFirst();

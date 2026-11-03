@@ -55,6 +55,26 @@ public final class RecordingLlmProvider implements LlmProvider {
 	}
 
 	@Override
+	public String model(dev.saq.mediscan.llm.LlmPurpose purpose) {
+		return delegate.model(purpose);
+	}
+
+	/**
+	 * Passed straight through, unrecorded.
+	 *
+	 * <p>This records the text evaluation's attempts - one request, one response, one outcome
+	 * - so a run can be replayed and audited. A stream has no single response to record, and
+	 * the chat evaluation's offline mode needs its own recording of chunk sequences. Recording
+	 * nothing here is honest; pretending a stream is one attempt would not be.
+	 */
+	@Override
+	public reactor.core.publisher.Flux<dev.saq.mediscan.llm.LlmStreamChunk> stream(
+			LlmRequest request) {
+
+		return delegate.stream(request);
+	}
+
+	@Override
 	public <T> LlmResult<T> structured(LlmRequest request, Class<T> outputType) {
 		try {
 			LlmResult<T> result = delegate.structured(request, outputType);

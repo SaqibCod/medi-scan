@@ -62,4 +62,21 @@ public abstract class LlmException extends RuntimeException {
 			super(message, cause);
 		}
 	}
+
+	/**
+	 * The daily cap was reached, so no call was made (phase 5).
+	 *
+	 * <p>Not a provider failure at all, which is why it is separate: nothing went wrong, the
+	 * demo simply spent its budget for the day. The pipeline expresses this as
+	 * {@code ReportFailure(CAPACITY)} on a report, but a chat answer has no report to fail -
+	 * it is either refused before the stream opens, as {@code 429 CAPACITY}, or reported as an
+	 * SSE {@code error} event with that code when the budget runs out part way through
+	 * (contract 4.4).
+	 */
+	public static class CapacityLlmException extends LlmException {
+
+		public CapacityLlmException(String message) {
+			super(message, null);
+		}
+	}
 }
