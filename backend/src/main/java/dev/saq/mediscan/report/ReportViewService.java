@@ -34,20 +34,36 @@ public class ReportViewService {
 
 	private static final Logger log = LoggerFactory.getLogger(ReportViewService.class);
 
+	/**
+	 * Told when a report is deleted, so caches holding anything derived from it can let go.
+	 *
+	 * <p>An interface declared here rather than a direct call into {@code chat}, for the same
+	 * reason {@link dev.saq.mediscan.llm.LlmGateway.TokenRecorder} exists: {@code chat} already
+	 * depends on {@code report}, and calling back the other way would make the two mutually
+	 * dependent. This package does not need to know who is listening or why.
+	 */
+	public interface DeletionListener {
+
+		void reportDeleted(UUID reportId);
+	}
+
 	private final ReportRepository reports;
 	private final BiomarkerRepository biomarkers;
 	private final ReportSummaryRepository summaries;
 	private final ReportResponseMapper mapper;
 	private final Clock clock;
+	private final List<DeletionListener> deletionListeners;
 
 	public ReportViewService(ReportRepository reports, BiomarkerRepository biomarkers,
-			ReportSummaryRepository summaries, ReportResponseMapper mapper, Clock clock) {
+			ReportSummaryRepository summaries, ReportResponseMapper mapper, Clock clock,
+			List<DeletionListener> deletionListeners) {
 
 		this.reports = reports;
 		this.biomarkers = biomarkers;
 		this.summaries = summaries;
 		this.mapper = mapper;
 		this.clock = clock;
+		this.deletionListeners = List.copyOf(deletionListeners);
 	}
 
 	/**
@@ -89,7 +105,11 @@ public class ReportViewService {
 		if (deleted == 0) {
 			throw notFound();
 		}
-		// The child rows go with it through ON DELETE CASCADE.
+		// The child rows go with it through ON DELETE CASCADE. Anything held outside the
+		// database - the chat answer cache - has to be told, or "delete" would be a half
+		// truth: the report would be gone while sentences quoting it could still be replayed.
+		deletionListeners.forEach(listener -> listener.reportDeleted(reportId));
+
 		log.info("report deleted id={}", reportId);
 	}
 

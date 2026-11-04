@@ -42,11 +42,13 @@ public class ReportFixtures {
 	private final UserRepository userRepository;
 	private final ReportStatusService reportStatus;
 	private final BiomarkerRepository biomarkers;
+	private final dev.saq.mediscan.report.ReportTextRepository reportTexts;
 	private final Clock clock;
 
 	public ReportFixtures(SessionRepository sessions, ReportRepository reports,
 			SessionService sessionService, UserUpsert users, UserRepository userRepository,
-			ReportStatusService reportStatus, BiomarkerRepository biomarkers, Clock clock) {
+			ReportStatusService reportStatus, BiomarkerRepository biomarkers,
+			dev.saq.mediscan.report.ReportTextRepository reportTexts, Clock clock) {
 		this.sessions = sessions;
 		this.reports = reports;
 		this.sessionService = sessionService;
@@ -54,6 +56,7 @@ public class ReportFixtures {
 		this.userRepository = userRepository;
 		this.reportStatus = reportStatus;
 		this.biomarkers = biomarkers;
+		this.reportTexts = reportTexts;
 		this.clock = clock;
 	}
 
@@ -211,6 +214,35 @@ public class ReportFixtures {
 				biomarkerSlug, numericValue == null ? "Negative" : String.valueOf(numericValue),
 				numericValue, unit, null, refLow, refHigh, flag));
 		return id;
+	}
+
+	/**
+	 * One validated value with its printed text and range (phase 5).
+	 *
+	 * <p>Chat needs both: {@code rawValue} and {@code referenceRangeText} are what build the
+	 * guard's allowed-number set, and the overload above leaves the range null and derives the
+	 * value from the number - which would make every range an invented number in a chat test.
+	 */
+	public UUID biomarkerWithRange(UUID reportId, int position, String testName, String slug,
+			String rawValue, Double numericValue, String unit, String referenceRangeText,
+			Double refLow, Double refHigh, Flag flag) {
+
+		UUID id = UUID.randomUUID();
+		biomarkers.save(new BiomarkerEntity(id, reportId, position, testName,
+				testName.toLowerCase(java.util.Locale.ROOT), slug, rawValue, numericValue, unit,
+				referenceRangeText, refLow, refHigh, flag));
+		return id;
+	}
+
+	/**
+	 * The masked report text, which chat puts in the prompt.
+	 *
+	 * <p>Written directly, as the pipeline's final transaction does. Always masked text: the
+	 * raw text never reaches this table in production, so a fixture that pretended otherwise
+	 * would be testing a state the application cannot reach.
+	 */
+	public void reportText(UUID reportId, String maskedText) {
+		reportTexts.save(new dev.saq.mediscan.report.ReportTextEntity(reportId, maskedText));
 	}
 
 	/**

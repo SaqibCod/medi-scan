@@ -57,6 +57,45 @@ public class StatsRecorder implements LlmGateway.TokenRecorder, ReportJob.Pipeli
 		addToDailyStats("rate_limit_rejections", 1);
 	}
 
+	/**
+	 * A chat answer finished, by how it finished (phase 5).
+	 *
+	 * <p>Counts only - no report id, no question, no answer, no slug. These five columns are
+	 * the entire trace chat leaves anywhere, because nothing it carries may be stored
+	 * ({@code CLAUDE.md} rules 9 and 19). They answer the aggregate questions worth asking:
+	 * how often the cache pays off, how often the model declines, and how often the number
+	 * guard had to stop an answer.
+	 */
+	public void recordChatAnswer() {
+		addToDailyStats("chat_answers", 1);
+	}
+
+	/** An answer came from the cache, costing no model or embedding call. */
+	public void recordChatCacheHit() {
+		addToDailyStats("chat_cache_hits", 1);
+	}
+
+	/** The model declined a diagnosis or treatment question. */
+	public void recordChatDeclined() {
+		addToDailyStats("chat_declined", 1);
+	}
+
+	/** The answer was not in the report or the curated pages. */
+	public void recordChatNotInContext() {
+		addToDailyStats("chat_not_in_context", 1);
+	}
+
+	/**
+	 * The number guard stopped an answer.
+	 *
+	 * <p>The one counter here that is a safety signal rather than a usage one. A rising count
+	 * means the model is reaching for numbers that are not on the report, which is a prompt
+	 * regression worth noticing before anyone reports it.
+	 */
+	public void recordChatNumberStop() {
+		addToDailyStats("chat_number_stops", 1);
+	}
+
 	@Override
 	public void recordTokens(int inputTokens, int outputTokens) {
 		if (inputTokens <= 0 && outputTokens <= 0) {

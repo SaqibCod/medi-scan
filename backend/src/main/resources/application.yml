@@ -61,6 +61,30 @@ spring:
           # input, so there is nothing for sampling to improve.
           temperature: 0.0
 
+  security:
+    filter:
+      # REQUEST and ERROR only, not ASYNC (Boot's default is async,error,request).
+      #
+      # Chat returns an SseEmitter, so the container raises a second, ASYNC
+      # dispatch when the answer finishes. The security chain would run again on
+      # that dispatch - but GuestAuthFilter and Spring's own
+      # BearerTokenAuthenticationFilter are both OncePerRequestFilter, which by
+      # design skips async dispatches. The SecurityContext is therefore empty,
+      # and `.authenticated()` denies a request it had already allowed. The
+      # symptom is an Access Denied on every streamed answer, after the response
+      # has been committed, so it cannot even be reported properly.
+      #
+      # Safe because the ASYNC dispatch is the same request completing, and the
+      # REQUEST dispatch already authenticated and authorised it. Ownership is
+      # not enforced here in any case: every report query filters by OwnerRef
+      # (CLAUDE.md rule 7), which runs in the service on the request thread.
+      #
+      # The alternative - overriding shouldNotFilterAsyncDispatch on our filter -
+      # would re-authenticate guests but not bearer callers, since the bearer
+      # filter is Spring's. That would leave signed-in users denied, which is
+      # worse than the problem.
+      dispatcher-types: request,error
+
   servlet:
     multipart:
       # Kept in step with mediscan.upload.max-bytes. Spring rejects an oversized

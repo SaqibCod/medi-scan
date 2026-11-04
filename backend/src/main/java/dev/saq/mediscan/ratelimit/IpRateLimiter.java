@@ -34,14 +34,19 @@ public class IpRateLimiter {
 	private final Map<String, Bucket> signInBuckets = new ConcurrentHashMap<>();
 	private final Map<String, Bucket> refreshBuckets = new ConcurrentHashMap<>();
 
+	/** Phase 5. Keyed like uploads - by user id when signed in, by IP otherwise. */
+	private final Map<String, Bucket> chatBuckets = new ConcurrentHashMap<>();
+
 	private final int sessionsPerHour;
 	private final int uploadsPerHour;
 	private final int authPerMinute;
+	private final int chatPerHour;
 
 	public IpRateLimiter(MediScanProperties properties) {
 		this.sessionsPerHour = properties.ratelimit().sessionsPerHour();
 		this.uploadsPerHour = properties.ratelimit().uploadsPerHour();
 		this.authPerMinute = properties.ratelimit().authPerMinute();
+		this.chatPerHour = properties.chat().ratePerHour();
 	}
 
 	/**
@@ -85,6 +90,34 @@ public class IpRateLimiter {
 		if (!probe.isConsumed()) {
 			throw new RateLimitExceededException(retryAfterSeconds(probe));
 		}
+	}
+
+	/**
+	 * Chat messages, keyed by whoever is calling (contract 1.6).
+	 *
+	 * <p>A bucket of its own, not shared with uploads. The two spend the daily budget at
+	 * different rates and for different reasons, and sharing would let a few uploads lock a
+	 * reader out of asking about the report they just uploaded - which is the one thing they
+	 * are certain to want next.
+	 *
+	 * @param bucketKey {@code user:<id>} when signed in, {@code ip:<address>} otherwise
+	 * @throws RateLimitExceededException with the seconds to wait, when the bucket is empty
+	 */
+	public void checkChat(String bucketKey) {
+		Bucket bucket = chatBuckets.computeIfAbsent(bucketKey, key -> newChatBucket());
+
+		ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+		if (!probe.isConsumed()) {
+			throw new RateLimitExceededException(retryAfterSeconds(probe));
+		}
+	}
+
+	private Bucket newChatBucket() {
+		return Bucket.builder()
+				.addLimit(limit -> limit
+						.capacity(chatPerHour)
+						.refillGreedy(chatPerHour, Duration.ofHours(1)))
+				.build();
 	}
 
 	/** The IP-keyed bucket name, for callers with no account. */
