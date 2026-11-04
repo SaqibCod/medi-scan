@@ -89,6 +89,85 @@ export const RESULTS_DISCLAIMER_EXTRA =
   "Talk to your doctor about what these results mean for you.";
 
 /**
+ * The chat panel's fixed wording (LLD 10.2, 10.4).
+ *
+ * The helper line under the input differs between breakpoints, and that is taken from the
+ * mockups rather than invented: the desktop panel has room to name both sources, the phone
+ * view does not and says the shorter thing.
+ */
+export const CHAT_COPY = {
+  title: "Ask about this report",
+  notSaved: "Not saved",
+  emptyPrompt: "Ask anything about the values on this report. Try one of these:",
+  inputLabel: "Your question",
+  placeholder: "Ask a question…",
+  send: "Send question",
+  stop: "Stop",
+  stopped: "Stopped",
+  openOnPhone: "Ask about this report",
+  back: "Back to results",
+  helperDesktop:
+    "Answers use only your report and our biomarker pages. No diagnosis or treatment advice.",
+  helperPhone: "Answers use only your report. No diagnosis or treatment advice.",
+  declinedNote: "Medi-Scan doesn't give diagnosis or treatment advice.",
+  notInContextNote: "This isn't covered by your report or our pages.",
+  sourcesPrefix: "Sources:",
+  sourcesReport: "your report",
+} as const;
+
+/**
+ * What to show for each way chat can fail (LLD 10.4).
+ *
+ * Keyed on the contract's `code`, never on the server's wording — the rule the whole client
+ * follows. `retry` means the question goes back in the input and an "Ask again" action is
+ * offered; `blocks` means the input is disabled until a countdown ends or midnight UTC.
+ */
+export interface ChatErrorCopy {
+  text: string;
+  placeholder?: string;
+  retry: boolean;
+  blocks: boolean;
+}
+
+export function chatErrorCopy(code: string, countdown?: string): ChatErrorCopy {
+  switch (code) {
+    case "RATE_LIMITED":
+      return {
+        text: `Slow down a little. You've asked 30 questions this hour. Ask again in ${countdown ?? "a moment"}.`,
+        placeholder: "Asking is paused for now",
+        retry: false,
+        blocks: true,
+      };
+    case "CAPACITY":
+      return {
+        text: "The answer stopped. Today's AI limit was reached partway through. Chat opens again at midnight UTC.",
+        placeholder: "Chat opens again at midnight UTC",
+        retry: false,
+        blocks: true,
+      };
+    case "LLM_UNAVAILABLE":
+      return {
+        text: "The AI service didn't respond. Your question is kept. Try asking again.",
+        retry: true,
+        blocks: false,
+      };
+    case "NETWORK_ERROR":
+    case "TIMEOUT":
+      return {
+        text: "The connection dropped. Your question is kept. Try asking again.",
+        retry: true,
+        blocks: false,
+      };
+    default:
+      return {
+        text: "Something went wrong with that answer. Try asking again.",
+        retry: true,
+        blocks: false,
+      };
+  }
+}
+
+/**
  * Above the results table when the text came from OCR (LLD 9.3).
  *
  * Not behind `FEATURE_OCR`: this is driven by `result.textSource`, which only says `OCR` or

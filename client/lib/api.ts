@@ -49,8 +49,15 @@ async function createSession(): Promise<SessionResponse> {
   return request<SessionResponse>("POST", "/api/sessions", { auth: "none" });
 }
 
-/** Resolves the credential headers for one attempt. Never sends both kinds at once. */
-async function credentialHeaders(auth: Auth): Promise<Record<string, string>> {
+/**
+ * Resolves the credential headers for one attempt. Never sends both kinds at once.
+ *
+ * Exported for `lib/chat.ts`, which cannot go through `request` below: that reads the whole
+ * response with `response.text()`, and chat needs the body as a stream. Sharing this keeps
+ * the one rule that matters — bearer when signed in, guest token otherwise, never both — in
+ * a single place rather than duplicated into the streaming path.
+ */
+export async function credentialHeaders(auth: Auth): Promise<Record<string, string>> {
   if (auth === "none") return {};
 
   if (auth === "auto") {
