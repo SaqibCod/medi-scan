@@ -37,6 +37,20 @@ class ChatSchemaTest extends PostgresTestBase {
 	@Autowired
 	private JdbcClient jdbc;
 
+	/**
+	 * Removes the synthetic chunks this class inserts.
+	 *
+	 * <p>Not tidiness. {@code vector_store} is shared across the whole suite, and a fixture
+	 * elsewhere that asks "is anything indexed?" would see these three rows and conclude the
+	 * real pages were loaded - which is exactly how {@code ChunkRetrieverTest} once failed
+	 * only when run with the rest of the suite.
+	 */
+	@org.junit.jupiter.api.AfterEach
+	void removeSyntheticChunks() {
+		jdbc.sql("delete from vector_store where slug in ('too-narrow', 'right-width', 'dupe', 'near')")
+				.update();
+	}
+
 	@Test
 	@DisplayName("vector_store holds reference content only - no owner, no report")
 	void vectorStoreHoldsNoReportData() {
