@@ -103,6 +103,9 @@ export const CHAT_COPY = {
   placeholder: "Ask a question…",
   send: "Send question",
   stop: "Stop",
+  // 7c: shown while a sign-in is running. Asking resumes on its own when it finishes, so the
+  // wording promises that rather than reading like a limit the reader has hit.
+  signingIn: "Signing you in…",
   stopped: "Stopped",
   openOnPhone: "Ask about this report",
   back: "Back to results",

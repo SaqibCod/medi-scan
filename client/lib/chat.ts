@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { credentialHeaders } from "./api";
 import { ApiError, networkError, toApiError } from "./api-error";
@@ -8,6 +8,12 @@ import { getBackendStatusChecker } from "./backend-status";
 import { API_URL } from "./env";
 import { handleSessionInvalid } from "./guest-session";
 import { publishDailyLimit } from "./notices";
+import {
+  isSigningIn,
+  streamFinished,
+  streamStarted,
+  subscribeSignIn,
+} from "./sign-in-gate";
 import { createSseParser } from "./sse";
 import type { ChatTurn } from "./api-types";
 
@@ -40,8 +46,14 @@ export interface ChatMessage {
   stopped?: boolean;
 }
 
-/** What the panel is doing, which decides whether the input accepts anything. */
-export type ChatStatus = "idle" | "streaming" | "blocked";
+/**
+ * What the panel is doing, which decides whether the input accepts anything.
+ *
+ * `signing-in` is separate from `blocked` because it ends on its own and says something
+ * different: the reader is not out of quota, they are mid-sign-in and asking will work again
+ * in a moment (7c).
+ */
+export type ChatStatus = "idle" | "streaming" | "blocked" | "signing-in";
 
 export interface ChatError {
   code: string;
@@ -211,6 +223,16 @@ export function useChat(reportId: string) {
   const controller = useRef<AbortController | null>(null);
 
   /**
+   * Whether a sign-in is running (7c).
+   *
+   * Mirrored into state so the panel re-renders when it changes; the gate itself is a plain
+   * module so that nothing in chat has to import anything from auth, or the reverse.
+   */
+  const [signingIn, setSigningIn] = useState(false);
+
+  useEffect(() => subscribeSignIn(() => setSigningIn(isSigningIn())), []);
+
+  /**
    * The last turns, oldest first, capped at the contract's six.
    *
    * Stopped and failed answers are left out: a truncated answer is not what the assistant
@@ -243,6 +265,14 @@ export function useChat(reportId: string) {
       const question = rawQuestion.trim();
       if (!question || status !== "idle") return;
 
+      // Asking is refused while a sign-in is running (7c). A question sent now would carry
+      // whichever credential happened to be current, and could arrive as a guest a moment
+      // after this report stopped being a guest's - a 404 for a report on screen.
+      if (isSigningIn()) {
+        setStatus("signing-in");
+        return;
+      }
+
       setError(null);
       setDraft("");
 
@@ -263,6 +293,10 @@ export function useChat(reportId: string) {
         setMessages((list) =>
           list.map((message) => (message.id === answerId ? { ...message, ...change } : message)),
         );
+
+      // Registered so a sign-in can wait for this answer rather than cutting it off: 7c
+      // awaits whenNoStreamActive() before swapping the credential.
+      streamStarted();
 
       try {
         await streamChat(reportId, question, history, abort.signal, {
@@ -319,6 +353,7 @@ export function useChat(reportId: string) {
           return;
         }
       } finally {
+        streamFinished();
         controller.current = null;
         setStatus((current) => (current === "blocked" ? current : "idle"));
       }
@@ -332,5 +367,10 @@ export function useChat(reportId: string) {
     setStatus("idle");
   }, []);
 
-  return { messages, status, error, draft, setDraft, ask, stop, unblock };
+  // A sign-in in progress outranks idle for the input's sake, but never interrupts a stream
+  // already running - that answer finishes under the credential it started with.
+  const effectiveStatus: ChatStatus =
+    signingIn && status === "idle" ? "signing-in" : status;
+
+  return { messages, status: effectiveStatus, error, draft, setDraft, ask, stop, unblock };
 }

@@ -50,7 +50,8 @@ export function ChatPanel({
     unblock,
   );
   const failure = error ? chatErrorCopy(error.code, countdown ?? undefined) : null;
-  const blocked = status === "blocked";
+  const signingIn = status === "signing-in";
+  const blocked = status === "blocked" || signingIn;
   const streaming = status === "streaming";
 
   function send(question: string) {
@@ -98,7 +99,9 @@ export function ChatPanel({
             disabled={blocked}
             maxLength={MAX_QUESTION}
             rows={1}
-            placeholder={blocked ? failure?.placeholder : CHAT_COPY.placeholder}
+            placeholder={
+              signingIn ? CHAT_COPY.signingIn : blocked ? failure?.placeholder : CHAT_COPY.placeholder
+            }
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               // Enter sends, Shift+Enter is a new line. A question is usually one line, and

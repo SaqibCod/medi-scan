@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { streamChat } from "./chat";
+import {
+  hasActiveStream,
+  isSigningIn,
+  resetSignInGate,
+  signInFinished,
+  signInStarted,
+  streamFinished,
+  streamStarted,
+} from "./sign-in-gate";
 
 /**
  * The streaming client (LLD 10.3, 13).
@@ -196,5 +205,58 @@ describe("streamChat", () => {
     expect(init.headers["X-Session-Token"]).toBe("test-token");
     // No cookie ever carries a credential here.
     expect(init.credentials).toBe("omit");
+  });
+});
+
+describe("the sign-in gate (7c pre-work)", () => {
+  afterEach(() => {
+    resetSignInGate();
+    vi.unstubAllGlobals();
+  });
+
+  it("registers a stream for the duration of the call", async () => {
+    // What lets 7c wait for an answer rather than cutting it off. Observed from inside the
+    // fetch mock: that runs while the stream is open, whereas a ReadableStream's `start`
+    // fires at construction, before the caller has registered anything.
+    let openDuringCall = false;
+
+    vi.stubGlobal("sessionStorage", {
+      getItem: () => JSON.stringify({ token: "t", expiresAt: "2099-01-01T00:00:00Z" }),
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        openDuringCall = hasActiveStream();
+        return Promise.resolve(
+          new Response('event: done\ndata: {"finishReason":"COMPLETE"}\n\n', { status: 200 }),
+        );
+      }),
+    );
+
+    streamStarted();
+    try {
+      await streamChat("r1", "Why?", [], new AbortController().signal, {
+        onToken: vi.fn(),
+        onSources: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+      });
+    } finally {
+      streamFinished();
+    }
+
+    expect(openDuringCall).toBe(true);
+    expect(hasActiveStream()).toBe(false);
+  });
+
+  it("reports a sign-in as in progress so asking can pause", () => {
+    signInStarted();
+    expect(isSigningIn()).toBe(true);
+
+    signInFinished();
+    expect(isSigningIn()).toBe(false);
   });
 });
