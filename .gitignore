@@ -52,6 +52,11 @@ desktop.ini
 # --- Eval ---
 eval/results/
 eval/.cache/
+# Recorded chat answers (phase 5). Generated text about a report is still text
+# about a report, so it is kept out of git for the same reason answer text never
+# reaches a log or the database. The questions and the report contexts are
+# committed; what the model said back is not.
+eval/chat/recordings/
 
 # --- Temp ---
 /tmp/medi-scan/*

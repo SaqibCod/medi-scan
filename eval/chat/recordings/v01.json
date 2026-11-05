@@ -1,4 +1,0 @@
-{
-  "pieces" : [ "[[ANSWER", "]]\n\nYour LDL Cholesterol result is 172 mg/dL. \n\n", "Your report has an \"H\" flag next to this number, which means it is high and sits above the printed reference", " range. \n\nLDL stands for low-density lipoprotein. It carries cholesterol through your blood to your body's cells. It is", " often called \"bad\" cholesterol because having extra LDL can cause plaque to build up in your blood vessels over time.", "" ],
-  "slugs" : [ "ldl-cholesterol" ]
-}
