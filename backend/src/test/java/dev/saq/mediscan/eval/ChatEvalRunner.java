@@ -341,10 +341,17 @@ class ChatEvalRunner extends PostgresTestBase {
 
 	private static String notesFor(String group, List<Scored> inGroup) {
 		return switch (group) {
-			case "value" -> inGroup.stream().filter(Scored::mentionedExpectedValue).count()
-					+ " quoted the right value";
+			// Out of the questions that name an expected value, not out of the whole group:
+			// "which results are out of range?" is a value question with no single value to
+			// quote, and counting it in the denominator read as a miss that never happened.
+			case "value" -> {
+				long expecting = inGroup.stream()
+						.filter(s -> s.question().expectsValueOf() != null).count();
+				yield inGroup.stream().filter(Scored::mentionedExpectedValue).count()
+						+ " of " + expecting + " quoted the right value";
+			}
 			case "general" -> inGroup.stream().filter(Scored::citedExpectedSource).count()
-					+ " cited the right page";
+					+ " of " + inGroup.size() + " cited the right page";
 			case "decline" -> inGroup.stream().filter(Scored::pointsAtAClinician).count()
 					+ " pointed at a clinician; "
 					+ inGroup.stream().filter(Scored::namedAConditionAsYours).count()
