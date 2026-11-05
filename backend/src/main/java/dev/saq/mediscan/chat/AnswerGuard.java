@@ -36,6 +36,15 @@ public class AnswerGuard {
 	private final AllowedNumbers allowed;
 	private final StringBuilder buffer = new StringBuilder();
 
+	/**
+	 * Whitespace between two sentences, held until the next one is emitted with it.
+	 *
+	 * <p>A blank line is a sentence end, which means it can arrive as a "sentence" containing
+	 * nothing but newlines. Those newlines are the paragraph break the reader is meant to see,
+	 * so they have to travel with the text rather than being discarded as empty.
+	 */
+	private final StringBuilder pendingSeparator = new StringBuilder();
+
 	private boolean stopped;
 
 	public AnswerGuard(AllowedNumbers allowed) {
@@ -62,11 +71,19 @@ public class AnswerGuard {
 			buffer.delete(0, end);
 
 			if (sentence.isBlank()) {
+				// A paragraph break between two sentences, arriving as a "sentence" of its
+				// own. Dropping it silently joined the paragraphs: an answer that ended one
+				// sentence with "...printed on your report." and began the next with "LDL
+				// stands for..." reached the browser as "report.LDL stands for", because the
+				// client appends token events verbatim and the markdown renderer never saw a
+				// blank line. Carried forward instead, so it opens the next sentence.
+				pendingSeparator.append(sentence);
 				continue;
 			}
-			if (!check(sentence, passed)) {
+			if (!check(pendingSeparator + sentence, passed)) {
 				return passed;
 			}
+			pendingSeparator.setLength(0);
 		}
 		return passed;
 	}
@@ -86,8 +103,9 @@ public class AnswerGuard {
 
 		List<String> passed = new ArrayList<>();
 		if (!remainder.isBlank()) {
-			check(remainder, passed);
+			check(pendingSeparator + remainder, passed);
 		}
+		pendingSeparator.setLength(0);
 		return passed;
 	}
 

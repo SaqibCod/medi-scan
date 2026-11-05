@@ -211,6 +211,46 @@ export async function reportIs(page: Page, body: unknown) {
   });
 }
 
+/**
+ * One SSE frame, in the wire shape the backend writes (contract 4.4).
+ *
+ * Built here rather than pasted into each test so the screenshots and the behaviour tests are
+ * looking at the same format the server actually produces — a mock that drifted from the
+ * contract would make both of them agree about something untrue.
+ */
+export function sseFrame(event: string, data: unknown) {
+  return `event:${event}\ndata:${JSON.stringify(data)}\n\n`;
+}
+
+/**
+ * A canned chat answer for {@link REPORT_ID}.
+ *
+ * Fulfilled in one body rather than trickled: Playwright's `fulfill` hands the client a
+ * readable stream either way, so the parser and the hook run exactly as they would on a real
+ * stream — only the timing differs, which is not what a screenshot is for.
+ */
+export async function chatAnswers(
+  page: Page,
+  // Readonly, so a caller can declare its canned answer `as const` and keep the literal text
+  // visible in the test rather than behind a mutable alias.
+  answer: {
+    readonly tokens: readonly string[];
+    readonly finishReason?: "COMPLETE" | "DECLINED" | "NOT_IN_CONTEXT";
+    readonly pages?: readonly { slug: string; title: string; heading: string }[];
+  },
+) {
+  const body = [
+    sseFrame("meta", { answerId: "a1b2c3d4-0000-0000-0000-000000000001", cached: false }),
+    ...answer.tokens.map((text) => sseFrame("token", { text })),
+    sseFrame("sources", { report: true, pages: answer.pages ?? [] }),
+    sseFrame("done", { finishReason: answer.finishReason ?? "COMPLETE" }),
+  ].join("");
+
+  await page.route(`${API}/api/reports/${REPORT_ID}/chat`, (route: Route) =>
+    route.fulfill({ status: 200, contentType: "text/event-stream", body }),
+  );
+}
+
 /** A Problem Details response, in the shape the backend actually sends (contract 1.5). */
 export function problem(
   status: number,

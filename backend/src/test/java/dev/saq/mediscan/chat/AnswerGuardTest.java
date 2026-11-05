@@ -197,6 +197,30 @@ class AnswerGuardTest {
 		}
 
 		@Test
+		@DisplayName("a paragraph break survives to the next sentence")
+		void paragraphBreakIsKept() {
+			// Found by looking at a screenshot. The break arrives as a "sentence" of nothing
+			// but newlines, and dropping it as blank joined the paragraphs: the client
+			// appends token events verbatim, so the reader saw "your report.LDL stands for".
+			AnswerGuard guard = guard();
+
+			List<String> passed = guard.accept("Your LDL is 162 mg/dL.\n\nIt is flagged high. ");
+
+			assertThat(String.join("", passed))
+					.contains("\n\n")
+					.doesNotContain("mg/dL.It");
+		}
+
+		@Test
+		@DisplayName("a leading blank line does not open the answer with whitespace")
+		void leadingBlankLineIsNotPrepended() {
+			AnswerGuard guard = guard();
+
+			assertThat(guard.accept("\n\nYour LDL is 162 mg/dL. ").getFirst())
+					.isEqualTo("\n\nYour LDL is 162 mg/dL.");
+		}
+
+		@Test
 		@DisplayName("several sentences in one chunk all come back")
 		void severalSentencesInOneChunk() {
 			assertThat(guard().accept("One is 52. Two is 28. Three is 140. "))

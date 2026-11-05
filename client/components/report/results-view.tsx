@@ -75,14 +75,19 @@ export function ResultsView({
 
         <Disclaimer extra={RESULTS_DISCLAIMER_EXTRA} />
 
-        {/* Phones get the panel as its own view; this is the way in (report-page--06). */}
-        <Button
-          variant="accent"
-          className="lg:hidden"
-          onClick={() => setChatOpen(true)}
-        >
-          {CHAT_COPY.openOnPhone}
-        </Button>
+        {/*
+          Phones get the panel as its own view; this is the way in (report-page--06).
+
+          The breakpoint lives on a wrapper rather than on the Button. `.ms-btn` sets its own
+          `display`, and because ds.css loads after the Tailwind utilities it wins on source
+          order - so `lg:hidden` on the button itself did nothing and the button showed up
+          beside the desktop panel. A plain div has no competing rule.
+        */}
+        <div className="lg:hidden">
+          <Button variant="accent" block onClick={() => setChatOpen(true)}>
+            {CHAT_COPY.openOnPhone}
+          </Button>
+        </div>
       </div>
 
       <aside className="sticky top-space-7 hidden h-[calc(100vh-8rem)] w-[380px] shrink-0 overflow-hidden rounded-xl border border-hairline bg-surface lg:block">
@@ -118,7 +123,13 @@ function PhoneChatView({
         <p className="text-[13px] text-ink-2">{context}</p>
       </div>
 
-      <div className="flex-1 overflow-hidden rounded-xl border border-hairline bg-surface">
+      {/*
+        A flex column, not just a flex item. The panel inside sizes itself with `h-full`, and
+        `h-full` needs a parent with a definite height - a `min-h` on the outer wrapper does
+        not provide one. Without this the input floated directly under the last message
+        instead of sitting at the bottom of the screen, as report-page--07 shows it.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-hairline bg-surface">
         <ChatPanel reportId={reportId} result={result} variant="phone" />
       </div>
     </div>

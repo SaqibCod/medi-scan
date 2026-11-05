@@ -61,7 +61,7 @@ export function ChatPanel({
 
   return (
     <section
-      className="flex h-full flex-col"
+      className="flex h-full min-h-0 flex-1 flex-col"
       aria-label={CHAT_COPY.title}
     >
       <header className="flex items-center justify-between gap-space-3 border-b border-hairline px-space-5 py-space-4">
@@ -69,7 +69,7 @@ export function ChatPanel({
         <Tag>{CHAT_COPY.notSaved}</Tag>
       </header>
 
-      <div ref={listRef} className="ms-chat flex-1 overflow-y-auto px-space-5 py-space-4">
+      <div ref={listRef} className="ms-chat min-h-0 flex-1 overflow-y-auto px-space-5 py-space-4">
         {messages.length === 0 ? (
           <EmptyState suggestions={suggestions} onPick={send} disabled={blocked} />
         ) : (
