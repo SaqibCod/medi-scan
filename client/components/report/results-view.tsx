@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { Button, IconButton } from "@/components/ds";
@@ -38,6 +38,37 @@ export function ResultsView({
   const [chatOpen, setChatOpen] = useState(false);
   const result = report.result;
 
+  const summaryRef = useRef<HTMLDivElement>(null);
+  const scrolledPastSummary = useScrolledPast(summaryRef);
+
+  /**
+   * Where the reader was before the chat view took over.
+   *
+   * The phone chat is a view swap, not an overlay, so the results come back freshly mounted
+   * at the top of the document. Someone who opened chat from halfway down a long table would
+   * otherwise have to find their place again, which is exactly the cost the floating button
+   * exists to avoid.
+   */
+  const scrollBeforeChat = useRef(0);
+  const hasOpenedChat = useRef(false);
+
+  function openChat() {
+    scrollBeforeChat.current = window.scrollY;
+    hasOpenedChat.current = true;
+    setChatOpen(true);
+    // The chat view is a screen of its own; starting it part way down reads as broken.
+    window.scrollTo(0, 0);
+  }
+
+  // Restored in a layout effect so it happens before paint - a visible jump from the top of
+  // the report back down to where the reader was is worse than no restore at all. Guarded on
+  // having actually opened chat, so a first mount never fights the browser's own restore.
+  useLayoutEffect(() => {
+    if (!chatOpen && hasOpenedChat.current) {
+      window.scrollTo(0, scrollBeforeChat.current);
+    }
+  }, [chatOpen]);
+
   const shown = useMemo(
     () =>
       filter === null
@@ -61,7 +92,10 @@ export function ResultsView({
 
         <GuestExpiryNote expiresAt={report.expiresAt} />
 
-        <SummaryCard result={result} />
+        {/* Wrapped so the floating button knows when the summary has gone past. */}
+        <div ref={summaryRef}>
+          <SummaryCard result={result} />
+        </div>
 
         <CountTiles counts={result.counts} value={filter} onChange={setFilter} />
 
@@ -84,11 +118,27 @@ export function ResultsView({
           beside the desktop panel. A plain div has no competing rule.
         */}
         <div className="lg:hidden">
-          <Button variant="accent" block onClick={() => setChatOpen(true)}>
+          <Button variant="accent" block onClick={openChat}>
             {CHAT_COPY.openOnPhone}
           </Button>
         </div>
       </div>
+
+      {/*
+        The floating way in, for a report long enough that the button at the foot is a scroll
+        away. Only once the summary has gone past: while it is still on screen the reader is
+        reading, and a button over the text they are reading is in the way rather than handy.
+      */}
+      {scrolledPastSummary ? (
+        <div
+          data-testid="floating-ask"
+          className="fixed inset-x-0 bottom-space-5 z-20 flex justify-center px-space-5 lg:hidden"
+        >
+          <Button variant="accent" size="sm" icon="sources" onClick={openChat}>
+            {CHAT_COPY.openOnPhone}
+          </Button>
+        </div>
+      ) : null}
 
       <aside className="sticky top-space-7 hidden h-[calc(100vh-8rem)] w-[380px] shrink-0 overflow-hidden rounded-xl border border-hairline bg-surface lg:block">
         <ChatPanel reportId={report.id} result={result} variant="desktop" />
@@ -134,4 +184,33 @@ function PhoneChatView({
       </div>
     </div>
   );
+}
+
+/**
+ * Whether the page has scrolled past `ref`.
+ *
+ * An IntersectionObserver rather than a scroll listener: the browser does the work off the
+ * main thread and fires twice rather than on every frame, which matters on a phone that is
+ * also streaming an answer.
+ *
+ * "Past" means above the viewport, not merely out of it — scrolling back up above the summary
+ * (which cannot happen here, but could if the layout changed) should not count. The observer
+ * reports the bounding rect, so the sign of its bottom edge answers that directly.
+ */
+function useScrolledPast(ref: React.RefObject<HTMLElement | null>) {
+  const [past, setPast] = useState(false);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setPast(!entry.isIntersecting && entry.boundingClientRect.bottom < 0),
+      { threshold: 0 },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return past;
 }

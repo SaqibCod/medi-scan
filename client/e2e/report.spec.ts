@@ -248,3 +248,69 @@ test.describe("what the browser keeps and who it talks to", () => {
     await context.close();
   });
 });
+
+/**
+ * The ways into chat on a phone (LLD 10.1).
+ *
+ * The button under the results is the one the mockup shows. The floating one exists because a
+ * report with a dozen markers puts that button a long scroll away from where the reader is
+ * actually looking, and a question occurs to you while you are reading a row, not after you
+ * have reached the end.
+ */
+test.describe("opening chat on a phone", () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) > 700, "phone layout only");
+
+  test("the floating button appears only after the summary has gone past", async ({ page }) => {
+    await landingReady(page);
+    await reportIs(page, doneReport());
+    await page.goto(`/reports/${REPORT_ID}`);
+
+    // Waited for: until the results render the document is one viewport tall, so a "hidden"
+    // assertion would pass against a page that simply has not loaded yet.
+    await expect(page.getByText(/Ranges come from your report/)).toBeVisible();
+
+    const floating = page.getByTestId("floating-ask");
+
+    // While the summary is on screen the reader is reading it, and a button over the text
+    // would be in the way rather than handy.
+    await expect(floating).toBeHidden();
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(400);
+    await expect(floating).toBeVisible();
+  });
+
+  test("it opens the chat view, and back returns to the same place", async ({ page }) => {
+    await landingReady(page);
+    await reportIs(page, doneReport());
+    await page.goto(`/reports/${REPORT_ID}`);
+    // Waited for: until the results render the document is one viewport tall and there is
+    // nothing to scroll, so the "before" position would be 0 and the test would prove nothing.
+    await expect(page.getByText(/Ranges come from your report/)).toBeVisible();
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(400);
+    const before = await page.evaluate(() => window.scrollY);
+    expect(before).toBeGreaterThan(0);
+
+    await page.getByTestId("floating-ask").click();
+    await expect(page.getByRole("heading", { name: "Ask about this report" })).toBeVisible();
+    // The chat view is a screen of its own, so it starts at the top of itself.
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    await page.getByRole("button", { name: "Back to results" }).click();
+    await expect(page.getByText(/Ranges come from your report/)).toBeVisible();
+
+    // The whole point: the reader lands back on the row they were looking at.
+    expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  });
+
+  test("the desktop panel is not rendered on a phone", async ({ page }) => {
+    await landingReady(page);
+    await reportIs(page, doneReport());
+    await page.goto(`/reports/${REPORT_ID}`);
+
+    // The panel exists only inside the phone view, which has not been opened yet.
+    await expect(page.getByRole("heading", { name: "Ask about this report" })).toBeHidden();
+  });
+});
