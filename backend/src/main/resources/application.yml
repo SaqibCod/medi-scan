@@ -335,8 +335,25 @@ mediscan:
     top-k: 4
     # Retrieving nothing is a valid outcome: the answer then rests on the
     # report alone, which beats padding the prompt with a page about something
-    # else. Tuned by the phase 5 retrieval sweep.
-    min-similarity: 0.6
+    # else.
+    #
+    # 0.7, chosen by the phase 5 retrieval sweep on 2026-11-05 against the real
+    # embedding model (eval/results/chat-retrieval-tuning-20261105-062940.md,
+    # 40 questions, embedding calls only):
+    #
+    #   min-similarity   hit rate   mean chunks   empty   off-topic
+    #   0.5              8/8 100%   3.90          1/40    13%
+    #   0.6              8/8 100%   2.95          10/40   13%
+    #   0.7              8/8 100%   1.78          20/40   11%
+    #
+    # Hit rate does not discriminate - every threshold finds the right page for
+    # all 8 questions that name one - so the choice is about noise. The 20 empty
+    # results at 0.7 are not a cost: only 8 of the 40 questions should retrieve a
+    # page at all, and the other 32 are about values on the report, refusals, or
+    # things nothing covers, where retrieving nothing is the right answer. At 0.6
+    # the live run cited glucose, rdw and monocytes under "Sources" for "which
+    # results are out of range?" - three pages for tests that reader never had.
+    min-similarity: 0.7
     # Overridden to false in local, where no page is reviewed yet.
     require-reviewed: ${RAG_REQUIRE_REVIEWED:true}
     # Index once the application is ready. Off under the test profile, where a

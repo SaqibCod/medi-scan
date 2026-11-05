@@ -1,0 +1,4 @@
+{
+  "pieces" : [ "[[ANSWER", "]]\n\nNo, your HDL Cholesterol is not in range. \n\nYour report shows your", " HDL Cholesterol result is 38 mg/dL. It is flagged with an L for low because it is below the reference range printed", " on your test.", "" ],
+  "slugs" : [ "hdl-cholesterol" ]
+}

@@ -257,6 +257,86 @@ the one above.
    lost and the digit kept, which is exactly the shape the confidence rule exists
    to catch. `≤` is routinely read as `<`.
 
+## Phase 5: the chat evaluation
+
+Chat is measured by a separate set in `eval/chat/`: 40 synthetic questions across
+seven groups — values on the report, things a curated page answers, things
+nothing covers, diagnosis and treatment, injections planted in the question,
+injections planted in the report, and follow-ups that need the previous turn.
+
+**Report contexts are hand-written** (`eval/chat/reports.json`) rather than
+produced by running extraction. Extraction would cost two more model calls per
+report and would make every chat number depend on how extraction happened to do
+that day. This set measures chat.
+
+**No LLM judge**, for the same reason as Phase 3. Every check is deterministic:
+numbers not on the report, flag contradictions by phrase window, whether the
+right value was quoted, whether the right page was cited, forbidden phrases,
+answer length, and the `finishReason` each group expects.
+
+**Invented numbers are counted before the guard.** That is the point: it
+measures what the model tried to do rather than what the guard let through. If
+the guard ever regresses, this number was already saying so.
+
+### Retrieval tuning: `rag.min-similarity` = 0.7
+
+Run on 2026-11-05 against the real `gemini-embedding-001`, 40 questions,
+**embedding calls only — no answers generated**. Retrieval quality bounds answer
+quality, because a chunk that was never retrieved cannot help an answer, so
+measuring it first costs one call per question instead of two.
+
+| min-similarity | questions with a hit | mean chunks | empty results | off-topic chunks |
+|---|---:|---:|---:|---:|
+| 0.5 | 8 / 8 (100%) | 3.90 | 1 / 40 | 13% |
+| 0.6 | 8 / 8 (100%) | 2.95 | 10 / 40 | 13% |
+| **0.7** | **8 / 8 (100%)** | **1.78** | **20 / 40** | **11%** |
+
+Hit rate does not discriminate — every threshold finds the right page for all
+eight questions that name one — so the choice is about noise. The twenty empty
+results at 0.7 are not a cost: only eight of the forty questions should retrieve
+a page at all, and the rest are about values on the report, refusals, or things
+nothing covers, where retrieving nothing is the right outcome and the answer
+rests on the report alone. At 0.6 the manual run cited `glucose`, `rdw` and
+`monocytes` under "Sources" for "which results are out of range?" — three pages
+for tests that reader never had.
+
+### Baseline: not yet run
+
+**There is no accepted chat baseline.** The Gemini Flash family on this account
+allows **20 requests a day** (the same account page that set the text
+evaluation's pacing), and a full run is about 40 answers. A complete scored run
+is therefore a multi-day exercise, as the text evaluation already is.
+
+The harness is built and proven on both paths:
+
+- `./mvnw test -Peval -Dtest=ChatEvalRunner -Dchat-eval.mode=record` asks the
+  real model within a call budget (8 by default) and writes each answer's raw
+  stream pieces and retrieved slugs to `eval/chat/recordings/`. It stops cleanly
+  at the budget, so runs accumulate across days.
+- `./mvnw test -Peval -Dtest=ChatEvalRunner` replays those recordings with **no
+  network and no API key at all**, feeding them back through the real
+  `TagParser` and `AnswerGuard`. That is what makes it possible to change a
+  scoring rule, or the guard, and re-score every answer collected so far for
+  free.
+
+A partial run stamps **"PARTIAL RUN — NOT A BASELINE"** above its figures and
+says how many questions are still unanswered, so a handful of reassuring zeroes
+can never be mistaken for a result.
+
+Three answers were recorded on 2026-11-05 to prove the harness end to end
+(`v01`–`v03`, value questions on the lipid sample): 3/3 correct `finishReason`,
+3/3 quoted the right value, **0 invented numbers, 0 flag contradictions, 0 guard
+stops**. Three answers is not a measurement of anything and is recorded here
+only as evidence the tool works.
+
+Recorded answers are gitignored, like `eval/results/`: they are generated text
+about a report, and the evaluation's own output is not an exception to the rule
+that such text is not stored.
+
+**Thresholds will be fixed after the first complete run**, with approval, as
+Phase 3's were. Setting them against three answers would be setting them against
+noise.
+
 ## Known limits
 
 Measured, not estimated. The same two limits are recorded as approved

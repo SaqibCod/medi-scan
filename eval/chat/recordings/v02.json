@@ -1,0 +1,4 @@
+{
+  "pieces" : [ "[[ANSWER", "]]\n\nYour report shows that your LDL Cholesterol result is 172 mg/dL. It", " is flagged as HIGH because this number is above the range printed on your report, which is ‹100. \n\nLDL stands", " for low-density lipoprotein. It carries cholesterol through your blood to your body's cells. It is often called \"bad\"", " cholesterol because when there is more of it than your body needs, the extra can build up in the walls of your blood vessels.", " Over many years, higher levels of LDL are linked to plaque building up in your arteries, which raises the risk of heart disease and stroke.", " Your doctor can help review this result with you.", "" ],
+  "slugs" : [ "ldl-cholesterol" ]
+}
