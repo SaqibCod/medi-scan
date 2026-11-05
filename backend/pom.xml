@@ -365,6 +365,31 @@
 				</plugins>
 			</build>
 		</profile>
+
+		<!--
+		  Phase 5: the retrieval sweep that picks rag.min-similarity.
+
+		  Separate from `eval` because it is far cheaper and worth running on its
+		  own: embedding calls only, no generation, so it costs one call per
+		  question rather than two. Needs GEMINI_API_KEY.
+		-->
+		<profile>
+			<id>chat-tuning</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration combine.self="override">
+							<groups>chat-tuning</groups>
+							<includes>
+								<include>**/ChatRetrievalTuningRun.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 	</profiles>
 
 </project>

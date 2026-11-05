@@ -29,6 +29,33 @@ mediscan:
     # Worth revisiting for production on the strength of a full run's latency spread.
     timeout: 60s
 
+  # Phase 5. The chat runs measure retrieval and answers against the real models, so the
+  # fake-provider defaults in application-test.yml must not apply here either.
+  embedding:
+    # Restated, and it has to be. application-test.yml sets this to `fake-embedding`, and a
+    # key that profile defines is not undone by simply not mentioning it here - only by
+    # overriding it. Leaving it out meant the *real* embedding client was built (provider is
+    # gemini above) and then asked for a model called "fake-embedding", which the API refuses
+    # with a 400. The symptom is three identical ClientException retries and no clue why,
+    # because the gateway deliberately withholds provider messages.
+    #
+    # This is the same shape of bug as docs/phase-3-findings.md item 1: a configuration value
+    # that looks right, binds fine, and is not the one actually used.
+    model: ${EMBEDDING_MODEL:gemini-embedding-001}
+    dimensions: ${EMBEDDING_DIMENSIONS:768}
+  chat:
+    # Same reason: application-test.yml pins this to fake-model.
+    model: ${CHAT_MODEL:gemini-3.6-flash}
+  rag:
+    # False, deliberately, and it is the opposite of production. No biomarker page has been
+    # reviewed by a person yet, so leaving this at the inherited `true` would index nothing
+    # and every retrieval number would be measured against an empty store - a sweep that
+    # looked like it ran and told you nothing. This is a local measurement that serves no
+    # reader; prod keeps the default.
+    require-reviewed: false
+    # The runs index explicitly, so a startup pass would only spend quota twice.
+    index-on-startup: false
+
 spring:
   ai:
     retry:
