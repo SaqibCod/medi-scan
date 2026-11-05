@@ -55,26 +55,32 @@ test.describe("the mobile menu", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    // Wait for the dialog to have taken focus before tabbing. Base UI moves initial focus
-    // asynchronously, and a Tab that lands before the trap is armed escapes legitimately —
-    // which made this test fail while the behaviour was correct.
-    await expect
-      .poll(() =>
-        page.evaluate(() => {
-          const open = document.querySelector('[role="dialog"]');
-          return !!open && !!document.activeElement && open.contains(document.activeElement);
-        }),
-      )
-      .toBe(true);
+    /**
+     * Whether focus has come to rest inside the dialog.
+     *
+     * Polled, never read once. Base UI moves focus asynchronously in two places: when the
+     * dialog opens, and when a Tab off the last element wraps to the first — the wrap goes
+     * via a focus-guard span rendered outside the popup, so for one frame `activeElement`
+     * is legitimately outside. Reading the state immediately made this test fail on the
+     * wrapping Tab while the behaviour was correct. Focus that really escaped stays
+     * escaped, so the poll times out rather than passing.
+     */
+    const settlesInsideDialog = () =>
+      expect
+        .poll(() =>
+          page.evaluate(() => {
+            const open = document.querySelector('[role="dialog"]');
+            return !!open && !!document.activeElement && open.contains(document.activeElement);
+          }),
+        )
+        .toBe(true);
+
+    await settlesInsideDialog();
 
     // Tab right around the dialog and past the end; focus must never leave it.
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press("Tab");
-      const inside = await page.evaluate(() => {
-        const open = document.querySelector('[role="dialog"]');
-        return !!open && !!document.activeElement && open.contains(document.activeElement);
-      });
-      expect(inside, `focus escaped after ${i + 1} tabs`).toBe(true);
+      await settlesInsideDialog();
     }
 
     await page.keyboard.press("Escape");
