@@ -11,12 +11,16 @@ mediscan:
   llm:
     provider: gemini
     api-key: ${GEMINI_API_KEY:}
-    # Cosmetic only: this is what LlmUsageLogger prints, not what the model call actually
-    # uses. The real model comes from spring.ai.google.genai.chat.options.model in the base
-    # application.yml, which this profile does not restate, so it inherits unchanged
-    # (confirmed 2026-10-18 the hard way: overriding mediscan.llm.model alone silently did
-    # nothing to the real request). Keep this in step with that value by hand.
-    model: ${GEMINI_CHAT_MODEL:gemini-3.8-flash}
+    # No longer cosmetic, and the correction matters. This used to be only what
+    # LlmUsageLogger printed, with the real model coming from the Spring AI property in the
+    # base application.yml - confirmed 2026-10-18 the hard way, when overriding this alone
+    # silently did nothing to the real request. GeminiProvider now sets the model on every
+    # request from this property, so overriding it here really does change what is called.
+    #
+    # Restated anyway rather than inherited, so a run records the model in its own profile
+    # and GEMINI_CHAT_MODEL can point one run at a different model without touching
+    # production config. Keep the value in step with the base application.yml.
+    model: ${GEMINI_CHAT_MODEL:gemini-3.6-flash}
     # Comfortably above eval.max-llm-calls (default 120, LLD 5.2) so the real cap guard is
     # never the thing that stops a run - that's eval.max-llm-calls's job, not this one's.
     daily-cap: 2000

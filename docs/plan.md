@@ -459,7 +459,8 @@ medi-scan/
 ```
 LLM_PROVIDER=gemini                # gemini | openai
 GEMINI_API_KEY=
-GEMINI_CHAT_MODEL=<free-tier model>
+GEMINI_CHAT_MODEL=<free-tier model>   # extraction and summary; measure before changing
+CHAT_MODEL=<free-tier model>          # chat only (phase 5), separate so the phase 3 baseline cannot move
 OPENAI_API_KEY=                    # optional, leave empty to disable
 OPENAI_CHAT_MODEL=<small, low-cost model>
 EMBEDDING_PROVIDER=gemini          # fixed once chosen

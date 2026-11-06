@@ -55,8 +55,9 @@ spring:
           #
           # GeminiProvider now also sets the model on every request from
           # mediscan.llm.model, which is the real source of truth; this default
-          # is kept in step so the two cannot disagree again.
-          model: ${GEMINI_CHAT_MODEL:gemini-3.8-flash}
+          # is kept in step so the two cannot disagree again. The reason for
+          # the value is recorded there.
+          model: ${GEMINI_CHAT_MODEL:gemini-3.6-flash}
           # Both pipeline steps are transcription and summarisation of fixed
           # input, so there is nothing for sampling to improve.
           temperature: 0.0
@@ -244,7 +245,35 @@ mediscan:
     # `fake` is accepted only under the local and test profiles; see LlmProviderGuard.
     provider: ${LLM_PROVIDER:gemini}
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_CHAT_MODEL:gemini-3.8-flash}
+    # The pipeline model, for extraction and the summary. Set on every request
+    # by GeminiProvider, so this is the single source of truth; the
+    # spring.ai.google.genai.chat default above is kept in step with it.
+    #
+    # gemini-3.6-flash since 2026-11-06. It was gemini-3.8-flash, the model the
+    # Phase 3 baseline was measured against on 2026-10-20, and that model has
+    # since stopped serving generation entirely: it answers a models listing in
+    # under half a second but refuses every generateContent call. Measured on
+    # the project's own key, 8 attempts over four days:
+    #
+    #   model                 generateContent
+    #   gemini-3.8-flash      503 "high demand" x5, no response within 45s x1
+    #   gemini-3.7-flash      no response within 45s
+    #   gemini-flash-latest   503 (it aliases the above)
+    #   gemini-3.6-flash      200 in 1.1-3.1s, 5 of 5
+    #   gemini-3.5-flash      200 in 2.2s
+    #
+    # This was phase 4 findings item 6, and it had become the single thing
+    # stopping a fresh checkout from processing any report at all: every upload
+    # failed LLM_UNAVAILABLE. 3.6-flash is the newest Flash that answers, and
+    # is already the chat model, so the app now runs one model line by default.
+    #
+    # Re-measured on the Phase 3 evaluation before being accepted, and it is
+    # not a drop-in: the first run held every gated limit but moved two
+    # ungated figures, which took a prompt change and a validator rule to put
+    # back. Read docs/evaluation.md, "The pipeline model change", before
+    # pointing this at anything else - a model swap here is a measured change,
+    # not a configuration preference.
+    model: ${GEMINI_CHAT_MODEL:gemini-3.6-flash}
     timeout: 30s
     max-invalid-retries: 1
     max-transient-retries: 2
@@ -294,11 +323,15 @@ mediscan:
     # one variable driving both would move the pipeline's model as a side
     # effect of picking a chat model.
     #
-    # gemini-3.6-flash, not the 3.8-flash the pipeline uses: on 2026-11-03,
-    # 3.8-flash, 3.7-flash and gemini-flash-latest all answered a models
-    # listing but returned 503 "experiencing high demand" on every generation
-    # attempt (3/3), which is phase 4 findings item 6 still unresolved.
-    # 3.6-flash answers in about a second and accepts thinkingBudget 0.
+    # gemini-3.6-flash, chosen here first, on 2026-11-03, when it was the
+    # newest Flash that answered a generation call at all and the pipeline was
+    # still pinned to 3.8-flash. The pipeline has since moved to the same model
+    # for the same reason (see mediscan.llm.model). They match today and the
+    # two properties still exist so they can stop matching: the Phase 3 and
+    # Phase 5 baselines each name the model they were measured against, and
+    # neither should move as a side effect of the other.
+    #
+    # It also accepts thinkingBudget 0, which the 3.8 line rejects.
     model: ${CHAT_MODEL:gemini-3.6-flash}
     # The prompt asks for at most 120 words; this is the hard ceiling behind it.
     max-output-tokens: 400
