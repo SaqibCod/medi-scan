@@ -63,10 +63,9 @@ Anyone can use the app as a guest with no login. Signing in with Google is optio
 
 | Layer | Choice |
 |---|---|
-| Frontend | Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query, Recharts |
-| Design system | `docs/design-system/` is the styling source of truth: tokens for every colour, space, radius, shadow and type style, and one usage note per component. Geist and Geist Mono are self-hosted through `next/font` — no runtime request to Google Fonts. Icons come only from the project's own `Icon` set; there is no Lucide and no other icon library. shadcn/ui is used only for behaviour primitives (the mobile menu sheet and the toaster), fully restyled with the tokens. |
+| Frontend | Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Recharts, Lucide |
 | Backend | Java 21, Spring Boot, Spring AI, Spring Data JPA, Actuator |
-| Document parsing | Apache PDFBox (PDF text and page rendering), Tesseract for OCR — the `tesseract` command-line program run as a child process, **not** Tess4J (see 4.2) |
+| Document parsing | Apache PDFBox (PDF text and page rendering), Tess4J / Tesseract (OCR) |
 | PII masking | Regex rules + Apache OpenNLP name finder |
 | LLM | Gemini free tier by default; OpenAI as an optional provider. Both sit behind a provider interface and are chosen in config. |
 | Embeddings | One fixed embedding model that never changes, separate from the chat provider |
@@ -98,7 +97,7 @@ Caddy (TLS, Let's Encrypt)  --  EC2 t4g.small (Docker)
 Spring Boot API
     |- Validation: file type, magic bytes, size
     |- Async job (status: PENDING -> PROCESSING -> DONE / FAILED)
-    |    |- Text extraction: PDFBox -> `tesseract` child process for scanned pages and images / raw text
+    |    |- Text extraction: PDFBox -> OCR fallback for scanned pages / Tess4J for images / raw text
     |    |- PII masking: regex + OpenNLP, then check that lab values are intact
     |    |- Step 1: structured extraction -> typed Java objects
     |    |- Validation: values must appear in source text; flags recomputed in code
@@ -127,10 +126,8 @@ PostgreSQL + pgvector (Neon)
 
 ### 4.2 Text extraction
 - **Text-based PDFs:** PDFBox text extraction.
-- **Scanned PDFs:** if a page yields almost no text (below a character threshold), render it to an image with PDFBox at about 300 DPI and run OCR on it. At most 10 such pages per report; more is `DOCUMENT_TOO_LONG`.
-- **Images:** OCR, with an image size cap and one OCR job at a time to protect memory. The pixel size is read from the file header before anything is decoded, so a small file that would expand to gigabytes is refused as `UNREADABLE` rather than decoded.
-- **How OCR runs:** Tesseract is the `tesseract` command-line program, started as a **child process** with its arguments as a list and no shell. It is never loaded into the JVM through JNA/Tess4J, because a crash in native code inside the JVM takes the whole server down, while a child process can be killed and its memory is returned when it exits. Each page has a timeout, each report has a whole-OCR time budget, and the process's output is capped. A timeout or an output overrun fails the report with `EXTRACTION_FAILED`.
-- **Which text came from where:** the report records whether its text came from the PDF text layer, from OCR, or from both (`result.textSource` in the API). The results page uses it to ask the reader to check OCR-read values against the paper report.
+- **Scanned PDFs:** if a page yields almost no text (below a character threshold), render it to an image with PDFBox at about 300 DPI and run OCR on it.
+- **Images:** Tess4J OCR, with an image size cap and one OCR job at a time to protect memory.
 - **Raw text:** used as is.
 
 ### 4.3 PII masking
@@ -143,42 +140,24 @@ Masking is best-effort, not a guarantee. The test suite checks both directions: 
 
 ### 4.4 Structured extraction (two steps)
 
-**Step 1: extraction.** Two separate shapes are involved, and keeping them apart is the point of this section.
-
-**What the model is asked for.** Strings as printed, nothing else:
-
-```java
-// The step-1 model schema. No numbers, no bounds, no flags.
-record ModelRow(
-    String testName,
-    String rawValue,           // exactly as printed: "5.4", "<0.5", "Negative", "Trace"
-    String unit,               // or null
-    String referenceRangeText  // exactly as printed: "3.5-5.0", "<200", "Negative"
-) {}
-
-record ModelExtraction(List<ModelRow> biomarkers, String collectedOn) {}
-```
-
-**What code produces and stores.** Validation turns each `ModelRow` into the shape the API returns:
+**Step 1: extraction.** Spring AI's `BeanOutputConverter` maps the masked text into typed objects:
 
 ```java
 enum Flag { LOW, NORMAL, HIGH, UNKNOWN }
 
 record Biomarker(
     String testName,
-    String rawValue,
-    Double numericValue,      // parsed in code; null when the value is not numeric
+    String rawValue,          // exactly as printed: "5.4", "<0.5", "Negative", "Trace"
+    Double numericValue,      // null when the value is not numeric
     String unit,
-    String referenceRangeText,
-    Double refLow,            // parsed in code; null if the range has no lower bound
-    Double refHigh,           // parsed in code; null if the range has no upper bound
-    Flag flag                 // always computed in code
+    String referenceRangeText,// exactly as printed: "3.5-5.0", "<200", "Negative"
+    Double refLow,            // null if the range has no lower bound
+    Double refHigh,           // null if the range has no upper bound
+    Flag flag                 // always recomputed in code
 ) {}
 
 record ExtractionResult(List<Biomarker> biomarkers) {}
 ```
-
-`numericValue`, `refLow`, `refHigh`, the flag, and every count are always computed in code from the model's strings, and are never requested from the model. Asking the model for a number it could silently round, or for a flag it could get backwards, would put an unchecked value in front of a patient. Keeping the schema to strings means the only thing the model can get wrong is what it transcribed, which the value check below catches.
 
 **Validation in code**
 - **Value check:** every `rawValue` must appear in the masked source text. Rows that don't are dropped and logged, which stops the model from inventing values.
@@ -188,7 +167,6 @@ record ExtractionResult(List<Biomarker> biomarkers) {}
   - `NORMAL` when it falls inside them.
   - `UNKNOWN` when the value is qualitative or the range can't be parsed (for example, ranges that depend on sex or age).
 - **No critical flag:** `CRITICAL` is deliberately left out. Critical values use separate cutoffs that can't be worked out from a reference range.
-- **Low-confidence OCR values:** on a report whose text came from OCR, each value is checked against the per-word confidence Tesseract reported for the characters it was read from. A value below the confidence threshold keeps its printed text but gets `UNKNOWN` and no `numericValue`, and is left out of trends. The same applies to a reference range or a collection date read with low confidence. OCR turns `5.4` into `54` often enough that a confident flag on a doubtful number is the worst failure this app can have, so an uncertain value is reported as uncertain instead of judged.
 
 **Step 2: summary.** A second LLM call receives only the validated biomarker list, not the raw text:
 
@@ -206,9 +184,6 @@ record ReportSummary(String patientSummary, List<String> highlights) {}
 - **Grounding:** answers use only the report and the retrieved pages. If the answer isn't there, the app says so.
 - **Medical advice:** diagnosis and treatment questions are declined with a pointer to a clinician.
 - **Streaming:** answers stream to the browser over Server-Sent Events.
-- **Decision tag:** the model opens every answer with exactly one of `[[ANSWER]]`, `[[DECLINE]]` or `[[NOT_IN_CONTEXT]]`. The server reads that tag, strips it, and maps it to the `finishReason` the contract puts on the `done` event. The tag is the only way the server can know by the end of a stream which of the three an answer was, short of grading the text with a second model. A missing tag counts as `[[ANSWER]]` and the count is logged; a tag repeated later in the text is removed. Nothing in the tag ever reaches the browser.
-- **Sentence gate and number guard:** tokens from the model are buffered into whole sentences rather than forwarded one by one, and each sentence is checked before it is sent. The allowed numbers are built from this report — the values and printed ranges, the numbers in the masked text, the flag counts, the collection date, and small list markers. A sentence quoting anything else stops the answer: the model stream is cancelled, one closing `token` event says the answer was stopped, and `sources` and `done {COMPLETE}` still follow. This is the rule that makes "never invent a number" enforceable rather than hopeful, and the price is a short buffering delay instead of a per-token trickle. The curated pages state no numeric ranges, so retrieved text never widens the allowed set.
-- **Cache for first questions:** an answer to a question sent with no history is cached in memory, keyed by report id, the normalized question, the prompt version and the model. A hit replays it with `cached: true` and costs no model call and no embedding call. Questions with history are never cached, because the answer depends on the conversation. Most repeats in practice are the four suggested questions on the report page, which is exactly what this catches. The cache is memory only, holds no report or user identity beyond the id, and is dropped when the report is deleted or expires.
 
 ### 4.6 Prompt-injection defense
 - Report text is wrapped in clear delimiters (for example `<report>...</report>`), and the system prompt says that content inside them is data only.
@@ -217,16 +192,16 @@ record ReportSummary(String patientSummary, List<String> highlights) {}
 - The test set includes a synthetic report with injected instructions ("Ignore previous instructions...").
 
 ### 4.7 SEO biomarker pages
-- Curated pages such as `/biomarkers/tsh` and `/biomarkers/ldl-cholesterol`, server-rendered from markdown. The files are read and parsed once per server instance and cached in memory, rather than pre-rendered at build time: the nonce-based CSP makes every page render per request anyway (`SECURITY.md`), so a build-time render would be thrown away.
+- Curated static pages such as `/biomarkers/tsh` and `/biomarkers/hba1c`, generated at build time.
 - OpenGraph metadata and JSON-LD structured data.
 - Content is written and reviewed by me, with sources, and is also the knowledge base for chat RAG.
-- The purpose is to show content modelling and metadata work, not to win search traffic. Medical search results favour well-established sites.
+- The purpose is to show static generation and metadata work, not to win search traffic. Medical search results favour well-established sites.
 
 ### 4.8 UX
 - Skeleton loaders and React Suspense.
 - A processing status view while the background job runs.
 - A disclaimer banner and a consent checkbox before upload.
-- Results are a table of every marker with its value, the reference range printed on the report, and a flag, per the mockups. Qualitative values show as text. There is no range bar: a bar invites comparison against a scale the report never printed, and the range on one report is not the range on another.
+- Results show each marker on a range bar (Recharts), with qualitative values shown as text.
 - A "Sign in with Google" button in the header. Guests see what signing in unlocks, but nothing is blocked.
 
 ### 4.9 Authentication
@@ -342,7 +317,14 @@ It reads only aggregated counts. It never shows report content, ids of other use
 - **Retention:** raw uploads are deleted right after extraction. Guest sessions and their reports auto-delete after 24 hours, and signed-in users' reports after 30 days, via a scheduled job. Reads also refuse anything past `expires_at`.
 - **Minimal user data:** users are stored as Google `sub`, display name, role, and timestamps only. No email address and no photo. Accounts with no sign-in for 180 days are deleted.
 - **Tokens:** session tokens and refresh tokens are stored only as SHA-256 hashes. `JWT_SIGNING_KEYS` and `GOOGLE_CLIENT_ID` come from the environment. Local and production use different signing keys.
-- **Content Security Policy:** nonce-based `script-src` (`'self' 'nonce-…' 'strict-dynamic'`), set per request in the Next.js middleware rather than as a static `next.config` header. `style-src` keeps `'unsafe-inline'`, for styles only. The full policy, the reason `style-src` is the exception, and what the nonce costs in rendering are in `SECURITY.md`. Google Identity Services is added to `script-src`, `connect-src` and `frame-src` in phase 7c, when sign-in ships.
+- **Content Security Policy** (set in `next.config` headers):
+  - `default-src 'self'`
+  - `script-src 'self' https://accounts.google.com/gsi/client`
+  - `frame-src https://accounts.google.com`
+  - `connect-src 'self' <API origin> https://accounts.google.com`
+  - `style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style`
+  - `object-src 'none'`
+  - `base-uri 'self'`
 - **No third-party scripts** other than Google Identity Services. No analytics or tag managers.
 - **HTTPS:** HTTPS only, terminated by Caddy. CORS is restricted to the Vercel origin.
 - **Guest session token:** the backend issues a random token when a session starts. The client stores it in `sessionStorage` and sends it as an `X-Session-Token` header. No cookies are used, so Safari's third-party cookie blocking isn't an issue.
@@ -357,9 +339,9 @@ It reads only aggregated counts. It never shows report content, ids of other use
 - `app_user(id UUID, google_sub UNIQUE, display_name, role, created_at, last_login_at)`
 - `refresh_token(id, user_id, family_id, token_hash UNIQUE, issued_at, expires_at, revoked_at, family_started_at)`
 - `session(id, token_hash, created_at, expires_at)`
-- `report(id UUID, session_id NULL, user_id NULL, source_type, status, error_code, collected_on NULL, created_at, started_at NULL, finished_at NULL, expires_at)`. A check constraint requires exactly one of `session_id` and `user_id`. Both foreign keys use `ON DELETE CASCADE`. `started_at` and `finished_at` bound the job run and feed the processing-time stats; both are null until the job reaches that point. Phase 2 creates the table with `session_id NOT NULL` and no `user_id`; Phase 6 adds `user_id`, makes `session_id` nullable, and adds the check constraint.
-- `report_text(report_id, masked_text)`. Written only when the report reaches `DONE`, in the same transaction as the biomarkers and summary, so a failed report stores no text.
-- `biomarker(id, report_id, position, test_name, test_name_norm, biomarker_slug, raw_value, numeric_value, unit, reference_range_text, ref_low, ref_high, flag)`. `position` keeps the order the values had in the report and is what results are ordered by. `test_name_norm` is lowercase with punctuation removed, used to match markers for trends.
+- `report(id UUID, session_id NULL, user_id NULL, source_type, status, error_code, collected_on NULL, created_at, expires_at)`. A check constraint requires exactly one of `session_id` and `user_id`. Both foreign keys use `ON DELETE CASCADE`.
+- `report_text(report_id, masked_text)`
+- `biomarker(id, report_id, test_name, test_name_norm, biomarker_slug, raw_value, numeric_value, unit, reference_range_text, ref_low, ref_high, flag)`. `test_name_norm` is lowercase with punctuation removed, used to match markers for trends.
 - `report_summary(report_id, patient_summary, highlights_json)`
 - `llm_usage(day, calls)`
 - `daily_stats(day, input_tokens, output_tokens, reports_created, reports_failed, rate_limit_rejections, masking_conflicts)`
@@ -404,24 +386,12 @@ medi-scan/
 ├── client/
 │   ├── app/
 │   │   ├── page.tsx
-│   │   ├── reports/[id]/
-│   │   ├── biomarkers/        (index, and [slug] per curated page)
-│   │   └── styles/           (generated tokens.css, ds.css, globals.css)
+│   │   ├── report/[id]/
+│   │   └── biomarkers/[slug]/
 │   ├── content/biomarkers/   (curated markdown, also indexed for RAG)
-│   ├── components/
-│   │   ├── ds/               (design-system components, ported from docs/design-system/)
-│   │   ├── shell/            (header, mobile menu, footer, disclaimer)
-│   │   ├── system/           (404, 401, 403, 500, 503 screens)
-│   │   └── notices/          (banners, inline notices, toasts)
+│   ├── components/           (upload, samples, status, results, chat, disclaimer)
 │   ├── lib/
-│   ├── scripts/build-tokens.mjs  (tokens.json → app/styles/tokens.css)
-│   ├── e2e/                  (Playwright)
 │   └── package.json
-├── docs/
-│   ├── plan.md, dataflow.md, api-contract.md, evaluation.md
-│   ├── phase-<n>-lld.md       (one low-level design per phase)
-│   ├── design-system/         (tokens.json, voice and component rules — styling source of truth)
-│   └── ui/screens/            (PNGs of the approved mockups, one per artboard)
 ├── backend/
 │   ├── src/main/java/.../
 │   │   ├── auth/          (Google token check, JWT issue, refresh rotation, security config)
@@ -459,27 +429,19 @@ medi-scan/
 ```
 LLM_PROVIDER=gemini                # gemini | openai
 GEMINI_API_KEY=
-GEMINI_CHAT_MODEL=<free-tier model>   # extraction and summary; measure before changing
-CHAT_MODEL=<free-tier model>          # chat only (phase 5), separate so the phase 3 baseline cannot move
+GEMINI_CHAT_MODEL=<free-tier model>
 OPENAI_API_KEY=                    # optional, leave empty to disable
 OPENAI_CHAT_MODEL=<small, low-cost model>
 EMBEDDING_PROVIDER=gemini          # fixed once chosen
 EMBEDDING_MODEL=<embedding model>
-EMBEDDING_DIMENSIONS=768           # must match the pgvector column; changing it needs a migration
-RAG_REQUIRE_REVIEWED=true          # index only pages with reviewedOn set; false in local
+EMBEDDING_DIMENSIONS=<must match the pgvector column>
 DATABASE_URL=jdbc:postgresql://localhost:5433/mediscan   # 5433 avoids a natively installed Postgres on 5432
 DATABASE_USER=
 DATABASE_PASSWORD=
 ALLOWED_ORIGIN=http://localhost:3000
 RATE_LIMIT_UPLOADS_PER_HOUR=10
 RATE_LIMIT_SESSIONS_PER_HOUR=20    # per IP; api-contract.md 1.6
-RATE_LIMIT_CHAT_PER_HOUR=30        # per user or IP; api-contract.md 1.6
 GLOBAL_DAILY_LLM_CALLS=500
-UPLOAD_TEMP_DIR=                   # blank uses the default under the system temp directory
-OCR_ENABLED=true                   # false rejects images with 415 and skips the scanned-page fallback
-OCR_COMMAND=tesseract              # path to the tesseract program
-OCR_TESSDATA_DIR=                  # blank uses the system tessdata; set to use tessdata_best
-OCR_PSM=4                          # Tesseract page segmentation mode
 RETENTION_HOURS=24                 # guest sessions
 USER_RETENTION_DAYS=30             # signed-in users' reports
 INACTIVE_ACCOUNT_DAYS=180
@@ -498,10 +460,6 @@ DOMAIN=api.example.duckdns.org     # used by Caddy for TLS
 NEXT_PUBLIC_API_URL=http://localhost:8080
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 ```
-
-**The embedding settings are fixed once chosen.** `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` are written into the `content_index` table alongside each page's hash, and the vector size is fixed by the `vector_store` column. Changing either one re-embeds every page, and changing the size also needs a new migration. The app refuses to start if the configured size and the column disagree.
-
-**Chat settings with no environment variable** — the output token limit, temperature, history budget, cache TTL and size, ping interval, stream timeout, `rag.top-k` and `rag.min-similarity` — are properties with defaults in `application.yml`, listed in `docs/phase-5-lld.md` section 11. They are tuning knobs, not deployment configuration, so they are not in this file.
 
 **Google setup (free):** create an OAuth "Web application" client in Google Cloud console. Add `http://localhost:3000` and the Vercel URL as authorized JavaScript origins. No client secret is needed for the ID token flow.
 
@@ -530,7 +488,12 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 ## 12. Testing and Evaluation
 
-**Evaluation:** Phase 3 builds a synthetic dataset of about 30 lab reports with hand-written answer keys, and a runner that sends them through the real pipeline with the real model to measure extraction accuracy, flag correctness, masking leaks, and summary safety. The method, metric definitions, and the committed baseline live in `docs/evaluation.md`; the dataset and runner live in `eval/` and `backend/src/test/java/<base>/eval/`.
+**Extraction test set:** 15–20 synthetic reports with expected JSON. They cover:
+- text-based PDFs, scanned PDFs, and photos
+- qualitative values and odd ranges
+- reports in different layouts
+
+**Metrics:** a script reports precision and recall on biomarkers, the share of exact value matches, flag accuracy, and the masking leak rate. The README shows the numbers.
 
 **Masking tests:** check that personal data is removed and that every lab value and reference range survives.
 
@@ -561,8 +524,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 | Prompt injection via report text | Delimiters, no tools, schema validation, injection tests |
 | LLM cost or quota limits | Free-tier default, Postgres-backed daily cap, caching, OpenAI off by default |
 | Free-tier LLM data use | Synthetic-data framing, masking before every call, documented in SECURITY.md |
-| OCR memory pressure | 2 GB instance, heap cap, swap, image size cap read from the header before decoding, one OCR job at a time, OCR in a child process that can be killed on timeout |
-| OCR misreads a number and the app flags it confidently | Per-word confidence from the same OCR run; a low-confidence value gets `UNKNOWN` and no number; the results page says the text came from OCR; measured on OCR cases in the eval set with a zero target for dangerous flag errors |
+| OCR memory pressure | 2 GB instance, heap cap, swap, image size cap, one OCR job at a time |
 | Slow processing / HTTP timeouts | Background jobs with status polling |
 | Unauthorized report access | UUIDs, one owner per report, ownership check on every endpoint, authorization tests |
 | Token theft through XSS (tokens in browser storage) | Strict CSP, no raw HTML rendering, 15-minute access tokens, refresh rotation with reuse detection |
@@ -575,58 +537,43 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 ## 14. Build Order
 
-**Phase numbers are labels, not positions.** Each phase keeps the number it was given when the work was first described, because code comments, migrations, and the design docs refer to "Phase 2" or "Phase 6" by name. The order of this list is the build order; the numbers in the labels are not. Phase 6 is split into 6a (accounts backend) and 6b (the data endpoints it enables), and 6a is built before phases 3, 4, and 5 so that chat is written against the final ownership model instead of being rewritten once users exist.
-
-Phase 7 is split into 7a to 7d (see item 8), and **7a and 7b are built before phases 4 and 5**. The frontend foundation — tokens, components, the shell, the API client — is what every later screen is drawn on, and OCR and chat both need a UI to be worth anything. Building it now also means the design system is ported once, against the design docs, rather than retrofitted onto screens that already exist. 7b follows immediately because it is what turns that foundation into something a visitor can actually use, and because OCR and chat both hang off screens it builds: the upload panel and the report page.
-
-The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is Phase 5 (chat).**
-
-1. **Foundation (Phase 1) — done:**
+1. **Foundation:**
    - Monorepo setup.
    - Docker Postgres + pgvector.
    - Spring Boot and Next.js skeletons.
    - Health endpoint and CORS.
    - Session tokens and ownership checks.
-2. **Text and PDF pipeline (Phase 2) — done:**
+2. **Text and PDF pipeline:**
    - Upload with background jobs and status.
    - PDFBox extraction.
    - Masking with the integrity check.
    - Step-1 extraction, validation, and flag recomputation.
    - Step-2 summary.
    - Sample reports.
-3. **Accounts, backend only (Phase 6a) — done:**
-   - Spring Security filter chain for guest and bearer callers.
-   - Google sign-in, JWT issue with `kid`, and refresh rotation.
-   - Users, and reports owned by a user.
-   - Claiming guest reports at sign-in.
-   - `/api/me` and account deletion.
-   - The admin role and the `/api/admin/**` rule (no admin endpoint yet).
-   - Authorization tests.
-
-   Built here, before the pipeline work that follows, because every later phase reads or writes reports through the owner model. Chat in particular would otherwise be built against guest-only ownership and rewritten. No frontend work: the sign-in UI ships with phase 7.
-4. **Evaluation (Phase 3) — done:** the synthetic test set and the scoring runner, built before OCR so every later change is measured. Method and baseline: `docs/evaluation.md`.
-5. **OCR (Phase 4) — done:** the `tesseract` command-line program, run as a child process, for images and the scanned-PDF fallback, feeding the same pipeline. Values OCR read with low confidence are never flagged (4.2, 4.4). Low-level design: `docs/phase-4-lld.md`; results in `docs/evaluation.md`.
-6. **Chat (Phase 5) — current:**
+3. **Evaluation:** build the synthetic test set and scoring script now, before adding OCR, so every later change is measured.
+4. **OCR:** Tess4J for images and the scanned-PDF fallback, feeding the same pipeline.
+5. **Chat:**
    - Curated biomarker content and embeddings.
    - Report-context chat with RAG and SSE.
-   - Prompt-injection defenses, the decision tag, and the number guard (4.5).
+   - Prompt-injection defenses.
    - Rate limits and the Postgres daily cap.
    - Caching and token logging.
-   - The chat panel on the report page from 7b.
-
-   Low-level design: `docs/phase-5-lld.md`.
-7. **History, trends, and admin stats (Phase 6b) — done:**
-   - `GET /api/reports` (history list).
-   - `GET /api/trends` and `GET /api/trends/markers`.
-   - `GET /api/admin/stats`.
-8. **Frontend (Phase 7),** split into four parts. The design system (`docs/design-system/`) and the approved mockups (`docs/ui/`) are the reference for all four.
-   - **7a — Foundation:** design tokens and the two themes, the 19 design-system components, the app shell, the API client, the lazy guest session, the backend wake check, banners, inline notices and toasts, the six system screens, and the privacy page. Low-level design: `docs/phase-7a-lld.md`.
-   - **7b — The product — done:** landing page, the upload panel, samples, report processing, the results and failed states, and the biomarker explainer page. Low-level design: `docs/phase-7b-lld.md`.
-   - **7c — Accounts:** Sign in with Google, auto sign-in, token refresh, cross-tab logout, the CSP entries Google needs, My reports, Account, and Trends.
-   - **7d — Admin and polish:** the admin dashboard, the accessibility pass, performance, SEO and metadata.
-
-   The chat UI is built with Phase 5, on the report page from 7b.
-9. **Deploy and harden (Phase 8):**
+6. **Accounts:**
+   - Spring Security filter chain for guest and bearer callers.
+   - Google sign-in, JWT issue, and refresh rotation.
+   - Claiming guest reports.
+   - `/api/me` and account deletion.
+   - Report history and trends.
+   - Admin role and stats.
+   - CSP.
+   - Authorization tests.
+7. **Frontend polish and SEO:**
+   - Results view with range bars.
+   - History and trend charts.
+   - Status and skeleton states.
+   - Disclaimer and consent.
+   - Biomarker pages with metadata.
+8. **Deploy and harden:**
    - arm64 image, EC2 + Caddy + DuckDNS.
    - Neon.
    - Budget alert and retention job.

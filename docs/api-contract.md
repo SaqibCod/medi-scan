@@ -2,7 +2,7 @@
 
 This document defines the HTTP API between the Next.js client and the Spring Boot backend. It matches the v3 project plan and the data flow design. If the code and this document disagree, fix one of them before merging.
 
-**Version:** 2.6 (chat: three clarifications to 4.4; no shape change)
+**Version:** 2.1 (optional Google sign-in, history, trends, admin stats; cross-tab sign-in and key rotation)
 
 ---
 
@@ -387,13 +387,6 @@ Creates a report and queues it for processing. Accepts exactly one of: a file, p
 | `file` | file | yes | PDF, PNG, or JPEG. Max 10 MB. The file signature (magic bytes) must match the type. |
 | `consent` | string | yes | Must be `"true"` |
 
-**Photos and scans.** PNG and JPEG uploads are accepted and read with OCR, as are PDF pages with no text layer. Two limits apply during the job, not at upload:
-
-- **Very large images:** over 40 megapixels (width × height) end as `FAILED` with `UNREADABLE`. The upload itself still returns `202`.
-- **Too many scanned pages:** a PDF with more than 10 pages needing OCR ends as `FAILED` with `DOCUMENT_TOO_LONG` (see 8.2).
-
-A file OCR finds no usable text in ends as `FAILED` with `UNREADABLE`. Values OCR was unsure about are kept but not flagged — see 4.2.
-
 **Option B: pasted text** (`application/json`)
 
 ```json
@@ -494,7 +487,6 @@ The response shape depends on `status`. Fields that don't apply to the current s
   "error": null,
   "result": {
     "collectedOn": "2026-09-28",
-    "textSource": "TEXT_LAYER",
     "biomarkers": [
       {
         "id": "a1b2c3d4-…",
@@ -550,18 +542,6 @@ The response shape depends on `status`. Fields that don't apply to the current s
 A failed report is still a `200` response. The request succeeded; the processing didn't.
 
 `result.collectedOn` is the sample collection date (`YYYY-MM-DD`) when step 1 can find it on the report, otherwise `null`. Trends use it to date each point.
-
-**`result.textSource`** says how the report's text was obtained:
-
-| Value | Meaning |
-|---|---|
-| `TEXT_LAYER` | All text came from the PDF's text layer, or from pasted text or a sample |
-| `OCR` | All text was read by OCR, from a photo or from pages with no text layer |
-| `MIXED` | Some pages came from a text layer and some from OCR |
-
-`sourceType` can't answer this on its own: a scanned PDF has `sourceType: "PDF"` and `textSource: "OCR"`. A client that doesn't recognise the value should treat it as `OCR`, which is the cautious reading.
-
-**Values OCR was unsure about.** On an `OCR` or `MIXED` report, a value whose characters OCR read with low confidence keeps its `rawValue`, `unit` and `referenceRangeText` exactly as read, but gets `flag: "UNKNOWN"` and `numericValue: null`, and is left out of trends. The same applies to a reference range read with low confidence (`refLow` and `refHigh` become `null`), and to `collectedOn` (it becomes `null`). A misread digit must not produce a confident flag, so an uncertain value is reported as uncertain rather than judged. A client showing an `OCR` or `MIXED` report should tell the reader the values came from OCR and ask them to check each one against the paper report.
 
 **Errors**
 
@@ -655,12 +635,6 @@ data: {"finishReason":"COMPLETE"}
 | `done` | `{ finishReason }` | `COMPLETE`, `DECLINED` (diagnosis or treatment question), or `NOT_IN_CONTEXT` (answer not in the report or pages) |
 | `error` | `{ code, message }` | Stream ends after this. Codes: `LLM_UNAVAILABLE`, `CAPACITY`, `INTERNAL_ERROR`. |
 
-**`finishReason: "COMPLETE"` also covers an answer the server cut short.** Every sentence is checked before it is sent, and an answer that quotes a number which is not on the report or its results is stopped there. The stream still ends normally: a final `token` event says in plain words that the answer was stopped, then `sources`, then `done` with `COMPLETE`. A stopped answer is not an error and needs no special case in the client. The guard is a server-side rule, not a field.
-
-**The cache only holds answers to first questions.** `meta.cached` can be `true` only for a request sent with an empty `history`. A question with history is always answered by the model, so a follow-up is never served an answer built for a different conversation. Cache keys always start with the report id, so an entry can never cross owners, and entries are dropped when the report is deleted or expires. The cache is memory only and is never written to the database.
-
-**Typed text is masked before the model sees it.** The server runs `question` and every `history[].content` through its personal-data rules (email, phone, SSN, identifier and date-of-birth patterns) while building the prompt. The request and response shapes are unchanged — this is stated so there is no doubt about what reaches the model. Nothing typed is logged or stored either way.
-
 **Chat history is never stored,** for guests or signed-in users.
 
 **Keep-alive.** The server sends an SSE comment line (`: ping`) every 15 seconds while the model is thinking, so proxies don't close the connection.
@@ -706,8 +680,6 @@ Lists the caller's reports, newest first. For a guest, these are the current ses
 
 List items are summaries. `counts` and `collectedOn` are `null` unless the report is `DONE`. Use `GET /api/reports/{id}` for the full result.
 
-A page past the last page returns `200` with an empty `items` list, not an error.
-
 **Errors:** `400 VALIDATION_ERROR`, `401 SESSION_INVALID`
 
 ---
@@ -729,7 +701,7 @@ Returns one biomarker's values across the signed-in user's reports, for a line c
 **Matching rules**
 - **Matching:** biomarkers match by `biomarkerSlug` when present. Otherwise they match by normalized test name (lowercase, punctuation and extra spaces removed).
 - **Numeric only:** only `DONE` reports and numeric values are included. Qualitative values such as `Negative` are left out.
-- **Grouping by unit:** points are grouped by unit, and each group is drawn as its own chart. Values are never converted between units. A biomarker with no unit forms its own series with `unit: null` — values are never merged across units, including the lack of one.
+- **Grouping by unit:** points are grouped by unit, and each group is drawn as its own chart. Values are never converted between units.
 - **Dates:** each point is dated by `collectedOn`, or by the upload date when that is missing. `dateSource` says which.
 
 **Response `200 OK`**
@@ -766,7 +738,7 @@ Returns one biomarker's values across the signed-in user's reports, for a line c
 }
 ```
 
-Points are sorted by date, oldest first. If nothing matches, `series` is an empty array, not an error. Each series is capped at the 100 most recent points, still sorted oldest first.
+Points are sorted by date, oldest first. If nothing matches, `series` is an empty array, not an error.
 
 ### `GET /api/trends/markers`
 
@@ -823,13 +795,11 @@ Returns aggregated usage numbers for the admin dashboard. It contains counts onl
     }
   ],
   "failuresByCode": { "UNREADABLE": 3, "EXTRACTION_FAILED": 1, "NO_RESULTS_FOUND": 1 },
-  "avgProcessingMsBySource": { "PDF": 6200, "TEXT": 4100, "SAMPLE": 3900 },
+  "avgProcessingMsBySource": { "PDF": 6200, "IMAGE": 14800, "TEXT": 4100, "SAMPLE": 3900 },
   "users": { "total": 37, "activeLast7Days": 12 },
   "activeReports": { "guest": 18, "user": 95 }
 }
 ```
-
-`avgProcessingMsBySource` only has a key for source types with at least one processed report in range. `IMAGE` appears once an image report has been processed, which is possible from Phase 4 on.
 
 **Errors:**
 - `401 AUTH_REQUIRED`, `401 TOKEN_EXPIRED`, `401 TOKEN_INVALID`.
@@ -885,7 +855,6 @@ The client calls this on page load to wake the backend and to show a "starting u
 | Code | Meaning | Suggested UI message |
 |---|---|---|
 | `UNREADABLE` | No usable text, even after OCR | "We couldn't read text from this file. Try a clearer image." |
-| `DOCUMENT_TOO_LONG` | Extracted text is over the length or page limit, or the PDF has more than 10 pages needing OCR | "This document is too long to process. Try a shorter report." |
 | `NO_RESULTS_FOUND` | No lab values survived validation | "We didn't find lab results in this document." |
 | `EXTRACTION_FAILED` | The model returned invalid output twice | "Something went wrong reading the results. Please try again." |
 | `CAPACITY` | Daily LLM cap was reached mid-job | "The demo has hit today's limit. Try again tomorrow." |
@@ -906,7 +875,6 @@ The client can keep these in `client/lib/api-types.ts`. The backend uses matchin
 export type ReportStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
 export type SourceType = "PDF" | "IMAGE" | "TEXT" | "SAMPLE";
 export type Flag = "LOW" | "NORMAL" | "HIGH" | "UNKNOWN";
-export type TextSource = "TEXT_LAYER" | "OCR" | "MIXED";
 
 export interface SessionResponse {
   token: string;
@@ -943,7 +911,6 @@ export interface Biomarker {
 
 export interface ReportResult {
   collectedOn: string | null; // YYYY-MM-DD
-  textSource: TextSource; // treat an unrecognised value as "OCR"
   biomarkers: Biomarker[];
   summary: string;
   highlights: string[];
@@ -1100,7 +1067,7 @@ export interface ProblemDetail {
 
 - **Adding** a new optional field, endpoint, enum value, or error code is a compatible change.
 - **Removing or renaming** a field, changing a type, or changing what a status code means is a breaking change. Bump the version in this document and update the client in the same commit.
-- **Unknown enum values:** the client treats an unknown `flag` as `UNKNOWN`, an unknown `status` as `PROCESSING` (keep polling), an unknown error `code` as a generic error, and an unknown or missing `textSource` as `OCR` (so the "check these values" note is shown rather than hidden).
+- **Unknown enum values:** the client treats an unknown `flag` as `UNKNOWN`, an unknown `status` as `PROCESSING` (keep polling), and an unknown error `code` as a generic error.
 
 ---
 
@@ -1140,36 +1107,6 @@ export interface ProblemDetail {
 ---
 
 ## 11. Changelog
-
-**2.6 (chat)**
-- **No shape changes.** No endpoint, field, enum, error code or SSE event changed. `POST /api/reports/{id}/chat` (4.4) is built in Phase 5 exactly as it was already specified: the event order `meta`, `token`…, `sources`, `done`, an `error` event replacing `sources` and `done` on a mid-stream failure, the `: ping` keep-alive, and the six before-the-stream error codes as JSON Problem Details.
-- **`finishReason: "COMPLETE"` covers a guarded stop (4.4).** The server checks each sentence before sending it and stops an answer that quotes a number which is not on the report. The stream still ends `sources` then `done` with `COMPLETE`, so no enum value was added.
-- **`meta.cached` is limited to first questions (4.4).** Only a request with an empty `history` can be answered from the cache.
-- **Typed text is masked before the model sees it (4.4).** `question` and `history[].content` go through the personal-data rules on the way into the prompt. No field changed type or meaning.
-- **Every endpoint in this document now has a handler.** The "not available yet" notes in 2.3 are spent: 4.5, section 5 and section 6 shipped in Phase 6b, images in Phase 4, and chat here.
-
-**2.5 (OCR)**
-- **Images are accepted (4.1).** PNG and JPEG uploads no longer return `415 UNSUPPORTED_FILE_TYPE`; they are read with OCR, as are PDF pages with no text layer. An image over 40 megapixels is still accepted at upload and then fails the job with `UNREADABLE`.
-- **New optional field `result.textSource` (4.2, 9.1):** `"TEXT_LAYER" | "OCR" | "MIXED"`. Adding an optional field is a compatible change (9.2). The server always sends it on a `DONE` report; a report created before this version has no stored value and is reported as `TEXT_LAYER`, which is what it was. A client that doesn't recognise the value treats it as `OCR` (9.2).
-- **Low-confidence OCR values (4.2):** on an `OCR` or `MIXED` report, a value, range or date OCR read with low confidence keeps its printed text but gets `flag: "UNKNOWN"` and `numericValue: null` (and `refLow`/`refHigh` or `collectedOn` null). No field changed type; this documents when the server chooses `UNKNOWN`.
-- **`DOCUMENT_TOO_LONG` (8.2)** now also covers a PDF with more than 10 pages needing OCR. No new failure code: OCR failures reuse `UNREADABLE`, `DOCUMENT_TOO_LONG` and `EXTRACTION_FAILED`.
-- **`avgProcessingMsBySource` (6)** can now include `IMAGE`, since image reports exist.
-
-**2.4**
-- **No shape changes.** The `TrendResponse` series `unit` field was already typed `string | null`; this entry only documents behavior, it doesn't change a type.
-- **Trends (5):** each series is capped at the 100 most recent points, still sorted oldest first. A biomarker with no unit returns its own series with `unit: null`, never merged with a unit's series.
-- **History (4.5):** a page past the last page returns `200` with an empty `items` list, not an error.
-- **Admin stats (6):** `avgProcessingMsBySource` only includes source types with data in range; `IMAGE` is absent until Phase 4 ships OCR. The example response no longer shows a placeholder `IMAGE` value.
-
-**2.3**
-- **No shape changes.** No endpoint, field, enum, error code, or SSE event changed. This entry records what is implemented, so the contract and the running API can be told apart.
-- **Auth endpoints implemented in Phase 6a:** `POST /api/auth/google` (2.3), `POST /api/auth/refresh` (2.4), `POST /api/auth/logout` (2.5), `GET /api/me` (2.6), and `DELETE /api/me` (2.7) behave as specified, including bearer tokens on the report endpoints, the `kid` header and key rotation (2.8), and the error codes `AUTH_REQUIRED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`, `GOOGLE_TOKEN_INVALID`, `REFRESH_TOKEN_INVALID`, and `FORBIDDEN` (8.1).
-- **Not available yet (Phase 6b):** `GET /api/reports` (4.5), `GET /api/trends` and `GET /api/trends/markers` (section 5), and `GET /api/admin/stats` (section 6). No handler is mapped for them yet, so a caller who passes the authorization rule gets `404` rather than the documented response. Their contract here is unchanged and no client should call them yet. `/api/admin/**` already requires role `ADMIN`, so the authorization rule is in place ahead of the endpoint.
-- **Still not available:** images on `POST /api/reports`, and `POST /api/reports/{id}/chat` (4.4), both unchanged from 2.2.
-
-**2.2**
-- **New report failure code `DOCUMENT_TOO_LONG`** (8.2): the extracted text is over the character or page limit. Previously these reports failed as `UNREADABLE`, which was misleading. `ReportError.code` is typed `string`, so `client/lib/api-types.ts` needs no change.
-- **Images rejected until Phase 4:** `POST /api/reports` returns `415 UNSUPPORTED_FILE_TYPE` for PNG and JPEG until the OCR pipeline ships (4.1). A text-less PDF is still accepted and fails the job with `UNREADABLE`.
 
 **2.1**
 - **Refresh rule:** the client now refreshes once on `401 TOKEN_INVALID` as well as `TOKEN_EXPIRED`, so rotating the signing key is invisible to users.

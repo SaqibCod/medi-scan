@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 class GuestAuthFilterTest extends PostgresTestBase {
 
-	private static final String REPORT_ROUTE = "/api/reports/support/whoami";
+	private static final String REPORT_ROUTE = "/api/reports/whoami";
 
 	@Autowired
 	MockMvc mockMvc;
