@@ -200,25 +200,41 @@ applies LLD 10.4's two limits — zero dangerous flag errors, zero in-scope leak
 **separately** from the text cases, because OCR loses roughly one value in ten and a recall
 limit here would fail for a property of photographs rather than a defect.
 
-**Status as of 2026-11-02: the pipeline is proven on OCR, the gate is not yet scored.**
+#### Scored and passed, 2026-11-06
 
-One case has a complete, scored run — `eval/results/ocr-eval-20261102-084128.md`:
+`eval/results/ocr-eval-20261106-031015.md`. All ten cases, clean-scan PNG,
+monospace, 300 DPI, `min-value-confidence` 80.
 
-| case | textSource | matched / expected | unclear | dangerous flag errors | leaks | ms |
-|---|---|---:|---:|---:|---:|---:|
-| `boundary-values` | OCR | 4 / 4 | 0 | **0** | **0** | 903 |
+| | |
+|---|---|
+| Cases scored | **10 of 10** |
+| **Dangerous flag errors** | **0** |
+| In-scope leaks | **2** — the same two known `NAME` misses as the text cases |
 
-That is the whole path working end to end on a photograph: render → OCR → masking → the real
-model → validation → flags, with every expected row recovered, nothing marked unclear, no
-dangerous flag error and no planted PII escaping. It is **not** the gate: one case of ten, and
-the written report says so in a banner above the figures.
+Both limits met, no `NOT A VALID GATE RESULT` stamp, so all three safety checks
+below passed too. This is the whole path on a photograph: render → OCR → masking
+→ the real model → validation → flags.
 
-The remaining nine are blocked on provider capacity (findings item 6) — `gemini-3.8-flash`
-answers a listing call in 0.44 s but 503s or hangs on generation, so those cases fail with
-`LLM_UNAVAILABLE`. **That blocker is gone as of 2026-11-06:** the pipeline no longer calls
-that model (see "The pipeline model change" below). The nine cases have not been run since,
-so the gate is still unscored — the obstacle was removed, not the work. Three safety checks keep that from being reported as a clean sheet, and all
-three run **before** the two gate limits are applied:
+Reported but deliberately not gated: row recall 94% (65 of 69), flag accuracy on
+matched rows 91%, unclear rate 13% (9 of 69), mean 8.0 s per report. OCR loses
+roughly one value in ten, which is a property of photographs.
+
+`comparators` is the weak case, and it fails in the right direction: 1 of 4
+matched with 3 marked unclear. That is findings item 4 from the sweep — `≥` and
+`≤` are the class Tesseract misreads — and the confidence rule turned those
+misreads into `UNKNOWN` rather than into confident wrong flags, which is the
+whole point of the rule. `flags-as-asterisks` matched 3 of 4 with 1 unclear.
+
+**Why it took until now.** The nine missing cases were blocked on provider
+capacity (findings item 6): `gemini-3.8-flash` answered a listing call in 0.44 s
+but 503'd or hung on generation, so they failed with `LLM_UNAVAILABLE`. Moving
+the pipeline off that model (see "The pipeline model change" below) unblocked
+them, and the gate was run immediately after. The earlier one-case investigation
+run, `eval/results/ocr-eval-20261102-084128.md`, was correctly stamped as not a
+gate result.
+
+Three safety checks keep a broken run from being reported as a clean sheet, and
+all three run **before** the two gate limits are applied:
 
 1. at least one matched row exists, or the run measured nothing;
 2. no case failed with a provider-side code — `LLM_UNAVAILABLE`, `CAPACITY` or

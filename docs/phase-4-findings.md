@@ -181,6 +181,7 @@ before being accepted (`docs/evaluation.md`, "The pipeline model change"). `.env
 pointing at `gemini-flash-latest`, which is an alias for the broken line, and now names the
 same model as the code.
 
-**What this does not do:** it does not score the Phase 4 OCR gate. The nine blocked cases are
-unblocked — the thing that failed them was this 503 — but a gate result has to be run and
-read, not inferred, and that is Phase 4 work.
+**The gate, run the same day.** With the model fixed, all ten cases completed and the gate
+scored for the first time: **0 dangerous flag errors**, 2 in-scope leaks (the two already-known
+`NAME` misses), 10 of 10 cases, no `NOT A VALID GATE RESULT` stamp. Both LLD 10.4 limits met.
+Figures and the per-case table are in `docs/evaluation.md`.
