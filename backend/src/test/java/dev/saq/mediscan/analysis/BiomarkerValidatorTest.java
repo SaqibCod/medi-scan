@@ -6,9 +6,13 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import dev.saq.mediscan.report.Flag;
 import dev.saq.mediscan.support.TestProperties;
@@ -176,6 +180,64 @@ class BiomarkerValidatorTest {
 		assertThat(outcome.biomarkers()).isEmpty();
 		assertThat(outcome.dropsByReason())
 				.containsEntry(ValidationOutcome.DropReason.UNSUPPORTED, 1);
+	}
+
+	// --- the unit field ------------------------------------------------------
+
+	/**
+	 * Junk the model has really returned where a unit belongs, plus the units that must
+	 * survive.
+	 *
+	 * <p>Both failures are from the 2026-11-06 Phase 3 run on {@code gemini-3.6-flash}: the
+	 * four characters {@code null} on three ratio rows, and {@code ":"} on every row of the
+	 * urinalysis case, lifted off the page. The reader would have been shown "1.4 null" and
+	 * "Negative :".
+	 *
+	 * <p>{@code %} is in the kept list because it is the one real unit made only of
+	 * punctuation, and a shape rule written carelessly would throw it away.
+	 */
+	static Stream<Arguments> unitCases() {
+		return Stream.of(
+				Arguments.of("null", null),
+				Arguments.of("NULL", null),
+				Arguments.of("none", null),
+				Arguments.of("N/A", null),
+				Arguments.of(":", null),
+				Arguments.of("-", null),
+				Arguments.of("--", null),
+				Arguments.of(".", null),
+				Arguments.of("   ", null),
+				Arguments.of("mg/dL", "mg/dL"),
+				Arguments.of("%", "%"),
+				Arguments.of("x10^3/uL", "x10^3/uL"),
+				Arguments.of("10^9/L", "10^9/L"),
+				Arguments.of("mmol/L", "mmol/L"),
+				Arguments.of("IU/mL", "IU/mL"),
+				Arguments.of("  mg/dL  ", "mg/dL"));
+	}
+
+	@ParameterizedTest(name = "unit \"{0}\" -> {1}")
+	@MethodSource("unitCases")
+	@DisplayName("keeps a unit that means something and drops punctuation and the word null")
+	void sanitizesUnit(String returned, String expected) {
+		ValidationOutcome outcome = validate(row("Total Cholesterol", "238", returned, "<200"));
+
+		// The row itself always survives: a bad unit is not a reason to drop a printed value.
+		assertThat(outcome.biomarkers()).hasSize(1);
+		assertThat(outcome.biomarkers().get(0).unit()).isEqualTo(expected);
+	}
+
+	@Test
+	@DisplayName("a dropped unit does not merge two different rows into a duplicate")
+	void droppedUnitDoesNotCauseFalseDuplicate() {
+		// The duplicate fingerprint includes the unit, so two rows whose junk units both became
+		// null must still be told apart by name and value - as these are.
+		ValidationOutcome outcome = validator.validate(new ModelExtraction(List.of(
+				row("Total Cholesterol", "238", ":", "<200"),
+				row("Triglycerides", "140", "null", "<150")), null), TEXT);
+
+		assertThat(outcome.biomarkers()).hasSize(2);
+		assertThat(outcome.biomarkers()).allSatisfy(b -> assertThat(b.unit()).isNull());
 	}
 
 	@Test

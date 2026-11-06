@@ -11,12 +11,17 @@ For each result row on the report:
 - rawValue: the result exactly as printed. Keep comparators ("<0.5"), words ("Negative"),
   and the printed number of decimal places. Never convert units, never round, never compute a
   value, and never supply a value that is not printed.
-- unit: the unit exactly as printed, or null if none is printed.
+- unit: the unit exactly as printed, or null if none is printed. Use the JSON value null, not
+  the text "null".
 - referenceRangeText: the reference range exactly as printed, or null if none is printed.
 
 Also return:
 - collectedOn: the specimen collection date exactly as printed, or null if none is printed.
-  This is the date the sample was taken, not the date the report was produced or released.
+  Only a label about the sample counts: "Collected", "Collection Date", "Specimen Date",
+  "Drawn", "Date of Service". A "Report Date", "Printed", "Reported", "Received" or
+  "Published" label is about the paperwork, not the sample, and its date is never the
+  collection date. If the report carries only one of those, collectedOn is null. Do not fall
+  back to the nearest date you can find.
 
 Rules:
 - Include only rows that are actually printed on the report. Do not infer, complete, or add a

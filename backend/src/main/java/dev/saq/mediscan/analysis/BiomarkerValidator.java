@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -47,6 +48,28 @@ public class BiomarkerValidator {
 	 * flag) would still reach the biomarker and be shown to the reader as if it were printed.
 	 */
 	private static final Pattern RANGE_CONTROL_CHARACTER = Pattern.compile("\\p{Cntrl}");
+
+	/**
+	 * A unit has to carry a letter, a digit or a percent sign to mean anything.
+	 *
+	 * <p>Anything else is punctuation the model picked up off the page rather than a unit.
+	 * Traced 2026-11-06, on the pipeline's move to {@code gemini-3.6-flash}: every row of the
+	 * {@code qualitative-urinalysis} case came back with {@code ":"} as its unit, lifted from
+	 * the colon between the test name and its result. The reader would have seen "Negative :".
+	 *
+	 * <p>{@code %} is the one real unit made only of punctuation, hence the exception.
+	 */
+	private static final Pattern UNIT_HAS_SUBSTANCE = Pattern.compile("[\\p{L}\\p{N}%]");
+
+	/**
+	 * Words a model writes when it means "no unit", as text instead of as JSON null.
+	 *
+	 * <p>Same trace: three ratio rows across {@code cmp-clean-table}, {@code kidney-panel} and
+	 * {@code pdf-lipid-table} returned the four characters {@code null}, which would have been
+	 * shown to the reader as the unit of their A/G ratio. The prompt now says to use the JSON
+	 * value; this is the half of the defence that does not depend on the model reading it.
+	 */
+	private static final Set<String> UNIT_MEANING_NONE = Set.of("null", "none", "n/a", "nil");
 
 	private final BiomarkerCatalog catalog;
 	private final CollectedDateParser dateParser;
@@ -151,7 +174,7 @@ public class BiomarkerValidator {
 			return Optional.empty();
 		}
 
-		String unit = trimToNull(row.unit());
+		String unit = sanitizeUnit(row.unit());
 		String referenceRangeText = sanitizeReferenceRange(row.referenceRangeText(), maskedText);
 		if (referenceRangeText == null && row.referenceRangeText() != null
 				&& !row.referenceRangeText().isBlank()) {
@@ -235,6 +258,28 @@ public class BiomarkerValidator {
 	 * it passes the support check exactly as {@code rawValue} does. This only discards text that
 	 * either could not have come from the report as printed, or demonstrably did not.
 	 */
+	/**
+	 * The unit, or null when what the model returned is not one.
+	 *
+	 * <p>No support check against the source text, unlike a value or a range. A unit is short
+	 * and repeats all over a report, so "it appears somewhere in the text" would admit the
+	 * exact junk this rejects - a colon appears in every report ever printed. What a unit has
+	 * to pass is a test of shape, not of provenance.
+	 *
+	 * <p>Dropping it loses nothing a reader can use: the result still shows its printed value
+	 * and its printed reference range, which is where a unit is legible anyway.
+	 */
+	private static String sanitizeUnit(String rawUnit) {
+		String trimmed = trimToNull(rawUnit);
+		if (trimmed == null) {
+			return null;
+		}
+		if (UNIT_MEANING_NONE.contains(trimmed.toLowerCase(Locale.ROOT))) {
+			return null;
+		}
+		return UNIT_HAS_SUBSTANCE.matcher(trimmed).find() ? trimmed : null;
+	}
+
 	private static String sanitizeReferenceRange(String rawRangeText, String maskedText) {
 		if (rawRangeText == null) {
 			return null;
