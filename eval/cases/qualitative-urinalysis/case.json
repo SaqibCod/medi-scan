@@ -1,9 +1,0 @@
-{
-  "id": "qualitative-urinalysis",
-  "title": "Dipstick urinalysis with only qualitative results",
-  "synthetic": true,
-  "format": "TEXT",
-  "tags": ["values"],
-  "expectedStatus": "DONE",
-  "expectedErrorCode": null
-}

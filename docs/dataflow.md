@@ -49,9 +49,8 @@ Each report's data changes form as it moves through the pipeline.
 | # | Stage | Data form | Where it lives | Contains personal data? | Lifetime |
 |---|---|---|---|---|---|
 | 1 | Upload | File bytes (PDF/image) or text | Temp file on EC2 disk | Possibly | Deleted right after step 2, even on failure |
-| 1b | OCR preparation | Prepared grayscale PNG (images and scanned pages only) | Temp file on EC2 disk, and a decoded image in JVM memory while it is written | Possibly | Deleted as soon as the page is OCR'd, even on failure |
-| 2 | Extraction | Raw text (String), plus per-word OCR confidence when OCR ran | JVM memory only | Possibly | Dropped right after step 3 (confidence is kept until validation, step 5) |
-| 3 | Masking | Masked text | JVM memory until the report is DONE, then the `report_text` table | No (best-effort) | Report lifetime |
+| 2 | Extraction | Raw text (String) | JVM memory only | Possibly | Dropped right after step 3 |
+| 3 | Masking | Masked text | `report_text` table | No (best-effort) | Report lifetime |
 | 4 | Step-1 LLM | Extraction JSON from the model | JVM memory only | No | Dropped after step 5 |
 | 5 | Validation | Validated biomarker rows + `collected_on` | `biomarker`, `report` tables | No | Report lifetime |
 | 6 | Step-2 LLM | Summary + highlights | `report_summary` table | No | Report lifetime |
@@ -113,8 +112,6 @@ sequenceDiagram
 **Details**
 - **When it runs:** lazily, on the first guest action that needs it (an upload, picking a sample, or the history list), and only if the tab isn't signed in and has no guest token. Page loads and browsing the biomarker pages don't create sessions.
 - **New tab:** `sessionStorage` is per tab, so a guest's new tab gets its own guest session the first time it needs one.
-- **Single flight:** concurrent callers that all need a session share one in-flight `POST /api/sessions`. Two parallel creates would burn two of the 20-per-hour allowance and leave one session owning nothing.
-- **On `401 SESSION_INVALID`:** the client drops the stored token, clears every cached report from its query cache, and tells the page. Those reports belonged to the session that just went away, so showing them again would mean showing a report id that now resolves to nothing. A page that was displaying one shows the "Guest session ended" screen; an upload just creates a new session and retries once.
 
 ### 3.2 Google sign-in (with claiming guest reports)
 
@@ -155,7 +152,7 @@ sequenceDiagram
 - **In-flight reports:** reports that are still `PENDING` or `PROCESSING` are claimed too. The background job writes by report id, so it doesn't matter who owns the report when the job finishes.
 - **ID token handling:** the Google ID token is discarded after verification. It is never stored or logged.
 - **Stored identity:** only `sub` and the display name are copied from the token. The email and photo claims are ignored.
-- **Admin role:** recomputed from `ADMIN_GOOGLE_SUBS` on every sign-in **and on every refresh** (3.4), and written back to `app_user` when it has changed. A config change therefore applies within one access token lifetime (15 minutes) without the user signing in again: adding a `sub` promotes them on their next refresh, removing one demotes them. The access token they already hold keeps its old role until it expires.
+- **Admin role:** set on every sign-in from config. Removing a `sub` from `ADMIN_GOOGLE_SUBS` downgrades that user on their next sign-in. Their current access token keeps its role for up to 15 minutes.
 
 ### 3.3 New tabs and returning visits (auto sign-in)
 
@@ -281,20 +278,17 @@ flowchart TD
     AD -->|"User without ADMIN"| F403["403 FORBIDDEN"]
     AD -->|"Guest or Anonymous"| F401a["401 AUTH_REQUIRED"]
     RT -->|"/api/me/**, /api/trends/**"| U1{"User?"}
-    U1 -->|"yes"| UX{"Bearer: user row<br/>still exists?"}
+    U1 -->|"yes"| OK
     U1 -->|"no"| F401a
     RT -->|"/api/reports/**"| U2{"User or Guest?"}
-    U2 -->|"yes"| UX
+    U2 -->|"yes"| OK
     U2 -->|"no"| F401b["401 SESSION_INVALID"]
-    UX -->|"yes, or caller is a guest"| OK
-    UX -->|"no: account deleted"| F401a
     RT -->|"public routes"| OK
 ```
 
 **Details**
-- **Bearer validation:** done by Spring Security's OAuth2 resource server. Signature, issuer, audience, and expiry are checked with no database lookup, and the signing key is picked by the token's `kid` (3.7).
-- **User-existence check:** resolving a bearer principal into an `OwnerRef` adds one primary-key lookup on `app_user`. If the row is gone, the request fails with `401 AUTH_REQUIRED` instead of being handled for a user who no longer exists. This is what makes account deletion take effect immediately rather than after the access token expires (8.1), and it stops an upload from hitting a foreign-key error. It is the only database read the bearer path performs, it is not a token lookup, and it applies to bearer callers only — a guest `OwnerRef` needs no extra check, because the session lookup in the guest filter already proved the session exists.
-- **Guest tokens:** handled by a custom filter placed after the bearer filter, which declines to act when an `Authorization` header is present.
+- **Bearer validation:** done by Spring Security's OAuth2 resource server, with no database lookup. The signing key is picked by the token's `kid` (3.7).
+- **Guest tokens:** handled by a custom filter placed before it.
 - **No fallback:** a bad bearer token fails the request immediately. The server never falls back to the guest token.
 - **Owner reference:** handlers receive an `OwnerRef`, either `USER(userId)` or `GUEST(sessionId)`. Every report repository method takes it, so report queries can't be written without an owner filter:
   - **User:** `WHERE id = ? AND user_id = ? AND expires_at > now()`
@@ -384,22 +378,23 @@ flowchart TD
     S["Job starts<br/>status = PROCESSING"] --> T{"Source type?"}
     T -->|"text / sample"| RT["Use text as is"]
     T -->|"PDF"| PDF["PDFBox text extraction"]
-    T -->|"image"| PREP["Check pixel size from the header<br/>EXIF rotate, grayscale, scale<br/>write a temp PNG"]
-    PREP --> OCR["tesseract child process<br/>one at a time, TSV out<br/>text + per-word confidence"]
+    T -->|"image"| OCR["Tesseract OCR<br/>one job at a time"]
     PDF --> CHK{"Enough text<br/>on each page?"}
     CHK -->|"yes"| RT
-    CHK -->|"no, scanned"| RENDER["Render page at 300 DPI, grayscale"] --> OCR
+    CHK -->|"no, scanned"| RENDER["Render page at 300 DPI"] --> OCR
     OCR --> RT
-    RT --> DEL["Delete temp files"]
+    RT --> DEL["Delete temp file"]
     DEL --> MASK["Mask personal data<br/>regex + OpenNLP"]
     MASK --> INT["Value integrity check"]
-    INT --> CAP{"Daily LLM cap<br/>reached?"}
+    INT --> SAVE1[("Save report_text")]
+    SAVE1 --> CAP{"Daily LLM cap<br/>reached?"}
     CAP -->|"yes"| FAIL["status = FAILED<br/>error = CAPACITY"]
     CAP -->|"no"| L1["Step-1 LLM call<br/>biomarkers + collection date"]
-    L1 --> V["Validate in code<br/>value in source, parse numbers,<br/>recompute flags, parse date,<br/>low-confidence OCR values → UNKNOWN"]
-    V --> L2["Step-2 LLM call<br/>summary from validated data"]
-    L2 --> SAVE[("One transaction:<br/>report_text + biomarkers +<br/>collected_on + report_summary")]
-    SAVE --> DONE["status = DONE"]
+    L1 --> V["Validate in code<br/>value in source, parse numbers,<br/>recompute flags, parse date"]
+    V --> SAVE2[("Save biomarkers + collected_on")]
+    SAVE2 --> L2["Step-2 LLM call<br/>summary from validated data"]
+    L2 --> SAVE3[("Save report_summary")]
+    SAVE3 --> DONE["status = DONE"]
     DONE --> STATS[("Update daily stats<br/>counts and timing only")]
     FAIL --> STATS
 ```
@@ -407,13 +402,7 @@ flowchart TD
 **Step details**
 
 1. **Extraction.** The job picks a path by source type. Scanned PDF pages are detected per page (for example, fewer than 50 characters of text) so mixed PDFs work too. OCR is guarded by a semaphore with one permit.
-   - **How OCR runs.** The `tesseract` program is started as a child process, with its arguments as a list and no shell, and asked for TSV on stdout. One run gives both the text and a confidence for every word. The process gets a per-page timeout and the report gets a whole-OCR time budget; its stdout is capped, and it is killed if it exceeds either. Nothing about it reaches the log but the exit code, the timing, the word count and the mean confidence.
-   - **Images.** The pixel size is read from the file header before anything is decoded, so a small file that would expand to gigabytes never gets decoded: over the pixel cap is `UNREADABLE`. The image is then EXIF-rotated, converted to grayscale, scaled into the range Tesseract reads best, and written as a temp PNG. Images are never sent to a model — only the OCR text, after masking.
-   - **Scanned and mixed PDFs.** Each low-text page is rendered at 300 DPI in grayscale and OCR'd in place, so page order is kept. More low-text pages than the OCR page limit is `DOCUMENT_TOO_LONG`. A page whose mean confidence is below the floor counts as empty rather than feeding garbage to the model. The length rules then apply to the combined text as before.
-   - **Which text came from where.** The report stores `text_source`: `TEXT_LAYER` when no page was OCR'd, `OCR` when every page with text was, `MIXED` otherwise. It is written in the final transaction with `DONE`, so a failed report has none. A report created before Phase 4 has none either, and the API reports it as `TEXT_LAYER`, which is what it was.
-   - **When OCR is off** (`OCR_ENABLED=false`, or the `local` profile with no `tesseract` on the box): images are rejected at upload with `415 UNSUPPORTED_FILE_TYPE`, and a PDF with no usable text layer has nowhere to fall back to, so the job fails with `UNREADABLE`.
-   - **No new failure codes.** An unreadable or over-large image is `UNREADABLE`, too many scanned pages is `DOCUMENT_TOO_LONG`, and a timeout, an output overrun or a non-zero exit is `EXTRACTION_FAILED`.
-2. **Temp file deletion.** Happens right after extraction in a `finally` block. This covers the prepared PNGs and rendered pages as well as the upload itself.
+2. **Temp file deletion.** Happens right after extraction in a `finally` block.
 3. **Masking.**
    - Regex rules run first, then OpenNLP.
    - Date masking only applies next to birth-date labels ("DOB", "Date of Birth"), so the collection date survives for trends.
@@ -428,10 +417,9 @@ flowchart TD
    - Rows whose `rawValue` isn't in the masked text are dropped.
    - Numbers are re-parsed from the raw strings, and flags are recomputed.
    - `collectedOn` is kept only if it parses as a real date that appears in the masked text and isn't in the future. Otherwise it's `null`.
-   - **On an OCR or mixed report,** each surviving value is looked up in the per-word confidence from the OCR run. A value whose characters were read below the confidence threshold keeps its printed text but gets `UNKNOWN` and no `numericValue`, so it never reaches a trend line. A low-confidence reference range loses `refLow` and `refHigh` (and so also gives `UNKNOWN`), and a low-confidence collection date becomes `null`. The count of such rows is recorded as a number in the daily stats. A misread digit must not produce a confident flag.
    - If zero rows survive, the job fails with `NO_RESULTS_FOUND`.
 7. **Step-2 LLM call.** Input is only the validated biomarker list as JSON. The model writes the summary and picks highlights only from rows flagged `LOW` or `HIGH`.
-8. **Saving.** The masked text, the biomarkers, `collected_on`, the summary, and `status = DONE` are all written in one transaction at the end, so a report is never left with biomarkers but no summary. Until that transaction commits, the masked text exists only in JVM memory, which means **a report that fails stores no text at all**.
+8. **Saving.** Steps 5–7 save in one transaction, so a report is never left with biomarkers but no summary.
 9. **Deleted mid-job.** If the report was deleted while processing (by the user, by account deletion, or by expiry), the save finds no row. The job stops without writing anything.
 10. **Stats.** Daily counters are updated with counts and timing only.
 
@@ -454,7 +442,6 @@ stateDiagram-v2
 | Code | Meaning | What the user sees |
 |---|---|---|
 | `UNREADABLE` | No usable text found, even after OCR | "We couldn't read text from this file. Try a clearer image." |
-| `DOCUMENT_TOO_LONG` | Extracted text is over the length or page limit | "This document is too long to process. Try a shorter report." |
 | `NO_RESULTS_FOUND` | No lab values survived validation | "We didn't find lab results in this document." |
 | `EXTRACTION_FAILED` | Model output invalid twice | "Something went wrong reading the results. Please try again." |
 | `CAPACITY` | Daily LLM cap reached mid-job | "The demo has hit today's limit. Try again tomorrow." |
@@ -510,64 +497,23 @@ sequenceDiagram
     B->>A: POST /api/reports/{id}/chat { question, history }
     A->>A: Authenticate, chat rate limit (per user or per IP)
     A->>D: Load report by id + owner, require status DONE
-    A->>A: Mask the question and each history turn
-    A->>A: Check Caffeine cache (only when history is empty)
+    A->>A: Check Caffeine cache (reportId + normalized question)
     alt cache hit
         A-->>B: SSE meta (cached), tokens, sources, done
     else cache miss
-        A->>D: Increment daily LLM cap (embed)
-        A->>E: Embed the masked question
+        A->>D: Increment daily LLM cap
+        A->>E: Embed question
         A->>D: Top 4 biomarker page chunks by similarity
         A->>D: Load masked text + biomarkers
-        A->>D: Increment daily LLM cap (chat)
         A->>L: Prompt = rules + report + results + references + last 6 turns + question
         A-->>B: SSE meta
         L-->>A: Token stream
-        A->>A: Read the decision tag, then check each sentence
         A-->>B: SSE token events
         A-->>B: SSE sources, then done with finishReason
         A->>D: Update daily stats (token counts)
-        A->>A: Store answer in cache (only when history was empty)
+        A->>A: Store answer in cache
     end
 ```
-
-**Five things happen between the model and the browser.** They are what makes a
-streamed answer safe to show, and they are listed in the order they run.
-
-1. **Typed text is masked first.** The question and every history turn go through
-   the same personal-data rules as report text — email, phone, SSN, identifier
-   and date-of-birth patterns — before anything else looks at them. There is no
-   name model on this path: a typed question rarely carries the labels the name
-   rules need, and running the model over it would mangle test names. Nothing
-   typed is logged or stored, masked or not.
-2. **A decision tag opens every answer.** The model is told to start with exactly
-   one of `[[ANSWER]]`, `[[DECLINE]]` or `[[NOT_IN_CONTEXT]]`. The server reads
-   it, strips it, and maps it to the `finishReason` the contract requires.
-   A missing tag is treated as `[[ANSWER]]` and counted. The tag never reaches
-   the browser, and a tag repeated later in the text is removed too.
-3. **The answer is buffered into sentences, not forwarded token by token.**
-   A sentence ends at `.`, `!` or `?` followed by a space or newline, at a blank
-   line, or at the end of the stream. A decimal point inside a number is not a
-   sentence end, and a list item counts as one sentence.
-4. **Every sentence passes a number guard before it is sent.** The allowed set is
-   built from this report: the numbers in its values and printed reference
-   ranges, the numbers in its masked text, the flag counts, the collection date,
-   and small list markers. A sentence holding any other number stops the answer —
-   the model stream is cancelled, one closing `token` event explains that, and
-   `sources` and `done {COMPLETE}` still follow. A stopped answer is never
-   cached. Only the count is logged, never the sentence. The curated pages carry
-   no numeric ranges, so they add nothing to the allowed set.
-5. **The cache is for first questions only.** A question arrives with an empty
-   `history` or it does not. If it does, the normalized question is looked up
-   before any quota is spent, and a hit replays the stored answer with
-   `meta.cached = true` at no model and no embedding cost. If it does not, the
-   model answers. That is why **the embedding call only happens on a cache
-   miss**: the lookup is a string key, not a vector search.
-
-The guard catches an invented *number*. It cannot catch a wrong *word* — calling
-a normal value high. The prompt tells the model to trust the flags in
-`<results>` rather than judge values itself, and the chat evaluation measures
-flag contradictions directly (`docs/evaluation.md`).
 
 **Prompt layout** (in this order):
 
@@ -576,13 +522,7 @@ flag contradictions directly (`docs/evaluation.md`).
 3. **Validated results:** `<results>` biomarker JSON `</results>`. The model is told to trust these flags over its own reading.
 4. **Reference pages:** `<reference>` the retrieved chunks, each with its page slug `</reference>`.
 5. **Recent history:** the last 6 turns from the client, capped at about 1,500 tokens.
-6. **The question**, masked.
-
-**Delimiters hold.** `<` and `>` are escaped inside every data block, so no
-report, chunk, history turn or question can close a tag and start giving
-instructions. The model has no tools, so the worst an injected instruction can
-do is change the words of one answer — and that answer still passes the number
-guard before any of it is sent.
+6. **The question.**
 
 **Event format:** `meta`, `token`, `sources`, `done` (with `finishReason`), and `error` are defined in `docs/api-contract.md` section 4.4.
 
@@ -628,7 +568,6 @@ flowchart TD
 - **Normalized test name:** lowercase, with punctuation and repeated spaces removed. It is computed in code at save time and stored in `biomarker.test_name_norm`, so trend queries can use an index.
 - **Units:** values are never converted between units. Each unit becomes its own chart series.
 - **Marker picker:** `GET /api/trends/markers` runs one grouped query: markers present in at least two `DONE` reports for this user.
-- **Point cap:** each series returns at most the 100 most recent points, still sorted oldest first.
 - **Expired reports:** trend points disappear when their report expires after 30 days. The UI says "History is kept for 30 days".
 
 ---
@@ -652,7 +591,7 @@ sequenceDiagram
 ```
 
 - **In-flight jobs:** jobs for deleted reports stop on their next save, because the row is gone (4.2, step 9).
-- **Access token:** it still passes signature checks for up to 15 minutes, but it stops working immediately. Every authenticated bearer request checks that the user row still exists before it resolves an `OwnerRef` (3.6), so a deleted account gets `401 AUTH_REQUIRED` on every endpoint, not an empty result. That check costs one primary-key lookup, and it also stops an upload from failing on a foreign key to a user that no longer exists.
+- **Access token:** it would still pass signature checks for up to 15 minutes. Every user-scoped query finds nothing, and `/api/me` returns `401 AUTH_REQUIRED` once the user row is gone.
 
 ### 8.2 Admin stats
 
@@ -680,26 +619,19 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    F["biomarkers/pages/*.md<br/>bundled in the backend image"] --> R{"reviewedOn set,<br/>or require-reviewed off?"}
-    R -->|"no"| SKIPR["Skip the page"]
-    R -->|"yes"| H["Hash each file"]
-    H --> CMP{"Same hash, model<br/>and size in content_index?"}
+    F["content/biomarkers/*.md<br/>bundled in the backend image"] --> H["Hash each file"]
+    H --> CMP{"Hash already<br/>in vector_store?"}
     CMP -->|"yes"| SKIP["Skip"]
-    CMP -->|"no"| CH["Split by H2 heading<br/>~500 tokens per chunk"]
+    CMP -->|"no"| CH["Split by heading<br/>~500 tokens per chunk"]
     CH --> EMB["Embed chunks"]
     EMB --> DEL["Delete old chunks for this slug"]
-    DEL --> INS[("Insert into vector_store<br/>metadata: slug, title, heading, chunkIndex")]
-    INS --> UPD[("Upsert content_index<br/>hash, model, dimensions, chunk count")]
+    DEL --> INS[("Insert into vector_store<br/>metadata: slug, heading, hash")]
 ```
 
 **Details**
-- **Startup cost:** content is only re-embedded when a file changes, so restarts don't spend embedding quota. A second start of an unchanged build embeds nothing.
-- **What "changed" means:** `content_index` stores each page's content hash together with the embedding model id and the vector size. A page is re-embedded when its hash differs; **every** page is re-embedded when the model or the size differs, because vectors from two models are not comparable. A page whose file has gone has its chunks deleted.
-- **One source of truth:** `client/content/biomarkers/` is the source. `scripts/sync-biomarker-content.sh` copies the pages and `index.json` into `backend/src/main/resources/biomarkers/`, and a test fails if the two copies differ byte for byte. The backend Docker build only sees `backend/`, so the copy has to exist; the test is what keeps it honest. This is the same arrangement `index.json` already uses.
-- **Only reviewed content in production:** `rag.require-reviewed` is true in `prod` and false in `local`. With it on, a page whose `reviewedOn` is null is not indexed at all, so unreviewed medical text can never reach a live answer. Locally everything is indexed, which is what makes the chat evaluation runnable before review.
-- **Indexing never blocks startup.** It runs after the application is ready, on a single thread. A failure — quota, network, a bad file — logs a WARN and leaves the existing index in place. Chat keeps working with whatever is indexed, including nothing.
-- **Counts only in the logs:** pages scanned, pages skipped, pages embedded, chunks written. Never a chunk, a heading body, or a vector.
-- **No report data:** `vector_store` only ever holds reference content, so retention doesn't need to touch it and it has no owner column.
+- **Startup cost:** content is only re-embedded when a file changes, so restarts don't spend embedding quota.
+- **One source of truth:** the frontend's static pages and the backend's RAG index read the same markdown folder. A small build step copies it into the backend image.
+- **No report data:** `vector_store` only ever holds reference content, so retention doesn't need to touch it.
 
 ### 9.2 Retention cleanup
 
@@ -756,7 +688,6 @@ flowchart TD
 - Raw session tokens or refresh tokens (hashes only); access tokens (not stored at all)
 - Any token in logs, including in exception messages and request logging
 - Any report content in logs. Logs hold ids, status changes, error codes, token counts, and timings only.
-- OCR output, Tesseract's stdout or stderr, and file names. An OCR page logs its exit code, duration, word count and mean confidence, and nothing else.
 
 ---
 
