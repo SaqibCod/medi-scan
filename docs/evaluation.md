@@ -215,7 +215,9 @@ the written report says so in a banner above the figures.
 
 The remaining nine are blocked on provider capacity (findings item 6) — `gemini-3.8-flash`
 answers a listing call in 0.44 s but 503s or hangs on generation, so those cases fail with
-`LLM_UNAVAILABLE`. Three safety checks keep that from being reported as a clean sheet, and all
+`LLM_UNAVAILABLE`. **That blocker is gone as of 2026-11-06:** the pipeline no longer calls
+that model (see "The pipeline model change" below). The nine cases have not been run since,
+so the gate is still unscored — the obstacle was removed, not the work. Three safety checks keep that from being reported as a clean sheet, and all
 three run **before** the two gate limits are applied:
 
 1. at least one matched row exists, or the run measured nothing;
@@ -405,6 +407,115 @@ why the record budget defaults low rather than to 40.
 Recorded answers are gitignored, like `eval/results/`: they are generated text
 about a report, and the evaluation's own output is not an exception to the rule
 that such text is not stored.
+
+## The pipeline model change
+
+2026-11-06. `mediscan.llm.model` moved from `gemini-3.8-flash`, the model the
+baseline above was measured against, to `gemini-3.6-flash`.
+
+**Why it had to move.** `gemini-3.8-flash` stopped serving generation. It answers
+a models listing in under half a second and refuses every `generateContent`
+call — 503 "experiencing high demand", or no response at all inside 45 seconds.
+Eight consecutive failures across four days, 2026-11-03 to 2026-11-06, on the
+project's own key. `gemini-3.7-flash` and `gemini-flash-latest` (an alias into
+that line) behave the same; `gemini-3.6-flash` answered 5 of 5 in 1.1–3.1 s.
+Because the broken model was the committed default, a fresh checkout could not
+process a single report: every upload failed `LLM_UNAVAILABLE`. The full probe
+table is in `docs/phase-4-findings.md` item 6, which is where this was first
+diagnosed and — wrongly — recorded as nothing to fix here.
+
+**It was not a drop-in.** The first run on the new model
+(`eval/results/20261106-021800/`, 31/31 cases, 57 real calls, no cache) held
+every gated limit, including the two that matter most — **0 dangerous flag
+errors, 0 invented numbers** — and matched the baseline on row recall, row
+precision, range accuracy, numeric accuracy, status accuracy, flag accuracy,
+failure rate and the injection case. Masking was unchanged: the same two known
+`NAME` leaks and the same one known `ADDRESS` gap.
+
+Two **ungated** figures moved, and both were real:
+
+| | baseline (3.8) | first run (3.6) |
+|---|---|---|
+| Unit accuracy | 100% | **94.9%** (9 of 177 rows) |
+| Date accuracy | 100% | **96.4%** (1 of 28 cases) |
+
+1. **The unit field came back as junk on rows that have no unit.** Six rows of
+   `qualitative-urinalysis` returned `":"` — the colon between the test name and
+   its result, lifted off the page. Three ratio rows (`cmp-clean-table`,
+   `kidney-panel`, `pdf-lipid-table`) returned the four characters `null`
+   instead of the JSON value. The reader would have been shown "Negative :" and
+   "1.4 null".
+
+2. **A report date was read as a collection date.** `no-collection-date` prints
+   `Report Date: 2026-07-15` and no collection date at all; the case exists to
+   check that the paperwork date is not borrowed. The expected answer is null
+   and the model returned the report date. The prompt already said "not the date
+   the report was produced or released" — true, abstract, and ignored.
+
+Neither touched a number or a flag, which is why every gate passed. Both are
+still wrong to show someone about their own report, so neither was accepted.
+
+**Fixed in two places, deliberately.** The date is fixed in the prompt, which
+now names the labels instead of stating a principle: which labels count as a
+collection date, which are about the paperwork, and that a missing one means
+null rather than the nearest date on the page. The unit is fixed in code,
+because a prompt is a request and `CLAUDE.md` rule 4 does not accept requests —
+`BiomarkerValidator` drops a unit that is punctuation only or that spells a word
+meaning "none", whatever model produced it. A bad unit never drops the row: the
+printed value and the printed range are what the reader needs, and they survive.
+
+**The prompt edit that had to be taken back out.** The first attempt also
+explained the unit in the prompt: that a ratio and a word result usually have no
+unit, and that a separator such as a colon is not one. Unit accuracy went to
+100% and **row recall fell to 97.2%** — the model returned one row of
+`qualitative-urinalysis` instead of six. Nothing was dropped by the validator
+(`dropped={}`), so those five rows were never extracted. Cutting that paragraph
+back to a single sentence about JSON null restored recall to 100% with unit
+accuracy still 100%, which is the run accepted below.
+
+Two conclusions, one firmer than the other. Firm: the code-side rule is what
+actually holds the unit field, and the prompt did not need to teach it. Less
+firm: that the paragraph *caused* the row loss is inference from two runs of one
+case, not a controlled result — `qualitative-urinalysis` is the dataset's only
+range-less word-result table and may simply be the least stable case on this
+model. Either way the prompt is now smaller than when this started, which is the
+direction to err in.
+
+**What this says about the gate.** Unit and date accuracy are measured and
+reported but are not limits in `eval/thresholds.json`, so the first run passed
+while getting both wrong. Row recall *is* a limit, at 0.95, so the second run
+passed too at 97.2%. That is a gap in the gate rather than a reason to re-grade
+either run, and no threshold was added or changed here — what the limits should
+be is a decision for whoever owns them, recorded as a finding instead.
+
+### Accepted run
+
+2026-11-06, after both fixes. `eval/results/20261106-023446/`, 31/31 cases, 30
+real calls. Every figure matches the committed 2026-10-20 baseline:
+
+| Metric | Baseline (3.8-flash) | Accepted (3.6-flash) |
+|---|---|---|
+| Cases / rows matched | 31 / 31, 177 / 177 | 31 / 31, 177 / 177 |
+| Row recall / precision | 100% / 100% | 100% / 100% |
+| Unit / range / numeric accuracy | 100% / 100% / 100% | 100% / 100% / 100% |
+| Date accuracy | 100% | 100% |
+| Status accuracy | 100% | 100% |
+| Flag accuracy | 100% | 100% |
+| **Dangerous flag errors** | **0** | **0** |
+| **Invented numbers** | **0** | **0** |
+| Failure rate on valid reports | 0% | 0% |
+| Leaks (in-scope) | 2 `NAME`, both known | 2 `NAME`, the same two |
+| `ADDRESS` (known gap, E6) | 1 of 1 planted | 1 of 1 planted |
+| Prompt-injection case | not followed | not followed |
+
+Two style figures moved for the better and neither is gated: mean reading grade
+4.1 → 3.5, and the baseline's one forbidden-phrase hit (read and accepted then
+as a false positive) is gone. Sentences landing in the prompt's 3-to-5 range is
+unchanged at 42.9%.
+
+The baseline table above is **not** restated against this model. It records what
+was measured on 2026-10-20 at commit `f7568c2`, and rewriting it would destroy
+the thing it exists for.
 
 ## Known limits
 

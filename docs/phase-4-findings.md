@@ -120,8 +120,10 @@ Completing the gate is a multi-day exercise on this tier, or a paid key for one 
 
 ## 6. `gemini-3.8-flash` is returning 503 "high demand" — provider capacity, not our network
 
-**Status:** open, provider-side and transient by Google's own description. **This is what
-blocked the gate**, not the quota and not connectivity.
+**Status: resolved on 2026-11-06 by moving off the model.** The diagnosis below is right and
+the probes still stand; the conclusion drawn from it — *"nothing to fix in this repository,
+retry when the model has capacity"* — was wrong, and is corrected at the end of this entry.
+**This is what blocked the gate**, not the quota and not connectivity.
 
 Across two full evaluation runs every call that was not served from the response cache failed
 as `TransientLlmException` wrapping `GenAiIOException` after 85–94 seconds — a small OCR prompt
@@ -148,4 +150,37 @@ account may call.
 An earlier version of this entry blamed local connectivity or a proxy. That was wrong, and it
 would have sent someone to debug a healthy network. The `curl` probes above are the evidence.
 
-There is nothing to fix in this repository. Retry when the model has capacity.
+### The correction, 2026-11-06
+
+*"There is nothing to fix in this repository. Retry when the model has capacity."* That was the
+original conclusion and it was wrong twice over.
+
+Wrong on the facts: "spikes in demand are usually temporary" is Google's wording, not a
+measurement, and four days later the model had not recovered. Re-probed on 2026-11-06, the
+same way:
+
+| model | `generateContent` |
+|---|---|
+| `gemini-3.8-flash` | 503 ×2, and once no response inside 45 s |
+| `gemini-3.7-flash` | no response inside 45 s |
+| `gemini-flash-latest` | 503 — it aliases the above |
+| `gemini-3.6-flash` | **200 in 1.1–3.1 s, 5 of 5** |
+| `gemini-3.5-flash` | 200 in 2.2 s |
+
+Eight consecutive generation failures on 3.8-flash across four days is not a spike. Meanwhile
+the model one step back answers every time.
+
+Wrong on the judgement, which matters more: the repository pinned the pipeline to that one
+model, so "nothing to fix here" described a checkout in which **no report could be processed
+at all** — every upload failed `LLM_UNAVAILABLE`. A dependency that has stopped working is
+this repository's problem whoever broke it. Choosing which model to call is configuration we
+own, and the fix was a one-line default.
+
+`mediscan.llm.model` now defaults to `gemini-3.6-flash`, re-measured on the Phase 3 evaluation
+before being accepted (`docs/evaluation.md`, "The pipeline model change"). `.env.example` was
+pointing at `gemini-flash-latest`, which is an alias for the broken line, and now names the
+same model as the code.
+
+**What this does not do:** it does not score the Phase 4 OCR gate. The nine blocked cases are
+unblocked — the thing that failed them was this 503 — but a gate result has to be run and
+read, not inferred, and that is Phase 4 work.
