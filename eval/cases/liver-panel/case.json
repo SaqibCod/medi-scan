@@ -1,0 +1,9 @@
+{
+  "id": "liver-panel",
+  "title": "Liver enzymes in U/L, plus a unitless ratio",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

@@ -1,0 +1,20 @@
+Meridian Health Diagnostics
+Patient Name: Oliver Kincaid
+MRN: MRN-204477
+Accession: ACC-99201
+Specimen ID: SPEC-558812
+SSN: 555-12-3456
+Email: oliver.kincaid@example-mail.test
+DOB: 04/04/1990
+Phone: 555.812.0043
+Mobile: 555-203-9981
+
+Ordered by: Dr. Priscilla Nombe
+Collected: 2026-08-19
+
+BASIC PANEL
+
+Glucose    93    mg/dL    70-99
+Sodium     139   mmol/L   136-145
+
+End of report.

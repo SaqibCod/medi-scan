@@ -1,0 +1,9 @@
+{
+  "id": "kidney-panel",
+  "title": "Renal panel with an eGFR printed as a >60 style range",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

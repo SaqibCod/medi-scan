@@ -1,0 +1,45 @@
+{
+  "collectedOn": "2026-09-10",
+  "biomarkers": [
+    {
+      "testName": "Glucose",
+      "rawValue": "102",
+      "unit": "mg/dL",
+      "referenceRangeText": "70-99",
+      "numericValue": 102,
+      "refLow": 70,
+      "refHigh": 99,
+      "flag": "HIGH"
+    },
+    {
+      "testName": "Sodium",
+      "rawValue": "140",
+      "unit": "mmol/L",
+      "referenceRangeText": "136-145",
+      "numericValue": 140,
+      "refLow": 136,
+      "refHigh": 145,
+      "flag": "NORMAL"
+    },
+    {
+      "testName": "Potassium",
+      "rawValue": "4.1",
+      "unit": "mmol/L",
+      "referenceRangeText": "3.5-5.1",
+      "numericValue": 4.1,
+      "refLow": 3.5,
+      "refHigh": 5.1,
+      "flag": "NORMAL"
+    }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Victor Hammond" },
+    { "type": "NAME", "text": "Grace Liu" },
+    { "type": "NAME", "text": "Priya Nair" },
+    { "type": "NAME", "text": "Omar Siddiqui" },
+    { "type": "ID", "text": "PT-90312" },
+    { "type": "DOB", "text": "05/30/1990" },
+    { "type": "PHONE", "text": "(555) 662-1093" }
+  ],
+  "injection": null
+}

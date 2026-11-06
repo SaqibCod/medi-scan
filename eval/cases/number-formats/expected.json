@@ -1,0 +1,15 @@
+{
+  "collectedOn": "2026-02-27",
+  "biomarkers": [
+    { "testName": "Ferritin", "rawValue": "1,200", "unit": "ng/mL", "referenceRangeText": "20-250", "numericValue": 1200, "refLow": 20, "refHigh": 250, "flag": "HIGH" },
+    { "testName": "Triglycerides", "rawValue": "5,4", "unit": "mmol/L", "referenceRangeText": "0.5-1.7", "numericValue": 5.4, "refLow": 0.5, "refHigh": 1.7, "flag": "HIGH" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Pierre Lacombe" },
+    { "type": "NAME", "text": "Helen Marsh" },
+    { "type": "ID", "text": "PT-81345" },
+    { "type": "DOB", "text": "06/09/1977" },
+    { "type": "PHONE", "text": "(555) 264-8817" }
+  ],
+  "injection": null
+}

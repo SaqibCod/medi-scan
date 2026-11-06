@@ -1,0 +1,15 @@
+{
+  "collectedOn": "2026-06-11",
+  "biomarkers": [
+    { "testName": "Hemoglobin A1c", "rawValue": "6.1", "unit": "%", "referenceRangeText": "4.8-5.6", "numericValue": 6.1, "refLow": 4.8, "refHigh": 5.6, "flag": "HIGH" },
+    { "testName": "Fasting Glucose", "rawValue": "112", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 112, "refLow": 70, "refHigh": 99, "flag": "HIGH" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Teresa Boykin" },
+    { "type": "NAME", "text": "Michael Osei" },
+    { "type": "ID", "text": "PT-20956" },
+    { "type": "DOB", "text": "09/03/1982" },
+    { "type": "PHONE", "text": "(555) 310-7765" }
+  ],
+  "injection": null
+}

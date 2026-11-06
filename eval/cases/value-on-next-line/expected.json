@@ -1,0 +1,16 @@
+{
+  "collectedOn": "2026-01-09",
+  "biomarkers": [
+    { "testName": "Glucose", "rawValue": "98", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 98, "refLow": 70, "refHigh": 99, "flag": "NORMAL" },
+    { "testName": "Blood Urea Nitrogen", "rawValue": "31", "unit": "mg/dL", "referenceRangeText": "7-20", "numericValue": 31, "refLow": 7, "refHigh": 20, "flag": "HIGH" },
+    { "testName": "Creatinine", "rawValue": "1.1", "unit": "mg/dL", "referenceRangeText": "0.6-1.3", "numericValue": 1.1, "refLow": 0.6, "refHigh": 1.3, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Edwin Kato" },
+    { "type": "NAME", "text": "Susan Whitfield" },
+    { "type": "ID", "text": "PT-26704" },
+    { "type": "DOB", "text": "10/05/1973" },
+    { "type": "PHONE", "text": "(555) 381-7762" }
+  ],
+  "injection": null
+}

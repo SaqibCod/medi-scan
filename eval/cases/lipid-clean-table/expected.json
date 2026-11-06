@@ -1,0 +1,53 @@
+{
+  "collectedOn": "2026-09-15",
+  "biomarkers": [
+    {
+      "testName": "Total Cholesterol",
+      "rawValue": "238",
+      "unit": "mg/dL",
+      "referenceRangeText": "<200",
+      "numericValue": 238,
+      "refLow": null,
+      "refHigh": 200,
+      "flag": "HIGH"
+    },
+    {
+      "testName": "HDL Cholesterol",
+      "rawValue": "38",
+      "unit": "mg/dL",
+      "referenceRangeText": ">40",
+      "numericValue": 38,
+      "refLow": 40,
+      "refHigh": null,
+      "flag": "LOW"
+    },
+    {
+      "testName": "LDL Cholesterol",
+      "rawValue": "162",
+      "unit": "mg/dL",
+      "referenceRangeText": "<100",
+      "numericValue": 162,
+      "refLow": null,
+      "refHigh": 100,
+      "flag": "HIGH"
+    },
+    {
+      "testName": "Triglycerides",
+      "rawValue": "140",
+      "unit": "mg/dL",
+      "referenceRangeText": "<150",
+      "numericValue": 140,
+      "refLow": null,
+      "refHigh": 150,
+      "flag": "NORMAL"
+    }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Monica Alvarez" },
+    { "type": "NAME", "text": "Harold Benning" },
+    { "type": "ID", "text": "PT-48213" },
+    { "type": "DOB", "text": "02/14/1985" },
+    { "type": "PHONE", "text": "(555) 014-8822" }
+  ],
+  "injection": null
+}

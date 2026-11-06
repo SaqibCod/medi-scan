@@ -74,7 +74,7 @@ class ErrorContractTest extends PostgresTestBase {
 	@Test
 	@DisplayName("the body's requestId matches the X-Request-Id header")
 	void requestIdMatchesHeader() throws Exception {
-		MvcResult result = mockMvc.perform(get("/api/reports/whoami")).andReturn();
+		MvcResult result = mockMvc.perform(get("/api/reports/support/whoami")).andReturn();
 
 		String headerId = result.getResponse().getHeader(RequestIdFilter.HEADER);
 		JsonNode problem = objectMapper.readTree(result.getResponse().getContentAsString());
@@ -87,9 +87,9 @@ class ErrorContractTest extends PostgresTestBase {
 	@Test
 	@DisplayName("each response gets its own request id")
 	void requestIdsAreUnique() throws Exception {
-		String first = mockMvc.perform(get("/api/reports/whoami"))
+		String first = mockMvc.perform(get("/api/reports/support/whoami"))
 				.andReturn().getResponse().getHeader(RequestIdFilter.HEADER);
-		String second = mockMvc.perform(get("/api/reports/whoami"))
+		String second = mockMvc.perform(get("/api/reports/support/whoami"))
 				.andReturn().getResponse().getHeader(RequestIdFilter.HEADER);
 
 		assertThat(first).isNotEqualTo(second);
@@ -98,7 +98,7 @@ class ErrorContractTest extends PostgresTestBase {
 	@Test
 	@DisplayName("error codes come from the contract's enum, never a free-form string")
 	void codeIsFromTheEnum() throws Exception {
-		MvcResult result = mockMvc.perform(get("/api/reports/whoami")).andReturn();
+		MvcResult result = mockMvc.perform(get("/api/reports/support/whoami")).andReturn();
 
 		JsonNode problem = objectMapper.readTree(result.getResponse().getContentAsString());
 		String code = problem.get("code").asString();

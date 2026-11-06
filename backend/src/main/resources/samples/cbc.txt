@@ -1,0 +1,34 @@
+RIVERBEND DIAGNOSTIC SERVICES
+18 Halford Street, Riverbend
+Phone: (555) 555-0170
+
+                  COMPLETE BLOOD COUNT WITH DIFFERENTIAL
+
+Patient Name: Marcus T. Elder             Accession: RB-9920415
+Date of Birth: 22/07/1978                 Specimen ID: 20260915-0477
+MRN: RB889214                             Collected: 15/09/2026
+Phone: (555) 555-0188                     Reported: 16/09/2026
+Referred by: Dr. Priya Ramachandran       Specimen: Whole blood, EDTA
+
+------------------------------------------------------------------------
+TEST                       RESULT     UNIT          REFERENCE     FLAG
+------------------------------------------------------------------------
+WBC                        6.8        x10^3/uL      4.0-11.0
+RBC                        4.85       x10^6/uL      4.20-5.80
+Hemoglobin                 14.6       g/dL          13.5-17.5
+Hematocrit                 43.2       %             38.8-50.0
+MCV                        89.1       fL            80.0-100.0
+MCH                        30.1       pg            27.0-33.0
+MCHC                       33.8       g/dL          32.0-36.0
+RDW                        12.9       %             11.5-14.5
+Platelet Count             245        x10^3/uL      150-400
+Neutrophils                58         %             40-70
+Lymphocytes                31         %             20-45
+Monocytes                  7          %             2-12
+------------------------------------------------------------------------
+
+All values within the stated reference intervals.
+Method: Automated impedance and flow cytometry.
+
+This is a synthetic report created for demonstration. It does not describe
+a real person and contains no real patient data.

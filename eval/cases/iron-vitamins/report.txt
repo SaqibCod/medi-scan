@@ -1,0 +1,28 @@
+Willowbrook Diagnostic Center
+Patient Name: Natalie Fournier
+Patient ID: PT-59012
+DOB: 06/27/1991
+Phone: (555) 147-3390
+
+Ordered by: Dr. Derek Huang
+Collected: 2026-03-29
+
+IRON AND VITAMIN PANEL
+
+Iron                      45      ug/dL    60-170
+Ferritin                  15      ng/mL    20-250
+TIBC                      410     ug/dL    250-450
+Transferrin Saturation    11.0    %        20-50
+UIBC                      365     ug/dL    150-375
+Vitamin B12               180     pg/mL    200-900
+Vitamin B6                28.0    ng/mL    5-50
+Folate                    8.1     ng/mL    2.7-17.0
+Homocysteine              18.0    umol/L   5-15
+Vitamin D                 22      ng/mL    30-100
+Vitamin A                 35.0    ug/dL    20-80
+Vitamin E                 9.2     mg/L     5.5-17.0
+Zinc                      55.0    ug/dL    60-120
+Copper                    150.0   ug/dL    70-140
+Magnesium                 1.9     mg/dL    1.7-2.2
+
+End of report.

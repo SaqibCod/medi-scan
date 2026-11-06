@@ -1,0 +1,17 @@
+{
+  "collectedOn": "2026-04-07",
+  "biomarkers": [
+    { "testName": "Sodium", "rawValue": "136", "unit": "mmol/L", "referenceRangeText": "136-145", "numericValue": 136, "refLow": 136, "refHigh": 145, "flag": "NORMAL" },
+    { "testName": "Glucose", "rawValue": "99", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 99, "refLow": 70, "refHigh": 99, "flag": "NORMAL" },
+    { "testName": "Total Cholesterol", "rawValue": "200", "unit": "mg/dL", "referenceRangeText": "<200", "numericValue": 200, "refLow": null, "refHigh": 200, "flag": "HIGH" },
+    { "testName": "HDL Cholesterol", "rawValue": "40", "unit": "mg/dL", "referenceRangeText": ">40", "numericValue": 40, "refLow": 40, "refHigh": null, "flag": "LOW" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Marcus Webb" },
+    { "type": "NAME", "text": "Alina Kowalski" },
+    { "type": "ID", "text": "PT-47763" },
+    { "type": "DOB", "text": "09/25/1965" },
+    { "type": "PHONE", "text": "(555) 835-1162" }
+  ],
+  "injection": null
+}

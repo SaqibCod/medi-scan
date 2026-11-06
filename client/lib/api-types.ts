@@ -10,12 +10,19 @@
  * - Removing or renaming a field, changing a type, or changing what a status code means is
  *   breaking: bump the contract version and update this file in the same commit.
  * - Unknown enum values: treat an unknown `flag` as `UNKNOWN`, an unknown `status` as
- *   `PROCESSING` (keep polling), and an unknown error `code` as a generic error.
+ *   `PROCESSING` (keep polling), an unknown error `code` as a generic error, and an unknown
+ *   or missing `textSource` as `OCR` (the cautious reading — the note gets shown, not hidden).
  */
 
 export type ReportStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
 export type SourceType = "PDF" | "IMAGE" | "TEXT" | "SAMPLE";
 export type Flag = "LOW" | "NORMAL" | "HIGH" | "UNKNOWN";
+
+/**
+ * How the report's text was obtained (contract 4.2). `sourceType` can't answer this on its
+ * own: a scanned PDF is `sourceType: "PDF"` with `textSource: "OCR"`.
+ */
+export type TextSource = "TEXT_LAYER" | "OCR" | "MIXED";
 
 export interface SessionResponse {
   token: string;
@@ -52,6 +59,12 @@ export interface Biomarker {
 
 export interface ReportResult {
   collectedOn: string | null; // YYYY-MM-DD
+  /**
+   * Where the text came from. On an `OCR` or `MIXED` report, low-confidence values keep their
+   * `rawValue` but carry `flag: "UNKNOWN"` and `numericValue: null`. Treat a value this union
+   * doesn't cover as `OCR`.
+   */
+  textSource: TextSource;
   biomarkers: Biomarker[];
   summary: string;
   highlights: string[];
@@ -192,6 +205,52 @@ export interface AdminStats {
 }
 
 // ---- Errors ----
+
+/**
+ * Every `code` the API can put in a Problem Details body (contract 8.1).
+ *
+ * Listed rather than described so the UI can be checked against it: a test asserts that every
+ * code here has wording in `error-messages.ts`, which means adding a code to the contract
+ * without deciding what the user is told fails the build.
+ *
+ * Client-only codes (`NETWORK_ERROR`, `TIMEOUT`, `UNKNOWN_ERROR`) are deliberately absent —
+ * they live in `api-error.ts`, because nothing sends them.
+ */
+export const HTTP_ERROR_CODES = [
+  "VALIDATION_ERROR",
+  "FILE_SIGNATURE_MISMATCH",
+  "SESSION_INVALID",
+  "AUTH_REQUIRED",
+  "TOKEN_EXPIRED",
+  "TOKEN_INVALID",
+  "GOOGLE_TOKEN_INVALID",
+  "REFRESH_TOKEN_INVALID",
+  "FORBIDDEN",
+  "REPORT_NOT_FOUND",
+  "SAMPLE_NOT_FOUND",
+  "REPORT_NOT_READY",
+  "FILE_TOO_LARGE",
+  "UNSUPPORTED_FILE_TYPE",
+  "RATE_LIMITED",
+  "CAPACITY",
+  "BUSY",
+  "INTERNAL_ERROR",
+] as const;
+
+export type HttpErrorCode = (typeof HTTP_ERROR_CODES)[number];
+
+/** `error.code` on a report that reached status `FAILED` (contract 8.2). */
+export const REPORT_ERROR_CODES = [
+  "UNREADABLE",
+  "DOCUMENT_TOO_LONG",
+  "NO_RESULTS_FOUND",
+  "EXTRACTION_FAILED",
+  "CAPACITY",
+  "LLM_UNAVAILABLE",
+  "INTERRUPTED",
+] as const;
+
+export type ReportErrorCode = (typeof REPORT_ERROR_CODES)[number];
 
 export interface ProblemDetail {
   type: string;

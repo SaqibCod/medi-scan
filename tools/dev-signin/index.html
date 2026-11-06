@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>Medi-Scan dev sign-in (local only)</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 44rem;
+    margin: 3rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.5;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.4rem; }
+  .warn {
+    background: #fff4e5;
+    border-left: 4px solid #d97706;
+    padding: 0.75rem 1rem;
+    margin: 1.5rem 0;
+  }
+  label { display: block; font-weight: 600; margin: 1.25rem 0 0.35rem; }
+  input, textarea {
+    width: 100%;
+    font: inherit;
+    padding: 0.5rem;
+    border: 1px solid #c7c7c7;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8rem; }
+  button {
+    font: inherit;
+    padding: 0.5rem 0.9rem;
+    margin-top: 0.6rem;
+    border: 1px solid #c7c7c7;
+    border-radius: 4px;
+    background: #f4f4f4;
+    cursor: pointer;
+  }
+  code { background: #f4f4f4; padding: 0.1rem 0.3rem; border-radius: 3px; }
+  #status { margin-top: 0.6rem; color: #555; font-size: 0.9rem; }
+  footer { margin-top: 2.5rem; font-size: 0.85rem; color: #555; }
+</style>
+</head>
+<body>
+
+<h1>Medi-Scan dev sign-in</h1>
+
+<p>
+  Produces a real Google ID token so the backend's auth endpoints can be exercised with
+  <code>curl</code> before the sign-in UI exists. It talks to Google and to nothing else &mdash;
+  there is no call to the Medi-Scan API anywhere on this page.
+</p>
+
+<div class="warn">
+  <strong>Local development only.</strong> This page is never deployed and is not part of the
+  client app. An ID token is a credential: paste it into your terminal, not into a chat, an
+  issue, or a commit.
+</div>
+
+<label for="clientId">Google OAuth web client id</label>
+<input id="clientId" type="text" placeholder="1234567890-abc.apps.googleusercontent.com"
+       autocomplete="off" spellcheck="false">
+<p id="status">Enter a client id, then press Load.</p>
+<button id="load" type="button">Load Google sign-in</button>
+
+<div id="buttonHost" style="margin-top:1.25rem"></div>
+
+<label for="token">ID token</label>
+<textarea id="token" rows="8" readonly placeholder="The token appears here after you sign in."></textarea>
+<button id="copy" type="button">Copy</button>
+
+<footer>
+  The client id is typed in rather than committed, so this file holds no configuration for any
+  real project. Add <code>http://localhost:5500</code> as an authorised JavaScript origin on
+  the OAuth client first, and remove it when you are done. See <code>README.md</code> next to
+  this file.
+</footer>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+  // No framework and no build step: this is a throwaway tool, and a dependency here would be
+  // a dependency to keep up to date for something that must never ship.
+  const status = document.getElementById('status');
+  const tokenBox = document.getElementById('token');
+
+  function onCredential(response) {
+    // response.credential is the ID token. It is shown and never sent anywhere.
+    tokenBox.value = response.credential;
+    status.textContent = 'Token received. Copy it, then use it with curl.';
+  }
+
+  document.getElementById('load').addEventListener('click', () => {
+    const clientId = document.getElementById('clientId').value.trim();
+    if (!clientId) {
+      status.textContent = 'A client id is required.';
+      return;
+    }
+    if (!window.google || !window.google.accounts) {
+      status.textContent = 'Google Identity Services has not loaded yet. Try again in a moment.';
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: onCredential,
+      // Deliberately off, unlike the real client: for manual testing you want to choose the
+      // account every time rather than be signed in silently as whoever was last.
+      auto_select: false
+    });
+
+    const host = document.getElementById('buttonHost');
+    host.innerHTML = '';
+    window.google.accounts.id.renderButton(host, { theme: 'outline', size: 'large' });
+
+    status.textContent = 'Loaded. Use the button above to sign in.';
+  });
+
+  document.getElementById('copy').addEventListener('click', async () => {
+    if (!tokenBox.value) {
+      status.textContent = 'Nothing to copy yet.';
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(tokenBox.value);
+      status.textContent = 'Copied.';
+    }
+    catch {
+      // Clipboard access needs a secure context, and plain-HTTP localhost sometimes is not.
+      tokenBox.select();
+      status.textContent = 'Could not use the clipboard. The token is selected - copy it manually.';
+    }
+  });
+</script>
+
+</body>
+</html>

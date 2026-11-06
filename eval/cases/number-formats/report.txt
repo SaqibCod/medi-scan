@@ -1,0 +1,15 @@
+Brookhaven Diagnostics
+Patient Name: Pierre Lacombe
+Patient ID: PT-81345
+DOB: 06/09/1977
+Phone: (555) 264-8817
+
+Ordered by: Dr. Helen Marsh
+Collected: 2026-02-27
+
+CHEMISTRY PANEL
+
+Ferritin         1,200    ng/mL    20-250
+Triglycerides    5,4      mmol/L   0.5-1.7
+
+End of report.

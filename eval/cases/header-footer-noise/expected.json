@@ -1,0 +1,15 @@
+{
+  "collectedOn": "2026-11-02",
+  "biomarkers": [
+    { "testName": "Glucose", "rawValue": "91", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 91, "refLow": 70, "refHigh": 99, "flag": "NORMAL" },
+    { "testName": "Sodium", "rawValue": "146", "unit": "mmol/L", "referenceRangeText": "136-145", "numericValue": 146, "refLow": 136, "refHigh": 145, "flag": "HIGH" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Yusuf Abara" },
+    { "type": "NAME", "text": "Wanda Pierce" },
+    { "type": "ID", "text": "PT-14477" },
+    { "type": "DOB", "text": "02/02/1980" },
+    { "type": "PHONE", "text": "(555) 674-9033" }
+  ],
+  "injection": null
+}

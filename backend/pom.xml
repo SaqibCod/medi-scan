@@ -35,6 +35,18 @@
 		  `bucket4j-core` coordinate stopped at 8.10.1.
 		-->
 		<bucket4j.version>8.21.0</bucket4j.version>
+
+		<!--
+		  Neither PDFBox nor OpenNLP is in Spring Boot's managed dependencies and
+		  neither has a Boot starter, so both versions are pinned here.
+		-->
+		<pdfbox.version>3.0.8</pdfbox.version>
+
+		<!--
+		  2.5.12 is the current stable line. 3.0.0-M6 exists but is a milestone,
+		  and the pre-trained models are only published against 2.x.
+		-->
+		<opennlp.version>2.5.12</opennlp.version>
 	</properties>
 
 	<dependencyManagement>
@@ -70,14 +82,31 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
-		<!--
-		  Phase 1 uses one stateless filter chain with a guest-token filter. The
-		  bearer-token resource server (spring-boot-starter-oauth2-resource-server)
-		  arrives in phase 6 - see SecurityConfig.
-		-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+
+		<!--
+		  Bearer-token authentication for the app's own access tokens (phase 6a).
+		  Beyond what starter-security already gives us, this adds five jars:
+		  spring-boot-security-oauth2-resource-server (Boot 4 splits
+		  autoconfiguration per technology), spring-security-oauth2-resource-server,
+		  spring-security-oauth2-jose, spring-security-oauth2-core, and
+		  com.nimbusds:nimbus-jose-jwt - which is where the JWK, JWS and key
+		  selection types live. No hand-written token parsing or signature checks
+		  anywhere (CLAUDE.md, "Auth library code").
+
+		  Nothing in application.yml sets spring.security.oauth2.resourceserver.*,
+		  so Boot's JwtDecoderConfiguration stays inactive and
+		  AccessTokenDecoderConfig owns the only JwtDecoder bean. Boot's
+		  OAuth2ResourceServerWebSecurityAutoConfiguration is
+		  @ConditionalOnDefaultWebSecurity and backs off because SecurityConfig
+		  already declares a SecurityFilterChain.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
 
 		<!--
@@ -111,6 +140,79 @@
 			<groupId>com.bucket4j</groupId>
 			<artifactId>bucket4j_jdk17-core</artifactId>
 			<version>${bucket4j.version}</version>
+		</dependency>
+
+		<!--
+		  Gemini through the Google AI Studio API key, not Vertex AI.
+
+		  This is the `google-genai` module, not `vertex-ai-gemini`: setting
+		  `spring.ai.google.genai.api-key` selects the Gemini Developer API, which
+		  needs nothing but the key. The Vertex AI module wants a Google Cloud
+		  project and location, which would break the $0 constraint in
+		  docs/plan.md section 1.
+
+		  Version comes from the Spring AI BOM above.
+		-->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-google-genai</artifactId>
+		</dependency>
+
+		<!--
+		  Gemini text embeddings for chat RAG (phase 5).
+
+		  The starter above already brings the *autoconfiguration* for this -
+		  spring-ai-autoconfigure-model-google-genai carries the embedding config as
+		  well as the chat config - and only the model jar is missing, which is why
+		  this is the bare module rather than a second starter.
+
+		  Same API-key route as chat: GoogleGenAiEmbeddingConnectionDetails accepts
+		  an apiKey and a com.google.genai.Client, so it reuses the timeout-carrying
+		  client bean from GeminiClientConfig. No Google Cloud project is involved.
+
+		  The model must be set explicitly. Spring AI 2.0.1 still defaults to
+		  text-embedding-004, which the API no longer offers at all.
+
+		  Version comes from the Spring AI BOM above.
+		-->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-google-genai-embedding</artifactId>
+		</dependency>
+
+		<!--
+		  The chat answer cache (phase 5, LLD C8).
+
+		  In memory, bounded and expiring, which is the whole requirement: a cached
+		  answer must never outlive its report and must never reach a disk. Caffeine
+		  gives size and TTL eviction without a cache server. Version managed by the
+		  Spring Boot BOM.
+		-->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+
+		<!--
+		  PDF text extraction (phase 2) and, from phase 4, rendering scanned pages
+		  for OCR. `pdfbox` pulls in `pdfbox-io`, which is where IOUtils and the
+		  temp-file stream cache live.
+		-->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>${pdfbox.version}</version>
+		</dependency>
+
+		<!--
+		  Person-name detection for masking, behind mediscan.mask.opennlp-enabled.
+		  Off by default - see SECURITY.md for why, and for what the label-based
+		  rules cover instead.
+		-->
+		<dependency>
+			<groupId>org.apache.opennlp</groupId>
+			<artifactId>opennlp-tools</artifactId>
+			<version>${opennlp.version}</version>
 		</dependency>
 
 		<!-- Boot 4's granular test starters, in place of spring-boot-starter-test. -->
@@ -151,6 +253,18 @@
 			<artifactId>testcontainers-junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!--
+		  Polling with a deadline, for assertions on the async job pipeline.
+		  backend/CLAUDE.md forbids sleeping in tests: a fixed sleep is either
+		  slower than it needs to be or flaky on a loaded CI box, and usually
+		  both. Version comes from Boot's dependency management.
+		-->
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -159,7 +273,123 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!--
+			  Excludes the @Tag("eval") runner from the default build. Surefire has
+			  supported JUnit 5 tag-based excludedGroups/groups since 2.22.0, well
+			  below the 3.5.6 this project's Boot 4.1.1 parent resolves, so no
+			  version needs pinning here - only the configuration.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!--
+					  eval: real model calls, run on purpose with -Peval.
+					  ocr-tuning: the phase 4 parameter sweep, minutes of real
+					  Tesseract runs over dozens of rendered pages, run with
+					  -Pocr-tuning. The `ocr` tag is deliberately NOT here - those
+					  integration tests belong in verify and skip themselves with
+					  a message when tesseract is missing (phase-4-lld 12.2).
+					-->
+					<excludedGroups>eval,ocr-tuning</excludedGroups>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!--
+		  Runs only the @Tag("eval") class against the real Gemini model:
+		  ./mvnw test -Peval. Needs GEMINI_API_KEY (backend/CLAUDE.md).
+		-->
+		<profile>
+			<id>eval</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<!--
+						  combine.self="override": Maven merges a profile's plugin
+						  <configuration> with the main build's block for the same
+						  plugin key-by-key rather than replacing it, so an empty
+						  <excludedGroups> here was being merged away and the
+						  inherited "eval" from the main build stayed in effect -
+						  self-contradicting with <groups>eval</groups> below and
+						  silently matching zero tests. This forces a clean replace.
+						-->
+						<configuration combine.self="override">
+							<groups>eval</groups>
+							<!--
+							  EvalRunner doesn't match Surefire's default name-based
+							  include patterns (*Test, Test*, *Tests, *TestCase), so
+							  without this it is filtered out before @Tag is even
+							  checked and the profile silently runs zero tests.
+							-->
+							<includes>
+								<include>**/EvalRunner.java</include>
+								<!--
+								  Phase 4's gate: the same cases read from a
+								  photograph, scored separately from the text
+								  cases (docs/phase-4-lld.md 10.2).
+								-->
+								<include>**/OcrEvalRunner.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!--
+		  The phase 4 OCR parameter sweep (docs/phase-4-lld.md 10.3). Real
+		  Tesseract over every rendered variant at each page-segmentation mode,
+		  which takes minutes and no LLM quota at all - the whole point of
+		  scoring OCR text quality separately is that it costs nothing but time.
+		  Same override reasoning as the eval profile above.
+		-->
+		<profile>
+			<id>ocr-tuning</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration combine.self="override">
+							<groups>ocr-tuning</groups>
+							<includes>
+								<include>**/OcrTuningRun.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!--
+		  Phase 5: the retrieval sweep that picks rag.min-similarity.
+
+		  Separate from `eval` because it is far cheaper and worth running on its
+		  own: embedding calls only, no generation, so it costs one call per
+		  question rather than two. Needs GEMINI_API_KEY.
+		-->
+		<profile>
+			<id>chat-tuning</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration combine.self="override">
+							<groups>chat-tuning</groups>
+							<includes>
+								<include>**/ChatRetrievalTuningRun.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 
 </project>

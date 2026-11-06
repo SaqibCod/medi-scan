@@ -1,0 +1,9 @@
+{
+  "id": "sex-and-age-ranges",
+  "title": "Sex-dependent and age-dependent reference ranges",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["ranges"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

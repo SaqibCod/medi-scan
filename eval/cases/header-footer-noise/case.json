@@ -1,0 +1,9 @@
+{
+  "id": "header-footer-noise",
+  "title": "Lab disclaimer, barcode, and page-footer noise around a small panel",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["layout"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

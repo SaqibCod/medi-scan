@@ -1,0 +1,33 @@
+{
+  "collectedOn": null,
+  "biomarkers": [
+    {
+      "testName": "Hemoglobin A1c",
+      "rawValue": "5.4",
+      "unit": "%",
+      "referenceRangeText": "4.8-5.6",
+      "numericValue": 5.4,
+      "refLow": 4.8,
+      "refHigh": 5.6,
+      "flag": "NORMAL"
+    },
+    {
+      "testName": "Fasting Glucose",
+      "rawValue": "102",
+      "unit": "mg/dL",
+      "referenceRangeText": "70-99",
+      "numericValue": 102,
+      "refLow": 70,
+      "refHigh": 99,
+      "flag": "HIGH"
+    }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Oscar Reyes" },
+    { "type": "NAME", "text": "Sana Khalil" },
+    { "type": "ID", "text": "PT-55820" },
+    { "type": "DOB", "text": "03/04/1978" },
+    { "type": "PHONE", "text": "(555) 773-2201" }
+  ],
+  "injection": null
+}

@@ -1,0 +1,9 @@
+{
+  "id": "pii-name-lookalike",
+  "title": "A patient name that looks like a lab word (Grace Ferritin)",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["pii"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

@@ -1,0 +1,9 @@
+{
+  "id": "boundary-values",
+  "title": "Values exactly on an inclusive or exclusive range boundary",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["values"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

@@ -1,0 +1,15 @@
+{
+  "collectedOn": "2026-06-30",
+  "biomarkers": [
+    { "testName": "Hemoglobin", "rawValue": "14.5", "unit": "g/dL", "referenceRangeText": "M: 13.5-17.5  F: 12.0-16.0", "numericValue": 14.5, "refLow": null, "refHigh": null, "flag": "UNKNOWN" },
+    { "testName": "Calcium", "rawValue": "9.8", "unit": "mg/dL", "referenceRangeText": "Adult 8.6-10.2 / Child 9.0-11.0", "numericValue": 9.8, "refLow": null, "refHigh": null, "flag": "UNKNOWN" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Dana Whitcombe" },
+    { "type": "NAME", "text": "Louis Beaumont" },
+    { "type": "ID", "text": "PT-30871" },
+    { "type": "DOB", "text": "03/19/1979" },
+    { "type": "PHONE", "text": "(555) 904-6623" }
+  ],
+  "injection": null
+}

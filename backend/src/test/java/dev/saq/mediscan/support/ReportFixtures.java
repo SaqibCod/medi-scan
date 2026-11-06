@@ -1,0 +1,264 @@
+package dev.saq.mediscan.support;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+
+import org.springframework.stereotype.Component;
+
+import dev.saq.mediscan.config.ReportErrorCode;
+import dev.saq.mediscan.report.BiomarkerEntity;
+import dev.saq.mediscan.report.BiomarkerRepository;
+import dev.saq.mediscan.report.Flag;
+import dev.saq.mediscan.report.ReportEntity;
+import dev.saq.mediscan.report.ReportRepository;
+import dev.saq.mediscan.report.ReportStatusService;
+import dev.saq.mediscan.report.SourceType;
+import dev.saq.mediscan.report.TextSource;
+import dev.saq.mediscan.session.OwnerRef;
+import dev.saq.mediscan.session.Session;
+import dev.saq.mediscan.session.SessionRepository;
+import dev.saq.mediscan.session.SessionService;
+import dev.saq.mediscan.user.UserRepository;
+import dev.saq.mediscan.user.UserRole;
+import dev.saq.mediscan.user.UserUpsert;
+
+/**
+ * Sessions and reports for tests that need rows to exist.
+ *
+ * <p>A bean rather than static helpers so it can use the real repositories: tests assert
+ * against the same persistence path production uses, instead of a second way of writing rows
+ * that could drift from it.
+ */
+@Component
+public class ReportFixtures {
+
+	private final SessionRepository sessions;
+	private final ReportRepository reports;
+	private final SessionService sessionService;
+	private final UserUpsert users;
+	private final UserRepository userRepository;
+	private final ReportStatusService reportStatus;
+	private final BiomarkerRepository biomarkers;
+	private final dev.saq.mediscan.report.ReportTextRepository reportTexts;
+	private final Clock clock;
+
+	public ReportFixtures(SessionRepository sessions, ReportRepository reports,
+			SessionService sessionService, UserUpsert users, UserRepository userRepository,
+			ReportStatusService reportStatus, BiomarkerRepository biomarkers,
+			dev.saq.mediscan.report.ReportTextRepository reportTexts, Clock clock) {
+		this.sessions = sessions;
+		this.reports = reports;
+		this.sessionService = sessionService;
+		this.users = users;
+		this.userRepository = userRepository;
+		this.reportStatus = reportStatus;
+		this.biomarkers = biomarkers;
+		this.reportTexts = reportTexts;
+		this.clock = clock;
+	}
+
+	/**
+	 * A user account, created the same way sign-in creates one.
+	 *
+	 * <p>Through {@link UserUpsert} rather than an insert of its own, so a test is working
+	 * against the row shape production actually writes - including the role.
+	 *
+	 * @param googleSub must be unique per test; the column is unique and a collision would
+	 *     silently return the other test's user
+	 */
+	public UUID user(String googleSub, UserRole role) {
+		return users.upsert(googleSub, "Test User", role, Instant.now(clock)).userId();
+	}
+
+	/** A {@code USER}-role account with a unique Google subject. */
+	public UUID user() {
+		return user("test-sub-" + UUID.randomUUID(), UserRole.USER);
+	}
+
+	/** An {@code ADMIN}-role account with a unique Google subject. */
+	public UUID adminUser() {
+		return user("test-admin-" + UUID.randomUUID(), UserRole.ADMIN);
+	}
+
+	/**
+	 * A live session's raw token, for tests that call an endpoint.
+	 *
+	 * <p>Goes through {@link SessionService} rather than inserting a row and inventing a
+	 * token, because the token the client sends has to hash to the stored value - so building
+	 * one by hand would mean reimplementing the hashing the filter depends on.
+	 */
+	public String sessionToken() {
+		return sessionService.create().token();
+	}
+
+	/** The session id behind a raw token, for tests that need to query by owner. */
+	public UUID sessionIdFor(String token) {
+		return sessionService.findActive(token).orElseThrow().getId();
+	}
+
+	/**
+	 * Now, by the clock the application is using.
+	 *
+	 * <p>Not {@code Instant.now()}. These rows carry expiry dates and the retention sweep reads
+	 * the injected clock, so a fixture that writes from the system clock while the application
+	 * reads from another is writing rows that are already expired from the application's point
+	 * of view. In every ordinary profile the two are the same instant and nothing changes; under
+	 * the {@code eval} profile, which pins the clock a year ahead so collection dates stay
+	 * plausible, it was the difference between a run finishing and the sweep deleting the run's
+	 * own sessions out from under it mid-case (found 2026-11-02, as a {@code NoSuchElement} from
+	 * {@code EvalRunner.readOutcome} once one case got slow enough for the 60-second sweep to
+	 * fire).
+	 */
+	private Instant now() {
+		return Instant.now(clock);
+	}
+
+	/** A live guest session, expiring in 24 hours. */
+	public UUID session() {
+		Instant now = now();
+		UUID id = UUID.randomUUID();
+		sessions.save(new Session(id, uniqueHash(id), now, now.plus(24, ChronoUnit.HOURS)));
+		return id;
+	}
+
+	/** A {@code PENDING} report owned by {@code sessionId}, expiring in 24 hours. */
+	public UUID pendingReport(UUID sessionId) {
+		return pendingReport(sessionId, SourceType.SAMPLE);
+	}
+
+	public UUID pendingReport(UUID sessionId, SourceType sourceType) {
+		Instant now = now();
+		UUID id = UUID.randomUUID();
+		reports.save(new ReportEntity(id, new OwnerRef.Guest(sessionId), sourceType, now,
+				now.plus(24, ChronoUnit.HOURS)));
+		return id;
+	}
+
+	/** A {@code PENDING} report owned by a signed-in user, with the 30-day user expiry. */
+	public UUID pendingUserReport(UUID userId) {
+		Instant now = now();
+		UUID id = UUID.randomUUID();
+		reports.save(new ReportEntity(id, new OwnerRef.User(userId), SourceType.SAMPLE, now,
+				now.plus(30, ChronoUnit.DAYS)));
+		return id;
+	}
+
+	/** A report that has already expired, for retention and visibility tests. */
+	public UUID expiredReport(UUID sessionId) {
+		Instant now = now();
+		UUID id = UUID.randomUUID();
+		reports.save(new ReportEntity(id, new OwnerRef.Guest(sessionId), SourceType.SAMPLE,
+				now.minus(48, ChronoUnit.HOURS), now.minus(1, ChronoUnit.HOURS)));
+		return id;
+	}
+
+	/**
+	 * A {@code DONE} report owned by a guest session, moved there the same way the pipeline
+	 * does: {@code PENDING -> PROCESSING -> DONE} through {@link ReportStatusService}, never by
+	 * writing the status column directly. No biomarkers; use {@link #biomarker} to add some.
+	 */
+	public UUID doneReport(UUID sessionId, LocalDate collectedOn) {
+		return doneReport(sessionId, collectedOn, TextSource.TEXT_LAYER);
+	}
+
+	/**
+	 * A {@code DONE} report that records how its text was read.
+	 *
+	 * <p>The overload above is the common case. This one exists for the OCR tests, which need a
+	 * report whose {@code text_source} is {@code OCR} or {@code MIXED} without running Tesseract
+	 * to get one.
+	 */
+	public UUID doneReport(UUID sessionId, LocalDate collectedOn, TextSource textSource) {
+		UUID id = pendingReport(sessionId, SourceType.PDF);
+		reportStatus.markProcessing(id);
+		reportStatus.markDone(id, collectedOn, textSource);
+		return id;
+	}
+
+	/** The user-owned twin of {@link #doneReport}. */
+	public UUID doneUserReport(UUID userId, LocalDate collectedOn) {
+		UUID id = pendingUserReport(userId);
+		reportStatus.markProcessing(id);
+		reportStatus.markDone(id, collectedOn, TextSource.TEXT_LAYER);
+		return id;
+	}
+
+	/** A {@code FAILED} report owned by a guest session. */
+	public UUID failedReport(UUID sessionId, ReportErrorCode code) {
+		UUID id = pendingReport(sessionId, SourceType.PDF);
+		reportStatus.markProcessing(id);
+		reportStatus.markFailed(id, code);
+		return id;
+	}
+
+	/** The user-owned twin of {@link #failedReport}. */
+	public UUID failedUserReport(UUID userId, ReportErrorCode code) {
+		UUID id = pendingUserReport(userId);
+		reportStatus.markProcessing(id);
+		reportStatus.markFailed(id, code);
+		return id;
+	}
+
+	/**
+	 * One validated lab value on {@code reportId}, inserted directly rather than through the
+	 * extraction pipeline - exactly what LLD section 9's test plan asks for.
+	 */
+	public UUID biomarker(UUID reportId, int position, String testName, String testNameNorm,
+			String biomarkerSlug, Double numericValue, String unit, Double refLow, Double refHigh,
+			Flag flag) {
+		UUID id = UUID.randomUUID();
+		biomarkers.save(new BiomarkerEntity(id, reportId, position, testName, testNameNorm,
+				biomarkerSlug, numericValue == null ? "Negative" : String.valueOf(numericValue),
+				numericValue, unit, null, refLow, refHigh, flag));
+		return id;
+	}
+
+	/**
+	 * One validated value with its printed text and range (phase 5).
+	 *
+	 * <p>Chat needs both: {@code rawValue} and {@code referenceRangeText} are what build the
+	 * guard's allowed-number set, and the overload above leaves the range null and derives the
+	 * value from the number - which would make every range an invented number in a chat test.
+	 */
+	public UUID biomarkerWithRange(UUID reportId, int position, String testName, String slug,
+			String rawValue, Double numericValue, String unit, String referenceRangeText,
+			Double refLow, Double refHigh, Flag flag) {
+
+		UUID id = UUID.randomUUID();
+		biomarkers.save(new BiomarkerEntity(id, reportId, position, testName,
+				testName.toLowerCase(java.util.Locale.ROOT), slug, rawValue, numericValue, unit,
+				referenceRangeText, refLow, refHigh, flag));
+		return id;
+	}
+
+	/**
+	 * The masked report text, which chat puts in the prompt.
+	 *
+	 * <p>Written directly, as the pipeline's final transaction does. Always masked text: the
+	 * raw text never reaches this table in production, so a fixture that pretended otherwise
+	 * would be testing a state the application cannot reach.
+	 */
+	public void reportText(UUID reportId, String maskedText) {
+		reportTexts.save(new dev.saq.mediscan.report.ReportTextEntity(reportId, maskedText));
+	}
+
+	/**
+	 * Deletes every session and every user, and with them every report, via the cascades.
+	 *
+	 * <p>Both owner kinds, necessarily: a report now cascades from {@code session} <em>or</em>
+	 * from {@code app_user}, so clearing only sessions would leave every user-owned report
+	 * behind - and the suite shares one database across test classes.
+	 */
+	public void clear() {
+		sessions.deleteAll();
+		userRepository.deleteAll();
+	}
+
+	/** 64 hex characters, unique per session, matching the column's length. */
+	private static String uniqueHash(UUID id) {
+		return id.toString().replace("-", "") + "0".repeat(32);
+	}
+}

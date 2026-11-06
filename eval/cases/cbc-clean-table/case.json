@@ -1,0 +1,9 @@
+{
+  "id": "cbc-clean-table",
+  "title": "Clean CBC panel with x10^3/uL and % units",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel", "table"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

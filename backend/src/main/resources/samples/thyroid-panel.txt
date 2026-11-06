@@ -1,0 +1,25 @@
+LAKEVIEW ENDOCRINE LABORATORY
+7 Castleton Row, Lakeview
+Phone: (555) 555-0133
+
+                            THYROID PANEL
+
+Patient Name: Dolores Fenwick             Accession: LV-2208734
+D.O.B.: 1991-03-19                        Specimen ID: 20261002-0092
+Medical Record No: LV-7781                Collected: 02 Oct 2026
+Phone: (555) 555-0119                     Reported: 03 Oct 2026
+Physician: Dr. Henry Okonkwo              Specimen: Serum
+
+------------------------------------------------------------------------
+TEST                            RESULT      UNIT       REFERENCE
+------------------------------------------------------------------------
+TSH                             0.21        uIU/mL     0.45-4.50
+Free T4                         1.74        ng/dL      0.82-1.77
+Thyroid Peroxidase Antibodies   Negative               Negative
+------------------------------------------------------------------------
+
+Comment: Low TSH with a free T4 at the upper end of the interval.
+Correlate clinically and consider repeat testing.
+
+This is a synthetic report created for demonstration. It does not describe
+a real person and contains no real patient data.

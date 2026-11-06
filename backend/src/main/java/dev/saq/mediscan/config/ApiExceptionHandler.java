@@ -9,13 +9,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
+import dev.saq.mediscan.upload.UploadTooLargeException;
 
 /**
  * The single place HTTP errors are rendered, as RFC 9457 Problem Details with the
@@ -35,6 +39,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+	/** Shared by both oversized-upload paths, so the client sees one message. */
+	private static final String FILE_TOO_LARGE_DETAIL = "The file is larger than the 10 MB limit.";
+
 	/** Everything that maps onto a contract error code. */
 	@ExceptionHandler(ApiException.class)
 	public ResponseEntity<ProblemDetail> handleApiException(ApiException ex) {
@@ -46,6 +53,66 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 			response.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()));
 		}
 		return response.body(problem);
+	}
+
+	/** A validation rule that bean validation cannot express. Carries the {@code errors} array. */
+	@ExceptionHandler(ValidationException.class)
+	public ResponseEntity<ProblemDetail> handleValidation(ValidationException ex) {
+		return ResponseEntity.badRequest()
+				.body(ProblemDetails.of(ErrorCode.VALIDATION_ERROR, ex.getMessage(), ex.fieldErrors()));
+	}
+
+	/**
+	 * An upload that exceeded the limit while being written.
+	 *
+	 * <p>The companion to {@link #handleMaxUploadSizeExceededException}: Spring raises its
+	 * exception from the declared {@code Content-Length} before the controller runs, while
+	 * {@code TempFileStore} raises this one from the bytes it actually wrote - the check that
+	 * still holds when the declared length is absent or untrue. Both produce the same response.
+	 */
+	@ExceptionHandler(UploadTooLargeException.class)
+	public ResponseEntity<ProblemDetail> handleUploadTooLarge(UploadTooLargeException ex) {
+		return fileTooLarge();
+	}
+
+	/**
+	 * Spring's own oversized-upload exception, from the declared {@code Content-Length}.
+	 *
+	 * <p>Overridden rather than handled with {@code @ExceptionHandler}:
+	 * {@link ResponseEntityExceptionHandler} already maps this type, so a second mapping makes
+	 * the resolver ambiguous and the context fails to start.
+	 */
+	@Override
+	protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+			MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status,
+			WebRequest request) {
+
+		return ResponseEntity.status(ErrorCode.FILE_TOO_LARGE.status())
+				.body(ProblemDetails.of(ErrorCode.FILE_TOO_LARGE, FILE_TOO_LARGE_DETAIL));
+	}
+
+	private static ResponseEntity<ProblemDetail> fileTooLarge() {
+		return ResponseEntity.status(ErrorCode.FILE_TOO_LARGE.status())
+				.body(ProblemDetails.of(ErrorCode.FILE_TOO_LARGE, FILE_TOO_LARGE_DETAIL));
+	}
+
+	/**
+	 * A {@code @PreAuthorize} denial on a route the filter chain allowed.
+	 *
+	 * <p>Needed because method security throws inside the controller invocation, so Spring
+	 * MVC resolves it here and the {@code ExceptionTranslationFilter} - and with it
+	 * {@link ProblemAccessDeniedHandler} - never sees it. Without this the catch-all below
+	 * would turn an authorization failure into {@code 500 INTERNAL_ERROR}.
+	 *
+	 * <p>It stays invisible on {@code /api/admin/**}, where the chain's matcher denies first.
+	 * It only shows up on a path the matcher allows, which is exactly where a
+	 * {@code @PreAuthorize} is the sole protection.
+	 */
+	@ExceptionHandler(AuthorizationDeniedException.class)
+	public ResponseEntity<ProblemDetail> handleAuthorizationDenied(AuthorizationDeniedException ex) {
+		ErrorCode code = DeniedAccess.codeForCurrentCaller();
+		return ResponseEntity.status(code.status())
+				.body(ProblemDetails.of(code, DeniedAccess.detailFor(code)));
 	}
 
 	/** A path variable or query parameter of the wrong type, such as a malformed UUID. */

@@ -1,0 +1,21 @@
+Sunrise Medical Laboratory
+123 Test Pkwy, Faketown, ST 00000
+
+Patient Name: Monica Alvarez
+Patient ID: PT-48213
+DOB: 02/14/1985
+Phone: (555) 014-8822
+
+Ordered by: Dr. Harold Benning
+Collected: 09/15/2026
+Reported: 09/16/2026
+
+LIPID PANEL
+
+Test                    Result   Units   Reference Range
+Total Cholesterol         238    mg/dL   <200
+HDL Cholesterol            38    mg/dL   >40
+LDL Cholesterol           162    mg/dL   <100
+Triglycerides             140    mg/dL   <150
+
+End of report.

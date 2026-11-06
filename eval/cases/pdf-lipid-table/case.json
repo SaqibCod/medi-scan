@@ -1,0 +1,9 @@
+{
+  "id": "pdf-lipid-table",
+  "title": "The lipid panel rendered as a text PDF",
+  "synthetic": true,
+  "format": "PDF",
+  "tags": ["pdf", "panel"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

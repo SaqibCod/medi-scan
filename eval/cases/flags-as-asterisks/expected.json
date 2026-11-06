@@ -1,0 +1,17 @@
+{
+  "collectedOn": "2026-02-14",
+  "biomarkers": [
+    { "testName": "Glucose", "rawValue": "112*", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 112, "refLow": 70, "refHigh": 99, "flag": "HIGH" },
+    { "testName": "Sodium", "rawValue": "140", "unit": "mmol/L", "referenceRangeText": "136-145", "numericValue": 140, "refLow": 136, "refHigh": 145, "flag": "NORMAL" },
+    { "testName": "Potassium", "rawValue": "2.9 L", "unit": "mmol/L", "referenceRangeText": "3.5-5.1", "numericValue": 2.9, "refLow": 3.5, "refHigh": 5.1, "flag": "LOW" },
+    { "testName": "Calcium", "rawValue": "11.1 H", "unit": "mg/dL", "referenceRangeText": "8.6-10.2", "numericValue": 11.1, "refLow": 8.6, "refHigh": 10.2, "flag": "HIGH" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Carla Jiminez" },
+    { "type": "NAME", "text": "Nathan Pruitt" },
+    { "type": "ID", "text": "PT-83015" },
+    { "type": "DOB", "text": "08/08/1983" },
+    { "type": "PHONE", "text": "(555) 920-6641" }
+  ],
+  "injection": null
+}

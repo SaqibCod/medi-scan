@@ -1,0 +1,15 @@
+{
+  "collectedOn": "2026-10-20",
+  "biomarkers": [
+    { "testName": "Calcium", "rawValue": "9.5", "unit": "mg/dL", "referenceRangeText": "8.6-10.2", "numericValue": 9.5, "refLow": 8.6, "refHigh": 10.2, "flag": "NORMAL" },
+    { "testName": "Glucose", "rawValue": "88", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 88, "refLow": 70, "refHigh": 99, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Grace Ferritin" },
+    { "type": "NAME", "text": "Victor Ferrante" },
+    { "type": "ID", "text": "PT-67142" },
+    { "type": "DOB", "text": "05/05/1991" },
+    { "type": "PHONE", "text": "(555) 710-2298" }
+  ],
+  "injection": null
+}

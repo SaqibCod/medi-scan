@@ -1,0 +1,9 @@
+{
+  "id": "repeated-test",
+  "title": "The same test ordered twice with different values",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["values"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

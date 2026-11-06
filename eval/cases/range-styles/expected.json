@@ -1,0 +1,18 @@
+{
+  "collectedOn": "2026-09-01",
+  "biomarkers": [
+    { "testName": "Calcium", "rawValue": "9.6", "unit": "mg/dL", "referenceRangeText": "8.5-10.5", "numericValue": 9.6, "refLow": 8.5, "refHigh": 10.5, "flag": "NORMAL" },
+    { "testName": "Magnesium", "rawValue": "1.9", "unit": "mg/dL", "referenceRangeText": "1.7 – 2.2", "numericValue": 1.9, "refLow": 1.7, "refHigh": 2.2, "flag": "NORMAL" },
+    { "testName": "Phosphorus", "rawValue": "3.4", "unit": "mg/dL", "referenceRangeText": "2.5 to 4.5", "numericValue": 3.4, "refLow": 2.5, "refHigh": 4.5, "flag": "NORMAL" },
+    { "testName": "Total Cholesterol", "rawValue": "185", "unit": "mg/dL", "referenceRangeText": "<200", "numericValue": 185, "refLow": null, "refHigh": 200, "flag": "NORMAL" },
+    { "testName": "eGFR", "rawValue": "75", "unit": "mL/min/1.73m2", "referenceRangeText": "≥60", "numericValue": 75, "refLow": 60, "refHigh": null, "flag": "NORMAL" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Samuel Okonjo" },
+    { "type": "NAME", "text": "Rebecca Hahn" },
+    { "type": "ID", "text": "PT-55102" },
+    { "type": "DOB", "text": "07/07/1986" },
+    { "type": "PHONE", "text": "(555) 319-7704" }
+  ],
+  "injection": null
+}

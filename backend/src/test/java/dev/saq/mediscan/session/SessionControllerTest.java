@@ -91,7 +91,7 @@ class SessionControllerTest extends PostgresTestBase {
 	void issuedTokenAuthenticates() throws Exception {
 		String token = tokenFromNewSession();
 
-		MvcResult result = mockMvc.perform(get("/api/reports/whoami")
+		MvcResult result = mockMvc.perform(get("/api/reports/support/whoami")
 				.header(GuestAuthFilter.HEADER, token))
 				.andReturn();
 

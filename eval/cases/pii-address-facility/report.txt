@@ -1,0 +1,18 @@
+Birchwood Family Clinic
+482 Birchwood Lane, Millbrook, ST 00000
+
+Patient Name: Harriet Doyle
+Patient ID: PT-83390
+DOB: 09/09/1987
+Phone: (555) 662-0147
+Home Address: 719 Larkspur Court, Millbrook, ST 00000
+
+Ordered by: Dr. Caleb Strand
+Collected: 2026-01-30
+
+BASIC PANEL
+
+Glucose    96    mg/dL    70-99
+Sodium     142   mmol/L   136-145
+
+End of report.

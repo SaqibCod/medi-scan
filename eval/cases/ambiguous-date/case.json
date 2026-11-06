@@ -1,0 +1,9 @@
+{
+  "id": "ambiguous-date",
+  "title": "A collection date that reads validly both as MM/dd and dd/MM",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["dates"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

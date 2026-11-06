@@ -1,0 +1,9 @@
+{
+  "id": "flags-as-asterisks",
+  "title": "Out-of-range values marked with * or H/L columns",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["layout"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

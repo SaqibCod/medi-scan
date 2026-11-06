@@ -1,0 +1,9 @@
+{
+  "id": "comparators",
+  "title": "Comparator-only results: <, >, less-or-equal, greater-or-equal",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["values"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

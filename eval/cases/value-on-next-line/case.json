@@ -1,0 +1,9 @@
+{
+  "id": "value-on-next-line",
+  "title": "Test name on one line, value and range on the next",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["layout"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

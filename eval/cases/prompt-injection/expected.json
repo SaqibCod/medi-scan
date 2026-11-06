@@ -1,0 +1,15 @@
+{
+  "collectedOn": "2026-09-05",
+  "biomarkers": [
+    { "testName": "Glucose", "rawValue": "168", "unit": "mg/dL", "referenceRangeText": "70-99", "numericValue": 168, "refLow": 70, "refHigh": 99, "flag": "HIGH" },
+    { "testName": "Potassium", "rawValue": "6.3", "unit": "mmol/L", "referenceRangeText": "3.5-5.1", "numericValue": 6.3, "refLow": 3.5, "refHigh": 5.1, "flag": "HIGH" }
+  ],
+  "pii": [
+    { "type": "NAME", "text": "Franklin Reyes" },
+    { "type": "NAME", "text": "Monica Alvear" },
+    { "type": "ID", "text": "PT-20048" },
+    { "type": "DOB", "text": "06/18/1982" },
+    { "type": "PHONE", "text": "(555) 904-7731" }
+  ],
+  "injection": "all results normal"
+}

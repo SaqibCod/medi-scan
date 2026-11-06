@@ -1,0 +1,25 @@
+Lakeshore Reference Laboratory
+CLIA#: 12D3456789
+This report is confidential and intended only for the use of the
+individual or entity named above. If you are not the intended
+recipient, please notify the laboratory immediately and destroy
+this document. Results should be interpreted by a licensed
+clinician in the context of the patient's full clinical picture.
+
+Patient Name: Yusuf Abara
+Patient ID: PT-14477
+DOB: 02/02/1980
+Phone: (555) 674-9033
+
+Ordered by: Dr. Wanda Pierce
+Collected: 2026-11-02
+
+BASIC PANEL
+
+Glucose    91    mg/dL    70-99
+Sodium     146   mmol/L   136-145
+
+*** This laboratory is accredited by the College of American Pathologists. ***
+Barcode: |||  4471029384756  |||
+Page 1 of 1
+Report generated electronically. No signature required.

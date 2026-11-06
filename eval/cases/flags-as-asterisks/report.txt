@@ -1,0 +1,18 @@
+Fairview Diagnostic Partners
+Patient Name: Carla Jiminez
+Patient ID: PT-83015
+DOB: 08/08/1983
+Phone: (555) 920-6641
+
+Ordered by: Dr. Nathan Pruitt
+Collected: 2026-02-14
+
+METABOLIC PANEL
+
+Test               Result    Units    Reference Range
+Glucose            112*      mg/dL    70-99
+Sodium             140       mmol/L   136-145
+Potassium          2.9 L     mmol/L   3.5-5.1
+Calcium            11.1 H    mg/dL    8.6-10.2
+
+End of report.

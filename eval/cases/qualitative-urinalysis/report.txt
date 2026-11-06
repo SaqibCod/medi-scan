@@ -1,0 +1,19 @@
+Caldwell Urgent Care
+Patient Name: Brianna Tolliver
+Patient ID: PT-92047
+DOB: 12/30/1996
+Phone: (555) 601-2298
+
+Ordered by: Dr. Omar Fitzgerald
+Collected: 2026-03-03
+
+URINALYSIS
+
+Leukocyte Esterase    Negative
+Nitrite                Negative
+Protein                Trace
+Glucose                Negative
+Ketones                Positive
+Blood                  Trace
+
+End of report.

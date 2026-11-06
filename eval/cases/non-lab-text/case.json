@@ -1,0 +1,9 @@
+{
+  "id": "non-lab-text",
+  "title": "A recipe, not a lab report",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["adversarial"],
+  "expectedStatus": "FAILED",
+  "expectedErrorCode": "NO_RESULTS_FOUND"
+}

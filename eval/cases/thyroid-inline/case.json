@@ -1,0 +1,9 @@
+{
+  "id": "thyroid-inline",
+  "title": "Thyroid panel in Name: value unit (range) format",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel", "inline"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}

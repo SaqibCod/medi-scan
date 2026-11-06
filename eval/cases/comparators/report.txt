@@ -1,0 +1,18 @@
+Silver Pine Labs
+Patient Name: Ingrid Solberg
+Patient ID: PT-60281
+DOB: 05/14/1988
+Phone: (555) 773-4091
+
+Ordered by: Dr. Marcus Delaney
+Collected: 2026-01-22
+
+SPECIALTY PANEL
+
+Test                Result    Units    Reference Range
+TSH                 <0.01     mIU/L    0.40-4.50
+hs-CRP              >200      mg/L     <3.0
+Troponin I          ≤0.02     ng/mL    <0.04
+D-Dimer             ≥5.0      mg/L     <0.50
+
+End of report.

@@ -1,0 +1,9 @@
+{
+  "id": "too-long",
+  "title": "Text generated past the document length limit",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["adversarial"],
+  "expectedStatus": "FAILED",
+  "expectedErrorCode": "DOCUMENT_TOO_LONG"
+}

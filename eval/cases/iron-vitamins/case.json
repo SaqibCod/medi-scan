@@ -1,0 +1,9 @@
+{
+  "id": "iron-vitamins",
+  "title": "Iron and vitamin panel with several unit styles",
+  "synthetic": true,
+  "format": "TEXT",
+  "tags": ["panel"],
+  "expectedStatus": "DONE",
+  "expectedErrorCode": null
+}
