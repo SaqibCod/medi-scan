@@ -168,6 +168,8 @@ sequenceDiagram
     participant A as API
 
     B->>B: Load page, auth state = RESOLVING
+    B->>B: Duplicated-tab check (BroadcastChannel, ≤150 ms)
+    Note over B: A copied tab drops the<br/>inherited refresh token here
     alt sessionStorage has a refresh token (reload)
         B->>A: POST /api/auth/refresh
         A-->>B: 200 new tokens
@@ -189,6 +191,8 @@ sequenceDiagram
 **Details**
 - **Auth states:** the client has three: `RESOLVING`, `SIGNED_IN`, and `GUEST`. Report pages and the history list wait while it's `RESOLVING`, so a report opened in a new tab isn't fetched as a guest and wrongly returns 404.
 - **One family per tab:** each tab signs in separately and gets its own refresh-token family. Tabs never share a refresh token, so tabs can't race each other on refresh, and reuse detection stays simple.
+- **Duplicated tabs, the one case that breaks that:** "Duplicate tab" — and Safari's "Open in New Tab" from a tab's own context menu — copies `sessionStorage`, so the new tab opens already holding the original's refresh token. Nothing in the page asked for it and nothing in the server can tell the two apart: whichever tab refreshes second is rotating a token that has already been used, which revokes the family and signs the user out of both tabs. So each tab does one check before it touches its tokens. On start it announces its own tab id on the `ms-auth` `BroadcastChannel` and waits briefly, at most 150 ms, for an answer. An answer means another live tab already owns that id, so this tab is the copy: it deletes `ms.refresh` and continues at the "no tokens" branch above, which signs it in again under a family of its own. Silence means it is the only tab holding that id and it keeps its token. The handshake carries a tab id and nothing else — no token, no user, no report id — and a tab never answers its own announcement, so a single tab can't mistake itself for a duplicate. Where `BroadcastChannel` is missing the check cannot run; the tab keeps its token and a duplicate costs one sign-out, the behaviour before the guard existed.
+- **The guest token is not affected:** a guest session token is a shared 24-hour credential with no rotation and no reuse detection, so two tabs holding one is harmless. `ms.guest` survives the check.
 - **Guest claim:** a new tab has no guest token, so there's nothing to claim. The `guestSessionToken` field is only sent when a guest in the same tab clicks "Sign in with Google".
 - **When auto sign-in doesn't happen:** Google may skip it, for example when the browser doesn't support FedCM, when the prompt is paused after a recent dismissal, or when the user has several Google accounts. The tab then becomes `GUEST` with the normal sign-in button. Nothing breaks.
 - **Cost on the server:** each auto sign-in is one `POST /api/auth/google`, counted against the per-IP limit of 10 per minute. That's enough for normal tab-opening. Extra refresh-token rows are removed by the retention job (9.2).
@@ -225,10 +229,10 @@ sequenceDiagram
 - **Atomic swap:** revoking the old token and inserting the new one happen in one transaction. A conditional `UPDATE … WHERE revoked_at IS NULL` makes sure only one of two racing requests wins. The loser is treated as reuse.
 - **Which errors trigger a refresh:** the client refreshes once on either `TOKEN_EXPIRED` or `TOKEN_INVALID`. `TOKEN_INVALID` covers access tokens signed with a key that has since been rotated out (3.7). The refresh token doesn't depend on the signing key, so the refresh still works.
 - **One refresh at a time per tab:** the client runs one refresh at a time and makes other failed calls wait for it. Without this, two parallel refreshes look like reuse and sign the user out.
-- **No cross-tab races:** each tab has its own `sessionStorage` and its own family (3.3), so tabs never refresh the same token.
+- **No cross-tab races:** each tab has its own `sessionStorage` and its own family (3.3), so tabs never refresh the same token. The one way two tabs can end up holding one token is "Duplicate tab", which copies `sessionStorage`; the duplicated-tab check in 3.3 drops the copy before either tab refreshes, so this stays true in practice rather than only by design.
 - **One retry only:** if the retried call fails again with 401, the client stops and shows the user as signed out instead of looping.
 - **Family lifetime:** a family can't outlive 30 days from the original sign-in. After that, refresh fails and the user signs in again.
-- **Proactive refresh:** the client may refresh a minute before `accessTokenExpiresAt` instead of waiting for a 401.
+- **Proactive refresh:** the client refreshes 60 seconds before `accessTokenExpiresAt` instead of waiting for a 401. It is the same single-flight refresh as the reactive one, so a proactive refresh and a 401 arriving together still produce one call. A tab whose timer fires while it is hidden refreshes on the same schedule — the token expires whether anyone is looking or not — and a refresh that fails here is handled exactly like a failed reactive one.
 - **On page load:** if `sessionStorage` has a refresh token, the client refreshes before making other calls, to get an access token into memory.
 
 ### 3.5 Logout (every tab)
@@ -256,6 +260,8 @@ sequenceDiagram
 - **Each tab revokes its own family.** Refresh tokens never leave the tab they belong to, not even over the `BroadcastChannel`. The message only says "logout".
 - **Why `disableAutoSelect()`:** without it, Google auto sign-in would sign the user straight back in on the next page load. After logout, the next sign-in needs a click.
 - **Closed tabs:** tabs that were already closed have no token left to revoke. Their families expire on their own within 7 days, and nothing in the browser can use them.
+- **Tabs with nothing to revoke:** a tab that is already a guest, or one that dropped an inherited refresh token in the duplicated-tab check (3.3), skips the logout call and just clears its state and calls `disableAutoSelect()`. There is no token to send and no family of its own to end.
+- **The same channel, two messages:** `ms-auth` carries the `"logout"` message and the 3.3 tab-id handshake, and neither carries a token or anything about the user. A tab ignores a message shape it doesn't recognise.
 - **Back to guest:** after logout, the tabs are guests. A guest session is created lazily if the user does something that needs one.
 - **Access tokens:** not revoked on the server, because they're stateless. They stop working within 15 minutes, and every tab has already deleted its copy.
 

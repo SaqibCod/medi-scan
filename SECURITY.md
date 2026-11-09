@@ -316,6 +316,44 @@ timings.
   endpoint returns aggregate counts only, never report content or user
   identifiers.
 
+### Sign-in in the browser
+
+Signing in happens entirely in the page — there is no redirect and no callback
+URL. Google Identity Services hands the page an ID token, the page posts it to
+`/api/auth/google`, and the app's own tokens come back.
+
+**What the browser keeps, and where:**
+
+| Thing | Where | Survives a reload? |
+|---|---|---|
+| Google ID token | nowhere | — it is posted once and dropped, never stored and never logged |
+| Access token | a JavaScript variable | no |
+| Refresh token | `sessionStorage`, key `ms.refresh` | yes, for that tab only |
+| Guest session token | `sessionStorage`, key `ms.guest` | yes, for that tab only |
+| Display name and role | memory, refetched after a reload | no |
+
+Nothing about a signed-in user is written to `localStorage`, to a cookie, or to
+a URL. The display name is rendered as text and never put in a page title, a log
+line, or a query key.
+
+**The duplicated-tab guard.** "Duplicate tab" copies `sessionStorage`, which
+means the copy opens holding the original's refresh token. Refresh tokens
+rotate, so the second of the two tabs to refresh presents a token that has
+already been used — indistinguishable, from the server, from a stolen copy — and
+reuse detection correctly revokes the family and signs the user out of both
+tabs. The user did nothing wrong and would have no idea why.
+
+So each tab announces its own tab id on a `BroadcastChannel` before it uses any
+token, and waits up to 150 ms. If a live tab answers that it already owns that
+id, this tab is the copy: it deletes `ms.refresh` and signs in again through
+Google auto sign-in, under a family of its own. The handshake carries a tab id
+and nothing else, a tab never answers its own announcement, and a lone tab
+therefore cannot mistake itself for a duplicate. Where `BroadcastChannel` is
+unavailable the check is skipped and a duplicated tab costs one sign-out.
+
+The guest token is deliberately left alone: it does not rotate and has no reuse
+detection, so two tabs sharing one is harmless.
+
 ### What an account actually is
 
 Four columns and two timestamps: Google's `sub`, a display name for the header,
@@ -380,7 +418,9 @@ The cost of that choice: a script-injection (XSS) bug could read
   raw HTML disabled
 - 15-minute access tokens
 - refresh-token rotation with reuse detection
-- one refresh-token family per tab, so tabs can't race each other
+- one refresh-token family per tab, so tabs can't race each other — including
+  duplicated tabs, which drop the token they inherit (see "Sign-in in the
+  browser" above)
 
 **The one thing in `localStorage` is the theme.** Key `ms-theme`, value `dark`
 or `light`, written only by the theme toggle. It is a display preference, not a
@@ -411,19 +451,21 @@ ends of the connection.
 
 An uploaded file stays a `File` object in memory until the request is sent, is
 never read into storage, and the file input is reset afterwards. The browser
-makes no third-party requests: the only origins it ever contacts are the site
-itself and the one API origin named in `connect-src`.
+contacts three origins and no others: the site itself, the one API origin named
+in `connect-src`, and `accounts.google.com` for sign-in. Nothing about a report
+is ever sent to Google — the only thing that crosses to it is the sign-in
+exchange itself.
 
 ### The Content Security Policy
 
 ```text
 default-src 'self';
 script-src 'self' 'nonce-{random}' 'strict-dynamic';
-style-src 'self' 'unsafe-inline';
+style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style;
 img-src 'self' data: blob:;
 font-src 'self';
-connect-src 'self' {API origin};
-frame-src 'none';
+connect-src 'self' {API origin} https://accounts.google.com/gsi/;
+frame-src https://accounts.google.com/gsi/;
 object-src 'none';
 base-uri 'none';
 form-action 'self';
@@ -455,9 +497,17 @@ front of an API that is dynamic anyway, so the cost is a few milliseconds per
 request against the whole point of the policy. Static assets — the JS chunks,
 the CSS, the self-hosted fonts — are unaffected and still cached normally.
 
-Google Identity Services is added to `script-src`, `connect-src` and `frame-src`
-in phase 7c, when sign-in ships. It remains the only third-party origin that is
-ever allowed.
+**The Google Identity Services entries.** Sign-in is the one feature that needs
+a third-party origin, and these four lines are the whole of it. `script-src`
+does not name Google at all: the GIS library is loaded by a script that already
+carries the nonce, and `'strict-dynamic'` extends trust to what that script
+loads, so no host allowlist is needed. `frame-src` moves from `'none'` because
+GIS renders its button and its One Tap prompt in an iframe from
+`accounts.google.com/gsi/`; `connect-src` lets that iframe talk back to Google;
+`style-src` covers the stylesheet the library injects for the button. Each entry
+is a path under one Google origin, not a wildcard, and Google Identity Services
+remains the only third-party origin that is ever allowed — no analytics, no tag
+managers, no fonts.
 
 ## Authorization
 
