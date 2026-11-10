@@ -65,6 +65,10 @@ type AuthState =
 3. **No refresh token:** `GUEST`, then load the Google script and call `prompt()` once (A2). If Google returns a credential, run 2.3.
 4. **Waiting pages:** report pages, My reports, Account and Trends wait while `RESOLVING`, or while a prompt is pending, **for at most 2 seconds** (contract 2.1). After that they render with whatever state exists. A late sign-in re-runs their queries.
 
+**Correction, verified against Google's docs during build.** Steps 3 and 4 cannot be driven by Google's `prompt()` notifications. `use_fedcm_for_prompt` is deprecated and ignored — FedCM is simply on — and under FedCM `isNotDisplayed()` and `getNotDisplayedReason()` report nothing, `getSkippedReason()` is gone, and even the display moment is deliberately delayed by up to a minute. There is therefore no signal that says "no auto sign-in is coming".
+
+So the 2-second budget is **the tab's own timer**, and nothing waits on a notification. A credential is accepted whenever it arrives, however late, and the invalidation in 2.3 is what makes a late one safe: the pages that had already rendered as a guest re-run their queries. The moment listener is still passed to `prompt()`, but only so GIS has somewhere to deliver notifications, and its argument is ignored.
+
 ### 2.3 Signing in (dataflow 3.2)
 
 1. Google gives an ID token through the callback (from the button or the prompt). The state becomes `SIGNING_IN`.
@@ -102,14 +106,15 @@ type AuthState =
 ### 2.6 Google script and CSP
 
 - **Loading the script:** load `https://accounts.google.com/gsi/client` with the request nonce (7a CSP), only on the client, once.
-- **CSP additions:** the exact origins Google documents for GIS with FedCM and the button, checked in Context7 and Google's docs. Expected:
-  - `script-src https://accounts.google.com/gsi/client`
+- **CSP additions:** the exact origins Google documents for GIS with FedCM and the button, checked in Context7 and Google's docs. **Three directives, not four:**
   - `frame-src https://accounts.google.com/gsi/`
   - `connect-src https://accounts.google.com/gsi/`
   - `style-src https://accounts.google.com/gsi/style`
-  
-  Nothing broader.
-- **Cross-Origin-Opener-Policy:** if 7a set it, check that GIS still works, using `same-origin-allow-popups` only if Google requires it. Report the result.
+
+  Nothing broader, and each one a path under a single origin rather than a wildcard. Google asks for the *parent* path rather than individual endpoints so that a change on their side does not break sign-in here.
+
+  **`script-src` is deliberately left alone**, though Google's documentation lists `script-src https://accounts.google.com/gsi/client`. Our policy already carries `'strict-dynamic'`, which makes every host expression in that directive inert — adding the entry would change nothing and would only suggest it was doing something. The loader carries the request nonce instead, and `'strict-dynamic'` extends that trust to everything GIS goes on to load.
+- **Cross-Origin-Opener-Policy: no change needed, confirmed.** 7a set no COOP header at all, and Google's docs are explicit that with FedCM enabled the browser renders prompts directly and no COOP change is required. COOP matters only for the popup `ux_mode` flows (`initTokenClient` / `initCodeClient`), which this app does not use. `X-Frame-Options: DENY` and `frame-ancestors 'none'` govern *our* page being framed by someone else and have no bearing on us framing Google.
 - **Client ID:** `NEXT_PUBLIC_GOOGLE_CLIENT_ID`. If it's unset, sign-in UI is hidden (the 7a flag logic) and a single console warning appears in development only.
 - **Flag:** turn on `NEXT_PUBLIC_FEATURE_SIGNIN=true` in `.env.example`, and remove the 7a/7b hidden states that it controlled.
 

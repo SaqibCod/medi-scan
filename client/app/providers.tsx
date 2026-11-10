@@ -7,6 +7,8 @@ import { ThemeProvider } from "next-themes";
 
 import { NoticeProvider } from "@/components/notices/notice-provider";
 import { ToastProvider } from "@/components/notices/toaster";
+import { AuthProvider } from "@/lib/auth/provider";
+import { CAN_SIGN_IN, GOOGLE_CLIENT_ID } from "@/lib/env";
 import { createQueryClient } from "@/lib/query-client";
 import { THEME_ATTRIBUTE, THEME_STORAGE_KEY, THEMES } from "@/lib/theme";
 
@@ -46,7 +48,16 @@ export function Providers({ children, nonce }: { children: ReactNode; nonce?: st
       >
         <QueryClientProvider client={queryClient}>
           <NoticeProvider>
-            <ToastProvider>{children}</ToastProvider>
+            {/*
+              Inside ToastProvider, because signing in, being signed out and deleting an
+              account all announce themselves with a toast. Outside everything that renders a
+              page, because `useAuth()` has to be available to all of them.
+            */}
+            <ToastProvider>
+              <AuthProvider clientId={CAN_SIGN_IN ? (GOOGLE_CLIENT_ID ?? undefined) : undefined} nonce={nonce}>
+                {children}
+              </AuthProvider>
+            </ToastProvider>
           </NoticeProvider>
         </QueryClientProvider>
       </ThemeProvider>

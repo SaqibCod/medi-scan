@@ -34,7 +34,7 @@ import {
   SIGNING_IN,
   type AuthState,
 } from "./state";
-import { claimTabIdentity } from "./tab-guard";
+import { claimTabIdentity, ensureTabIdentity } from "./tab-guard";
 import { clearTokens, readRefreshToken, storeTokens } from "./tokens";
 
 /**
@@ -304,6 +304,13 @@ export function AuthProvider({
       body: AUTH_COPY.accountDeletedBody,
     });
   }, [becomeGuest, toast]);
+
+  // This tab now holds a refresh token, so it needs an id another tab can ask about — and
+  // only now, because that is the only thing the id exists to protect (LLD A4).
+  useEffect(() => {
+    if (state.status !== "SIGNED_IN") return;
+    ensureTabIdentity(getAuthChannel());
+  }, [state.status]);
 
   // --- Proactive refresh (LLD A5) -----------------------------------------------------
 

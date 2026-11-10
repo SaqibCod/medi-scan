@@ -24,6 +24,15 @@ function apiOrigin(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 }
 
+/**
+ * The parent URL of Google Identity Services, as Google's own CSP guidance names it.
+ *
+ * A path, not a bare origin, and deliberately the parent rather than the individual endpoints:
+ * Google asks for this precisely so a change on their side does not break sign-in here.
+ */
+const GSI = "https://accounts.google.com/gsi/";
+const GSI_STYLE = "https://accounts.google.com/gsi/style";
+
 export function proxy(request: NextRequest) {
   // Read per request rather than once at module load: the cost is nothing, and a value frozen
   // at import time is both harder to test and wrong the moment the environment changes.
@@ -34,7 +43,12 @@ export function proxy(request: NextRequest) {
   const policy = [
     "default-src 'self'",
 
-    // 7c adds Google Identity Services here, and only there. No analytics, no tag managers.
+    // Google Identity Services is deliberately NOT named here, though its own documentation
+    // lists `script-src https://accounts.google.com/gsi/client`. `'strict-dynamic'` makes every
+    // host expression in this directive inert, so adding it would change nothing and only
+    // suggest it was doing something. The GIS loader carries the nonce instead, and
+    // `'strict-dynamic'` extends that trust to whatever it goes on to load.
+    //
     // `'unsafe-eval'` is development only: React uses eval to rebuild server stack traces in
     // the browser. A production response never carries it.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
@@ -44,16 +58,21 @@ export function proxy(request: NextRequest) {
     // (color-scheme) and our own components' `style` props all emit them. An injected
     // stylesheet cannot read sessionStorage or call an API, and CSS-based exfiltration is
     // already closed off by img-src below. Reasoning in full in SECURITY.md.
-    "style-src 'self' 'unsafe-inline'",
+    // The GIS entry is for the stylesheet the library injects for its button. `'unsafe-inline'`
+    // covers inline attributes, not an external sheet, so it has to be named.
+    `style-src 'self' 'unsafe-inline' ${GSI_STYLE}`,
 
     // `blob:` is for previewing a chosen file before upload, from 7b.
     "img-src 'self' data: blob:",
     "font-src 'self'",
 
-    // The dev server talks to itself over a websocket for hot reload.
-    `connect-src 'self' ${API_ORIGIN}${isDev ? " ws: wss:" : ""}`,
+    // The dev server talks to itself over a websocket for hot reload. The GIS entry lets
+    // Google's iframe reach its own endpoints; nothing about a report ever goes there.
+    `connect-src 'self' ${API_ORIGIN} ${GSI}${isDev ? " ws: wss:" : ""}`,
 
-    "frame-src 'none'",
+    // Was `'none'` until sign-in shipped. GIS renders both its button and the One Tap prompt
+    // in an iframe from this path, and there is no version of the ID-token flow without one.
+    `frame-src ${GSI}`,
     "object-src 'none'",
     // Nothing here uses <base>, and allowing one lets an injection re-point every relative URL.
     "base-uri 'none'",

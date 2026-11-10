@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createAuthChannel, type AuthChannel } from "./channel";
-import { claimTabIdentity, TAB_ID_STORAGE_KEY } from "./tab-guard";
+import { claimTabIdentity, ensureTabIdentity, TAB_ID_STORAGE_KEY } from "./tab-guard";
 import { REFRESH_STORAGE_KEY } from "./tokens";
 
 /**
@@ -43,15 +43,37 @@ describe("a tab that was opened, not copied", () => {
     const identity = await claimTabIdentity(tab, WAIT_MS);
 
     expect(identity.duplicated).toBe(false);
-    expect(identity.tabId).toBeTruthy();
-    expect(window.sessionStorage.getItem(TAB_ID_STORAGE_KEY)).toBe(identity.tabId);
     expect(window.sessionStorage.getItem(REFRESH_STORAGE_KEY)).toBe(
       "refresh-token-from-the-original",
     );
   });
 
+  it("writes nothing at all for a visitor who never signs in", async () => {
+    window.sessionStorage.clear();
+
+    const identity = await claimTabIdentity(openTab(), WAIT_MS);
+
+    // An id only ever exists to protect a refresh token. A guest has none, so storing an
+    // identifier for them would be tracking them for nothing.
+    expect(identity.tabId).toBeNull();
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("takes an id only once it holds a token, and then answers for it", async () => {
+    const tab = openTab();
+    await claimTabIdentity(tab, WAIT_MS);
+    const tabId = ensureTabIdentity(tab);
+
+    expect(window.sessionStorage.getItem(TAB_ID_STORAGE_KEY)).toBe(tabId);
+
+    // Asking twice does not mint a second id.
+    expect(ensureTabIdentity(tab)).toBe(tabId);
+  });
+
   it("answers for its own id once it holds one", async () => {
-    const original = await claimTabIdentity(openTab(), WAIT_MS);
+    const tab = openTab();
+    await claimTabIdentity(tab, WAIT_MS);
+    const original = { tabId: ensureTabIdentity(tab) };
 
     // A second tab asking about that id must now be told it is taken.
     const asker = openTab();
@@ -69,9 +91,10 @@ describe("a tab that was opened, not copied", () => {
 
 describe("a duplicated tab", () => {
   it("drops the copied refresh token, keeps the guest token, and takes a new id", async () => {
-    // The original tab starts and takes an id.
+    // The original tab starts, signs in, and so takes an id.
     const original = openTab();
-    const first = await claimTabIdentity(original, WAIT_MS);
+    await claimTabIdentity(original, WAIT_MS);
+    const firstId = ensureTabIdentity(original);
 
     // "Duplicate tab": the copy opens with the same sessionStorage, so it inherits both the
     // tab id and the refresh token.
@@ -79,6 +102,7 @@ describe("a duplicated tab", () => {
     const second = await claimTabIdentity(copy, WAIT_MS);
 
     expect(second.duplicated).toBe(true);
+    expect(firstId).toBeTruthy();
 
     // The one thing that must go, because it rotates and would trip reuse detection.
     expect(window.sessionStorage.getItem(REFRESH_STORAGE_KEY)).toBeNull();
@@ -86,20 +110,36 @@ describe("a duplicated tab", () => {
     // The one thing that must stay: a guest token does not rotate, so sharing it is harmless.
     expect(window.sessionStorage.getItem(GUEST_KEY)).toContain("guest-abc");
 
-    // And it stops impersonating the original.
-    expect(second.tabId).not.toBe(first.tabId);
-    expect(window.sessionStorage.getItem(TAB_ID_STORAGE_KEY)).toBe(second.tabId);
+    // And it stops impersonating the original, taking an id of its own only if it signs in.
+    expect(second.tabId).toBeNull();
+    expect(window.sessionStorage.getItem(TAB_ID_STORAGE_KEY)).toBeNull();
+
+    const freshId = ensureTabIdentity(copy);
+    expect(freshId).not.toBe(firstId);
   });
 
-  it("leaves the original tab alone", async () => {
+  it("leaves the original tab alone: it is the copy that gives way", async () => {
     const original = openTab();
-    const first = await claimTabIdentity(original, WAIT_MS);
+    await claimTabIdentity(original, WAIT_MS);
+    const firstId = ensureTabIdentity(original);
 
-    await claimTabIdentity(openTab(), WAIT_MS);
+    const second = await claimTabIdentity(openTab(), WAIT_MS);
+    expect(second.duplicated).toBe(true);
 
-    // The original keeps the id it claimed. Nothing in the handshake writes to another tab.
-    expect(first.duplicated).toBe(false);
-    expect(first.tabId).toBeTruthy();
+    // The original is still the owner of its id and still answering for it. Checked by asking
+    // again rather than by reading storage: a real copy has its own `sessionStorage`, which
+    // jsdom cannot model — here both "tabs" share one, so what the copy cleared would look
+    // like the original's loss. What the original actually keeps is its answerer.
+    const asker = openTab();
+    const answers: string[] = [];
+    asker.subscribe((message) => {
+      if (message.type === "tab-taken") answers.push(message.tabId);
+    });
+
+    asker.post({ type: "tab-claim", tabId: firstId });
+    await new Promise((done) => setTimeout(done, WAIT_MS));
+
+    expect(answers).toEqual([firstId]);
   });
 });
 

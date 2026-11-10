@@ -35,7 +35,8 @@ export const TAB_ID_STORAGE_KEY = "ms.tab";
 export const DUPLICATE_CHECK_MS = 150;
 
 export interface TabIdentity {
-  tabId: string;
+  /** Null while the tab has never held a refresh token, and so has nothing to protect. */
+  tabId: string | null;
   /** True when this tab was a copy and has had its inherited refresh token taken away. */
   duplicated: boolean;
 }
@@ -68,6 +69,15 @@ function writeTabId(tabId: string): void {
   }
 }
 
+function clearTabId(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(TAB_ID_STORAGE_KEY);
+  } catch {
+    // Nothing was stored.
+  }
+}
+
 /**
  * Starts answering claims for `tabId`, for as long as this tab holds it.
  *
@@ -84,10 +94,29 @@ function answerFor(channel: AuthChannel, tabId: string): () => void {
 }
 
 /**
+ * Takes an id for this tab, if it does not already have one, and starts answering for it.
+ *
+ * Called when the tab first holds a refresh token — at sign-in, and after the refresh that
+ * restores a session on reload. Not on page load: a visitor who never signs in has no token
+ * to protect, and writing them an identifier anyway would be tracking them for nothing. Most
+ * visitors are guests, and for them `sessionStorage` stays completely empty.
+ */
+export function ensureTabIdentity(channel: AuthChannel): string {
+  const existing = readTabId();
+  if (existing) return existing;
+
+  const tabId = newTabId();
+  writeTabId(tabId);
+  answerFor(channel, tabId);
+  return tabId;
+}
+
+/**
  * Works out whether this tab is a copy, and takes the inherited token away if it is.
  *
  * Returns once the question is settled, which is immediately for a tab that has no inherited
- * id at all — the overwhelmingly common case of a genuinely new tab.
+ * id at all — the overwhelmingly common case of a genuinely new tab, and of every tab
+ * belonging to someone who has never signed in.
  */
 export async function claimTabIdentity(
   channel: AuthChannel,
@@ -95,13 +124,10 @@ export async function claimTabIdentity(
 ): Promise<TabIdentity> {
   const inherited = readTabId();
 
-  // No stored id means nothing was copied: this tab was opened, not duplicated. Nothing to ask.
-  if (!inherited) {
-    const tabId = newTabId();
-    writeTabId(tabId);
-    answerFor(channel, tabId);
-    return { tabId, duplicated: false };
-  }
+  // No stored id means there was no signed-in tab to copy. An id is only ever written
+  // alongside a refresh token, so without one there is nothing that could have been
+  // duplicated, and nothing to ask about.
+  if (!inherited) return { tabId: null, duplicated: false };
 
   // Without a working channel the question cannot be asked. Keeping the token is the
   // pre-guard behaviour: a duplicate costs one sign-out, a lone tab keeps working.
@@ -142,8 +168,8 @@ export async function claimTabIdentity(
   // non-rotating credential that two tabs can hold without either of them noticing.
   clearRefreshToken();
 
-  const tabId = newTabId();
-  writeTabId(tabId);
-  answerFor(channel, tabId);
-  return { tabId, duplicated: true };
+  // And it stops impersonating the original. It takes an id of its own only if it signs in
+  // again, which keeps the rule intact: an id exists exactly when a token does.
+  clearTabId();
+  return { tabId: null, duplicated: true };
 }
