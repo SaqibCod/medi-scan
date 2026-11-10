@@ -362,3 +362,54 @@ html, body { transition: background-color .3s ease, color .3s ease; }
   .ms-signincard { grid-template-columns: minmax(0, 1fr); padding: 32px 24px; }
   .ms-signincard__art { display: none; }
 }
+
+/* --- 7c: Trends ----------------------------------------------------------------------- */
+
+.ms-trends { display: grid; grid-template-columns: 260px minmax(0, 1fr); align-items: start; gap: 32px; margin-top: 32px; }
+.ms-trends__main { display: flex; flex-direction: column; gap: 20px; }
+
+.ms-markerbtn { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: left; }
+.ms-markerbtn:hover { border-color: var(--line-strong); }
+.ms-markerbtn[aria-current="true"] { background: var(--solid); color: var(--on-solid); border-color: var(--solid); }
+.ms-markerbtn[aria-current="true"] .text-ink-3 { color: var(--on-solid); opacity: .62; }
+
+.ms-seriescard { padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.ms-seriescard__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ms-seriescard__meta { text-align: right; }
+
+/* The chart is sized to include its x-axis band, so the card never grows a nested scrollbar. */
+.ms-chart { margin-top: 16px; }
+.ms-chart__tick { font: 400 11px/1 var(--font-mono); }
+.ms-chart__value { font: 400 12px/1 var(--font-mono); }
+.ms-chart__band { font: 400 11px/1 var(--font-mono); }
+
+.ms-charttip { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--glass); backdrop-filter: blur(var(--blur-bar)); }
+.ms-charttip__date { font: 400 11px/1.4 var(--font-mono); color: var(--ink-3); }
+.ms-charttip__value { font: 400 13px/1.5 var(--font-sans); color: var(--ink); }
+.ms-charttip__note { font: 400 11px/1.4 var(--font-sans); color: var(--ink-3); }
+
+/* Legends for the two encodings the chart uses beyond position. */
+.ms-chartlegend { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 14px; }
+.ms-chartlegend__item { display: inline-flex; align-items: center; gap: 8px; font: 400 12px/1 var(--font-sans); color: var(--ink-2); }
+.ms-chartlegend__band { width: 18px; height: 10px; border-radius: 2px; background: var(--flag-normal-bg); border: 1px dashed var(--flag-normal-fg); }
+.ms-chartlegend__hollow { width: 10px; height: 10px; border-radius: var(--radius-pill); border: 2px solid var(--ink-2); }
+
+.ms-multiunit { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; border-radius: var(--radius-md); background: var(--accent-soft); font: 400 13px/20px var(--font-sans); color: var(--ink-2); }
+
+/* Wide tables scroll inside their own box rather than pushing the page sideways. */
+.ms-tablewrap { margin-top: 16px; overflow-x: auto; }
+.ms-trendtable { width: 100%; border-collapse: collapse; font: 400 13px/1.5 var(--font-sans); }
+.ms-trendtable th { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); font-weight: 400; color: var(--ink-3); }
+.ms-trendtable td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); color: var(--ink); vertical-align: top; }
+/* Figures line up down the column, which is the one place equal-width digits help. */
+.ms-trendtable .t-data { font-variant-numeric: tabular-nums; }
+
+.ms-notenough { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr); align-items: center; gap: 24px; margin-top: 32px; padding: 48px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.ms-notenough__art { min-height: 180px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); }
+
+@media (max-width: 900px) {
+  .ms-trends { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .ms-seriescard__meta { text-align: left; }
+  .ms-notenough { grid-template-columns: minmax(0, 1fr); padding: 32px 24px; }
+  .ms-notenough__art { display: none; }
+}

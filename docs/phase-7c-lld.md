@@ -133,6 +133,12 @@ So the 2-second budget is **the tab's own timer**, and nothing waits on a notifi
   - nav links: How it works, Samples, My reports, Trends
   - an avatar pill (initial in a circle, then the display name) links to `/account`, in place of the sign-in button
 - **Guest:** nav links How it works, Samples, My reports. The Google button (A1) sits in the sign-in slot.
+
+**Two corrections to the nav, settled against the mockups at approval point 2.**
+
+**Privacy stays.** The three 7c screens drop it to make room for Trends, but `landing-page--01` keeps it and one header serves both. The nav is therefore How it works · Samples · Privacy · My reports, plus Trends when signed in — additive, so the shipped landing page and its tests are untouched, and a privacy link stays one click away in a health app.
+
+**Trends appears only when signed in.** `trends-page--04` shows a guest with a Trends link while `my-reports-page--02` shows a guest without one; the two mockups disagree. `/api/trends` answers a guest `401 AUTH_REQUIRED`, so the link is hidden for them — `/trends` still answers a direct URL with the sign-in card, but it does not advertise itself to someone it would turn away.
 - **Resolving:** the slot shows a neutral skeleton pill the same size, so there's no layout jump.
 - **Phone menu sheet:** the same links. The full-width Google button for guests, or the account row for users.
 - **Unhidden now:**
@@ -161,7 +167,11 @@ Match `my-reports-page--01` to `--07`.
 - Up to two marker cards, each with a sparkline, "{reportCount} reports · {first} → {last} {unit}", linking to `/trends?marker=…`.
 - The first and last values come from `GET /api/trends?marker=` for those two markers, using the **first series** only (the most points).
 
-**Filters:** tabs All, Done, Processing, Failed with counts (A7). Processing covers `PENDING` and `PROCESSING`. The API filter takes one status, so the Processing tab makes two `size=1` calls and adds them up, and lists with two pages merged. Or show `PROCESSING` only and say so: **pick the simpler correct option at approval point 2.**
+**Filters:** tabs All, Done, Processing, Failed with counts (A7). Processing covers `PENDING` and `PROCESSING`.
+
+**Decided at approval point 2:** the Processing tab fetches `status=PENDING` and `status=PROCESSING` at `size=50` (the contract's maximum), merges them by `createdAt` descending, and pages the merged list in the browser. Server-side paging cannot be used across two lists — page 1 of each is not page 1 of the union — and in-flight reports are transient, so nobody holds fifty of one status at once. If they somehow did, the count beside the tab would still be exact; only the rows past the fiftieth of either status would be missing.
+
+The counts are therefore **five** `size=1` calls, not the four A7 assumed: All, `DONE`, `PENDING`, `PROCESSING`, `FAILED`. "Processing" is two statuses and there is no counts endpoint to ask instead.
 
 **List rows** (`ReportListItem`):
 - **Date block:** `collectedOn` with "Collected", otherwise the `createdAt` date with "Uploaded".
@@ -180,7 +190,11 @@ Match `my-reports-page--01` to `--07`.
   - guest: "Deleted in {n} h", in the warning colour
   - then an arrow link to `/reports/{id}` and a delete `IconButton` (with the 7b dialog)
 
-**Bottom:** "Showing {a}–{b} of {total}", numbered pagination with chevrons, and the footer line ("Reports are deleted automatically 30 days after upload. Chats are never saved." or the guest version).
+**Bottom:** numbered pagination with chevrons, and the footer line ("Reports are deleted automatically 30 days after upload. Chats are never saved." or the guest version).
+
+**Correction:** "Showing {a}–{b} of {total}" is **not** at the bottom. `my-reports-page--01` puts it on the **tab row's right**, opposite the filters, where it reads as a caption on the list rather than a second piece of pagination.
+
+**Correction to the flag-bar label.** The mockup's "{total} tests · {h} high · {l} low · {n} normal" omits `counts.unknown`, which makes the numbers fail to add up on any report that has one — and after OCR, an unchecked value is the deliberate safe outcome, not an edge case. The bar and the label both carry it, as "· {u} unchecked", in a recessive colour that is not a flag colour.
 
 **States:**
 - empty (`--03`, `--06`): per mockup
@@ -201,7 +215,9 @@ Match `account-page--01` to `--06`.
   - **Profile card:** initial, name, "Google account" tag, "Member since {createdAt}", "Reports saved {reportCount}" (from `GET /api/me`).
   - **Sign out:** an outline button with the note "Signs you out in every open tab of this browser." (2.5).
   - **Stat cards:** "{reportCount} My reports, each kept for 30 days" links to `/reports`. "{k} Markers you can follow on Trends" links to `/trends` (k from `/api/trends/markers`).
-  - **"What Medi-Scan keeps about you":** the four rows from the mockup, unchanged. Check each against `SECURITY.md` and tell me if anything is wrong.
+  - **"What Medi-Scan keeps about you":** the four rows from the mockup. Check each against `SECURITY.md` and tell me if anything is wrong.
+
+    **Checked, and one row is wrong.** Rows two to four are accurate. Row one said only "Your Google name — only to show it here and in the header", but `SECURITY.md` ("What an account actually is") records that an account is Google's `sub`, a display name, a role and two timestamps. The `sub` is the thing that makes an account an account — it is what links this visit to the last one — and a card headed "what we keep about you" that omits the identifier is wrong in the row that most has to be right. It now reads "Your Google name and account id", and the body names the id as well as what is *not* kept (password, email, photo).
   - **Delete account** (`--02`, `--05`): the card opens an inline confirm.
     - Text: "Delete your account and all {n} of your reports for good?"
     - A required checkbox: "I understand my reports can't be recovered and I'll be signed out everywhere."
@@ -236,6 +252,9 @@ Match `trends-page--01` to `--05`.
   - A line in `accent`. Dots filled in the flag colour.
   - **Hollow dots** for `dateSource: UPLOADED`, with the legend "Hollow dot: dated by upload".
   - **Reference band:** from the **latest point's** `refLow` and `refHigh`, a shaded `flag-normal-bg` area with dashed edges and the label "Range {text}", legend "Reference range on your latest report". If only one bound exists, shade from it to the axis edge. If none, no band.
+
+    **Correction, two parts.** `TrendPoint` carries `refLow` and `refHigh` but *not* the range as the lab printed it, so "{text}" has to be composed in the client: both bounds → `{low}-{high}`, high only → `<{high}`, low only → `>{low}`. And the open end is **not** left to the chart library. A reference area with one bound undefined extends to a different edge depending on which bound is missing, and a normal range shaded on the wrong side of the line is worse than no band at all — so the y-axis domain is computed first (from the values *and* the bounds, or a band outside the data's range would be clipped away), and both bounds are then passed explicitly.
+  - **An upload-dated x tick carries a `*`** ("Oct 2026\*"), as in `trends-page--02`. Not in the original design; it is what makes the hollow-dot legend findable, since the dot alone is 9px.
   - **One point:** no line, and the note "Only one value in {unit} so far. A line appears once there are two."
   - Values are labelled on the latest point. The tooltip shows date, value, unit, flag, and "dated by upload" when relevant.
   - **Tokens only:** colours come from tokens through CSS variables, so the theme switch works. Charts respect reduced motion (no animation).

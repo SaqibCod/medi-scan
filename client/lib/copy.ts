@@ -448,3 +448,57 @@ export const ACCOUNT_COPY = {
     note: "Reports you made as a guest in this tab move to your account when you sign in.",
   },
 } as const;
+
+/** Trends (`/trends`), from `trends-page--01` to `--05`. */
+export const TRENDS_COPY = {
+  eyebrow: "Trends",
+  headline: "Your values over time.",
+  subhead: "Across every saved report.",
+
+  listEyebrow: "In 2 or more reports",
+  listNote: "A test shows up here once it appears in at least two finished reports.",
+  reports: (n: number) => (n === 1 ? "1 report" : `${n} reports`),
+
+  chart: "Chart",
+  table: "Table",
+
+  inUnit: (unit: string | null) => (unit ? `In ${unit.toUpperCase()}` : "No unit given"),
+  since: (delta: string, unit: string | null, date: string) =>
+    `${delta}${unit ? ` ${unit}` : ""} since ${date}`,
+  latestFrom: (date: string) => `Latest from ${date}`,
+
+  /** More than one unit for the same marker. Medi-Scan never converts between them. */
+  multiUnit: (name: string, k: number) =>
+    `${name} was reported in ${k} different units. Medi-Scan never converts between units, so each one gets its own chart.`,
+
+  onePoint: (unit: string | null) =>
+    unit
+      ? `Only one value in ${unit} so far. A line appears once there are two.`
+      : "Only one value so far. A line appears once there are two.",
+
+  legendBand: "Reference range on your latest report",
+  legendHollow: "Hollow dot: dated by upload",
+
+  footer:
+    "The shaded band is the range printed on your most recent report. Labs set their own ranges, so the table shows each report's own. Trends show what your reports say over time and are not medical advice.",
+
+  /** `trends-page--03`: signed in, but not enough finished reports to compare. */
+  notEnough: {
+    title: "Nothing to compare yet.",
+    body: (n: number) =>
+      `A trend needs the same test in at least two finished reports. You have ${
+        n === 1 ? "1 finished report" : `${n} finished reports`
+      } so far. Add another one, like your next blood test, and its shared values will show up here.`,
+    add: "Add a report",
+    reports: "My reports",
+  },
+
+  /** `trends-page--04`. */
+  signedOut: {
+    headline: "Sign in to see trends.",
+    body: "Guest reports disappear after 24 hours, so there's nothing to compare over time. Signed in, your reports are kept for 30 days and values like LDL or TSH line up here.",
+  },
+
+  /** A marker reached by URL that has no numeric points at all. */
+  emptyMarker: "No numeric values for this test yet.",
+} as const;
