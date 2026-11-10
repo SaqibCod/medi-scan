@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 
 import { Button, Card, Eyebrow, FlagChip } from "@/components/ds";
+import { useAuth } from "@/lib/auth/provider";
 import { formatCollectedOn, formatValue } from "@/lib/report-format";
 import { isReportId, useReport } from "@/lib/reports";
 
@@ -23,6 +24,7 @@ import { isReportId, useReport } from "@/lib/reports";
  */
 export function OnYourReportBox({ slug }: { slug: string }) {
   const params = useSearchParams();
+  const { user } = useAuth();
   const reportId = params.get("report") ?? "";
   const biomarkerId = params.get("b") ?? "";
 
@@ -61,7 +63,18 @@ export function OnYourReportBox({ slug }: { slug: string }) {
         <Button href={`/reports/${reportId}`} variant="outline" icon="chevron-left" size="sm">
           Back to report
         </Button>
-        {/* "See trend" needs history, which arrives in 7c. */}
+        {/* Signed in only: `/api/trends` answers a guest `401 AUTH_REQUIRED`, and a guest's
+            reports expire in 24 hours, so there is nothing for them to see a trend of. */}
+        {user && biomarker.biomarkerSlug && (
+          <Button
+            href={`/trends?marker=${encodeURIComponent(biomarker.biomarkerSlug)}`}
+            variant="outline"
+            icon="chart"
+            size="sm"
+          >
+            See trend
+          </Button>
+        )}
       </div>
     </Card>
   );

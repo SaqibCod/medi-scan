@@ -243,3 +243,25 @@ html, body { transition: background-color .3s ease, color .3s ease; }
   .ms-toast[data-starting-style], .ms-toast[data-ending-style] { transform: none; }
   html, body { transition: none; }
 }
+
+/* ---------------------------------------------------------------------------------------
+   7c: accounts
+   --------------------------------------------------------------------------------------- */
+
+/* A neutral stand-in that claims nothing while something is still being decided. */
+.ms-skel { display: block; background: var(--surface-2); border-radius: var(--radius-md); animation: ms-pulse 1.6s ease-in-out infinite; }
+
+/* The signed-in header control: initial in a circle, then the display name. */
+.ms-accountpill { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 16px 0 6px; border-radius: var(--radius-pill); border: 1px solid var(--line-strong); color: var(--ink); text-decoration: none; }
+.ms-accountpill:hover { border-color: var(--accent); }
+.ms-accountpill__initial { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-ink); font: 500 13px/1 var(--font-sans); }
+.ms-accountpill__name { font: 500 14px/1 var(--font-sans); }
+
+/* The same thing in the phone menu, where it is a full-width row rather than a pill. */
+.ms-accountrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.ms-accountrow .ms-accountpill__initial { width: 32px; height: 32px; font-size: 14px; }
+.ms-accountrow .ms-accountpill__name { font: 400 20px/1 var(--font-sans); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-skel { animation: none; }
+}

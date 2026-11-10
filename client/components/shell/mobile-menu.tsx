@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import Link from "next/link";
 
+import { AuthSlot } from "@/components/auth/auth-slot";
 import { IconButton } from "@/components/ds";
-import { FEATURE_SIGNIN } from "@/lib/env";
-import { NAV_LINKS } from "./nav";
+import { useAuth } from "@/lib/auth/provider";
+import { headerLinks } from "./nav";
 
 /**
  * The phone menu.
@@ -18,6 +19,9 @@ import { NAV_LINKS } from "./nav";
  */
 export function MobileMenu() {
   const [open, setOpen] = useState(false);
+  const { user } = useAuth();
+
+  const links = headerLinks(user !== null);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -37,7 +41,7 @@ export function MobileMenu() {
 
           <nav aria-label="Main">
             <ul className="flex flex-col">
-              {NAV_LINKS.map((link) => (
+              {links.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
@@ -53,8 +57,10 @@ export function MobileMenu() {
             </ul>
           </nav>
 
-          {/* Sign-in ships in 7c. The slot stays; the button does not appear until it works. */}
-          {FEATURE_SIGNIN && null}
+          {/* The account row for a signed-in visitor, Google's full-width button for a guest.
+              Only the row closes the sheet: the button is Google's own iframe, and we neither
+              can nor should intercept what happens inside it. */}
+          <AuthSlot block onNavigate={() => setOpen(false)} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

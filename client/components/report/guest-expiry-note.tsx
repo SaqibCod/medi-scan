@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { SignInAction } from "@/components/auth/sign-in-action";
 import { Icon } from "@/components/ds";
 import { formatExpiryCountdown } from "@/lib/report-format";
 
@@ -13,7 +14,9 @@ import { formatExpiryCountdown } from "@/lib/report-format";
  * tomorrow. Updating every minute is enough: the number is in minutes, and a per-second
  * timer on a page that may sit open for hours is waste.
  *
- * "Sign in to keep it" is absent until 7c (B10) rather than shown and disabled.
+ * "Sign in to keep it" sits beside the countdown from 7c. It is the one moment in the app
+ * where signing in has an obvious, immediate payoff — this report, which is about to be
+ * deleted, stops being about to be deleted — so it is offered here and nowhere more insistent.
  */
 export function GuestExpiryNote({ expiresAt }: { expiresAt: string }) {
   const [countdown, setCountdown] = useState(() => formatExpiryCountdown(expiresAt));
@@ -24,14 +27,15 @@ export function GuestExpiryNote({ expiresAt }: { expiresAt: string }) {
   }, [expiresAt]);
 
   return (
-    <div className="flex items-start gap-space-4 rounded-md bg-accent-soft px-space-5 py-space-4">
+    <div className="flex flex-wrap items-start gap-space-4 rounded-md bg-accent-soft px-space-5 py-space-4">
       <span className="mt-[2px] shrink-0 text-accent-ink" aria-hidden="true">
         <Icon name="clock" size={18} />
       </span>
-      <p className="t-body-s text-ink-2">
+      <p className="t-body-s min-w-[16ch] flex-1 text-ink-2">
         <span className="text-ink">Guest report:</span> it&apos;s deleted automatically in{" "}
-        <span className="t-data text-ink">{countdown}</span>.
+        <span className="t-data text-ink">{countdown}</span>. Sign in to keep it for 30 days.
       </p>
+      <SignInAction />
     </div>
   );
 }

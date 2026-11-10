@@ -1,7 +1,9 @@
 "use client";
 
+import { SignInAction } from "@/components/auth/sign-in-action";
 import { Button } from "@/components/ds";
 import { useNotices } from "@/components/notices/notice-provider";
+import { useAuth } from "@/lib/auth/provider";
 import { FEATURE_SIGNIN } from "@/lib/env";
 import { RequestIdBlock } from "./request-id-block";
 import { RetryCounter } from "./retry-counter";
@@ -61,6 +63,9 @@ export function ReportNotAvailableScreen() {
               My reports
             </Button>
           )}
+          {/* The likeliest cause of landing here is a report that belongs to an account this
+              tab is not signed in to, so the way out is on the screen (mockup `--02`). */}
+          <SignInAction />
         </>
       }
       notes={[
@@ -83,12 +88,17 @@ export function GuestSessionEndedScreen() {
       headlineFaint="Its reports are gone."
       numeral="401"
       actions={
-        // "Analyze a report" goes home, which is where analysing will live from 7b. It starts
-        // nothing by itself — a new guest session is created by the first action that needs
-        // one, never by arriving on a page.
-        <Button href="/" icon="upload">
-          Analyze a report
-        </Button>
+        <>
+          {/* "Analyze a report" goes home, which is where analysing lives from 7b. It starts
+              nothing by itself — a new guest session is created by the first action that needs
+              one, never by arriving on a page. */}
+          <Button href="/" icon="upload">
+            Analyze a report
+          </Button>
+          {/* The text below offers signing in as the way to not have this happen again, so
+              the means to do it is right here. */}
+          <SignInAction />
+        </>
       }
     >
       Guest sessions last 24 hours, and their reports are deleted with them. Start again now, or
@@ -99,6 +109,8 @@ export function GuestSessionEndedScreen() {
 
 /** Used by 7d on `FORBIDDEN`. Mockup `--04`. */
 export function ForbiddenScreen() {
+  const { user } = useAuth();
+
   return (
     <SystemScreen
       eyebrow="Admins only"
@@ -107,9 +119,18 @@ export function ForbiddenScreen() {
       headlineFaint="Your account can't open it."
       numeral="403"
       actions={
-        <Button href="/" icon="arrow-right">
-          Back to home
-        </Button>
+        <>
+          <Button href="/" icon="arrow-right">
+            Back to home
+          </Button>
+          {/* Only reachable while signed in — a guest gets `401 AUTH_REQUIRED`, not this — so
+              the account page is somewhere this visitor can actually go. */}
+          {user && (
+            <Button href="/account" variant="outline">
+              Your account
+            </Button>
+          )}
+        </>
       }
     >
       You&rsquo;re signed in, but your account doesn&rsquo;t have access to this page. If you
