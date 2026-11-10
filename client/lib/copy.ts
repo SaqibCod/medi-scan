@@ -367,3 +367,84 @@ export const REPORTS_COPY = {
     reports: (n: number) => (n === 1 ? "1 report" : `${n} reports`),
   },
 } as const;
+
+/**
+ * Account (`/account`), from `account-page--01` to `--06`.
+ *
+ * The "what we keep" rows are checked against SECURITY.md, "What an account actually is".
+ * Row one deliberately differs from the mockup: see the note on it.
+ */
+export const ACCOUNT_COPY = {
+  eyebrow: "Account",
+  headline: "Your account.",
+  signedInAs: (name: string) => `Signed in as ${name}.`,
+
+  googleTag: "Google account",
+  memberSince: "Member since",
+  reportsSaved: "Reports saved",
+
+  signOut: "Sign out",
+  signOutNote: "Signs you out in every open tab of this browser.",
+
+  statReports: "My reports, each kept for 30 days",
+  statMarkers: "Markers you can follow on Trends",
+
+  keepsTitle: "What Medi-Scan keeps about you",
+  keeps: [
+    {
+      icon: "user",
+      label: "Your Google name and account id",
+      /**
+       * Expanded from the mockup, which said only "Your Google name".
+       *
+       * `SECURITY.md` records that an account is Google's `sub`, a display name, a role and
+       * two timestamps. The id is the thing that makes an account an account — it is what
+       * links this visit to the last one — and a card headed "what we keep about you" that
+       * omits the identifier is wrong in the one row that most has to be right.
+       */
+      body: "The name is only to show it here and in the header. The id is how we recognise you next time. We never see your Google password, your email address or your photo.",
+    },
+    {
+      icon: "file",
+      label: "Your reports and results",
+      body: "Each one is deleted automatically 30 days after upload, or sooner if you delete it.",
+    },
+    {
+      icon: "clock",
+      label: "Sign-in sessions",
+      body: "One per browser tab, ending after at most 30 days. Signing out ends them all.",
+    },
+    {
+      icon: "sources",
+      label: "Chat messages: never",
+      body: "Questions you ask about a report stay in your browser tab and are not saved on our server.",
+    },
+  ],
+
+  deleteTitle: "Delete account",
+  deleteBody: (n: number) =>
+    `Permanently deletes your account and everything linked to it: ${
+      n === 1 ? "your 1 report" : `all ${n} of your reports`
+    }, their results and summaries, and every sign-in. This can't be undone.`,
+  deleteTrigger: "Delete account…",
+  confirmQuestion: (n: number) =>
+    n === 1
+      ? "Delete your account and your 1 report for good?"
+      : `Delete your account and all ${n} of your reports for good?`,
+  confirmCheckbox: "I understand my reports can't be recovered and I'll be signed out everywhere.",
+  confirmKeep: "Keep my account",
+  confirmDelete: "Delete my account",
+
+  /** `account-page--03` and `--06`. */
+  signedOut: {
+    headline: "Sign in to see",
+    headlineFaint: "your account.",
+    benefits: [
+      "Keep reports for 30 days instead of 24 hours.",
+      "Follow a value like LDL or TSH over time on Trends.",
+      "Come back to your history on later visits.",
+    ],
+    guest: "Continue as guest",
+    note: "Reports you made as a guest in this tab move to your account when you sign in.",
+  },
+} as const;

@@ -327,3 +327,38 @@ html, body { transition: background-color .3s ease, color .3s ease; }
   .ms-emptyreports { grid-template-columns: minmax(0, 1fr); padding: 32px 24px; }
   .ms-emptyreports__art { display: none; }
 }
+
+/* --- 7c: Account ---------------------------------------------------------------------- */
+
+.ms-account { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; gap: 24px; margin-top: 32px; }
+.ms-account__main { display: flex; flex-direction: column; gap: 24px; }
+.ms-account__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.ms-account__avatar { display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-ink); font: 400 28px/1 var(--font-sans); }
+
+/* A stat that is also a way in: figure, label, and the arrow that says so. */
+.ms-statcard { display: block; padding: 22px 24px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); text-decoration: none; }
+.ms-statcard:hover { border-color: var(--accent); }
+.ms-statcard__top { display: flex; align-items: center; justify-content: space-between; }
+
+/* Label and explanation side by side, stacking on a phone. */
+.ms-account__keep { display: grid; grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1.3fr); align-items: start; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.ms-account__keep:first-child { border-top: 0; }
+
+.ms-account__deletehead { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
+.ms-account__deleteicon { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--flag-high-bg); color: var(--flag-high-fg); flex-shrink: 0; }
+
+/* The confirm panel, tinted so it reads as the consequence of the card it sits in. */
+.ms-account__confirm { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; padding: 20px; border-radius: var(--radius-md); background: var(--flag-high-bg); }
+
+/* The signed-out card, shared by Account and Trends. */
+.ms-signincard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); align-items: center; gap: 24px; padding: 48px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.ms-signincard__art { position: relative; min-height: 260px; }
+
+@media (max-width: 900px) {
+  .ms-account { grid-template-columns: minmax(0, 1fr); }
+  .ms-account__stats { grid-template-columns: minmax(0, 1fr); }
+  .ms-account__keep { grid-template-columns: 24px minmax(0, 1fr); }
+  .ms-account__keep span:last-child { grid-column: 2; }
+  .ms-signincard { grid-template-columns: minmax(0, 1fr); padding: 32px 24px; }
+  .ms-signincard__art { display: none; }
+}
