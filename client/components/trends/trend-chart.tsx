@@ -196,8 +196,13 @@ export function TrendChart({
       aria-label={`${markerName} over time${unit ? `, in ${unit}` : ""}`}
       aria-describedby={describedBy}
     >
-      <ResponsiveContainer width="100%" height={240}>
-        <LineChart data={data} margin={{ top: 24, right: 16, bottom: 8, left: 4 }}>
+      {/*
+        The height includes the x-axis band rather than only the plot. Sizing to the plot
+        alone is what gives a chart card its own little scrollbar, with the dates cut off at
+        the bottom — and the band often reaches the axis, so the labels need the clearance.
+      */}
+      <ResponsiveContainer width="100%" height={272}>
+        <LineChart data={data} margin={{ top: 24, right: 16, bottom: 20, left: 4 }}>
           {/* Hairline, solid and recessive: the grid is scenery, not data. */}
           <CartesianGrid stroke="var(--line)" strokeWidth={1} vertical={false} />
 

@@ -125,9 +125,20 @@ async function fixtures(page: Page, options: { signedIn: boolean; empty?: boolea
     });
   }
 
-  const rows = options.empty ? [] : fixtureRows();
+  // A guest's reports really do expire in hours, not days, and they have fewer of them. The
+  // picture has to show what a guest would actually see, or the review compares the mockup
+  // against a fiction.
+  const guestRows = fixtureRows()
+    .slice(1, 3)
+    .map((row, index) => ({
+      ...row,
+      expiresAt: new Date(Date.now() + (23 - index) * 3_600_000 + 60_000).toISOString(),
+    }));
+
+  const rows = options.empty ? [] : options.signedIn ? fixtureRows() : guestRows;
+
   await reportList(page, {
-    all: options.signedIn ? rows : rows.slice(1, 3),
+    all: rows,
     DONE: rows.filter((row) => row.status === "DONE"),
     PENDING: [],
     PROCESSING: rows.filter((row) => row.status === "PROCESSING"),
