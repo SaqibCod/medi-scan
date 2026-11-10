@@ -195,6 +195,14 @@ export interface FailureCopy {
   eyebrow: string;
   headline: string;
   body: string;
+  /**
+   * One line for a row in a list (7c LLD 4).
+   *
+   * Separate from `eyebrow`, which names the category ("Couldn't read this file") where a row
+   * has to say what happened to this report ("Couldn't read text from this file"). A row is
+   * read in passing, beside five others, so it gets a sentence rather than a label.
+   */
+  short: string;
 }
 
 /**
@@ -208,36 +216,43 @@ const FAILURES: Record<string, FailureCopy> = {
     eyebrow: "Couldn't read this file",
     headline: "We couldn't read text from this file.",
     body: copy.unreadableBody,
+    short: "Couldn't read text from this file",
   },
   DOCUMENT_TOO_LONG: {
     eyebrow: "Document too long",
     headline: "This document is too long to read.",
     body: "Try uploading only the pages with your results, or paste just that part of the text.",
+    short: "This document is too long to read",
   },
   NO_RESULTS_FOUND: {
     eyebrow: "No results found",
     headline: "We didn't find lab results in this document.",
     body: "Medi-Scan reads lab reports: test names, values and reference ranges. A letter or a discharge summary has nothing for it to work with.",
+    short: "No lab results found in this document",
   },
   EXTRACTION_FAILED: {
     eyebrow: "Something went wrong",
     headline: "Something went wrong reading the results.",
     body: "This one is on us, not on your report. Try again, or try a different export of the same report.",
+    short: "Something went wrong reading the results",
   },
   CAPACITY: {
     eyebrow: "Daily limit reached",
     headline: "The demo has hit today's limit.",
     body: "Medi-Scan runs on a free AI quota that resets at midnight UTC. Reports you already have still open.",
+    short: "Today's AI limit was reached",
   },
   LLM_UNAVAILABLE: {
     eyebrow: "AI service unavailable",
     headline: "The AI service is unavailable right now.",
     body: "This is the provider's side, not your report. Try again in a few minutes.",
+    short: "The AI service was unavailable",
   },
   INTERRUPTED: {
     eyebrow: "Processing interrupted",
     headline: "Processing was interrupted.",
     body: "The server restarted while your report was being read. Nothing was saved, so upload it again.",
+    short: "Processing was interrupted",
   },
 };
 
@@ -245,6 +260,7 @@ const UNKNOWN_FAILURE: FailureCopy = {
   eyebrow: "Something went wrong",
   headline: "We couldn't finish reading this report.",
   body: "Try uploading it again, or try a sample report to see how it should go.",
+  short: "We couldn't finish reading this report",
 };
 
 /** A failure code the contract adds later still gets a view (contract 9.2). */
@@ -296,4 +312,58 @@ export const AUTH_COPY = {
 
   /** The label on Google's own button, for the slot's accessible name while it loads. */
   signInLabel: "Sign in with Google",
+} as const;
+
+/**
+ * My reports, Account and Trends (7c), word for word from the mockups.
+ *
+ * Counted strings are functions rather than templates in the components, because every one of
+ * them has a singular case and "1 reports" undermines everything else on the page.
+ */
+export const REPORTS_COPY = {
+  eyebrow: "My reports",
+  headline: "Your reports.",
+
+  /** The second headline line. The count is the "All" total. */
+  userSubhead: (n: number) =>
+    n === 1 ? "1 saved, kept for 30 days." : `${n} saved, each kept for 30 days.`,
+  guestSubhead: (n: number) =>
+    n === 1 ? "1 in this session, gone in 24 hours." : `${n} in this session, gone in 24 hours.`,
+  emptySubhead: "Nothing here yet.",
+
+  newReport: "New report",
+
+  guestBanner:
+    "These reports live only in this browser tab's session and are deleted 24 hours after it started. Sign in with Google to keep them for 30 days and follow your values over time. They move to your account automatically.",
+
+  /** Row titles, by what the report turned out to be. */
+  titleDone: "Lab report",
+  titleSample: "Sample report",
+  titleProcessing: "New report",
+  titleFailed: "Report could not be read",
+  processingLabel: "Reading your report…",
+
+  showing: (from: number, to: number, total: number) => `Showing ${from}–${to} of ${total}`,
+
+  footerUser:
+    "Reports are deleted automatically 30 days after upload. Chats are never saved.",
+  footerGuest: "Guest reports are deleted automatically 24 hours after your session started.",
+
+  empty: {
+    title: "No reports yet.",
+    body: "Upload a lab report as a PDF or a photo, or paste its text. Not ready to share yours? Try one of our sample reports first.",
+    upload: "Upload a report",
+    sample: "Try a sample report",
+  },
+
+  trendsTeaser: {
+    eyebrow: "Trends",
+    /** Only shown when at least one marker appears in more than one report. */
+    headline: (k: number) =>
+      k === 1
+        ? "1 marker appears in more than one report."
+        : `${k} markers appear in more than one report.`,
+    subhead: "See how they've changed.",
+    reports: (n: number) => (n === 1 ? "1 report" : `${n} reports`),
+  },
 } as const;

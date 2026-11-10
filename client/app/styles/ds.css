@@ -265,3 +265,65 @@ html, body { transition: background-color .3s ease, color .3s ease; }
 @media (prefers-reduced-motion: reduce) {
   .ms-skel { animation: none; }
 }
+
+/* --- 7c: My reports ------------------------------------------------------------------- */
+
+/* The proportional summary bar. Decoration: the counts are spelled out beneath it. */
+.ms-flagbar { display: flex; gap: 3px; height: 6px; border-radius: var(--radius-pill); overflow: hidden; }
+.ms-flagbar--idle { background: var(--surface-2); position: relative; }
+.ms-flagbar__seg { display: block; border-radius: var(--radius-pill); }
+.ms-flagbar__seg--high { background: var(--flag-high-fg); }
+.ms-flagbar__seg--low { background: var(--flag-low-fg); }
+.ms-flagbar__seg--normal { background: var(--flag-normal-fg); }
+.ms-flagbar__seg--unknown { background: var(--dot-idle); }
+
+/* Indeterminate, because the server reports no progress and inventing some would be a lie. */
+.ms-flagbar__pending { position: absolute; inset: 0; width: 35%; background: var(--accent); border-radius: var(--radius-pill); animation: ms-indeterminate 2.4s ease-in-out infinite; }
+.ms-dot-accent { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--accent); animation: ms-pulse 1.6s ease-in-out infinite; }
+
+/* A row: date · what it was · what it found · how long it has left. */
+.ms-reportrow { display: grid; grid-template-columns: 96px minmax(0, 1.1fr) minmax(0, 1.3fr) auto; align-items: center; gap: 24px; padding: 20px 24px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.ms-reportrow__date { display: flex; flex-direction: column; }
+.ms-reportrow__day { font: 300 34px/1 var(--font-sans); letter-spacing: -.03em; color: var(--ink); }
+.ms-reportrow__month { font: 400 11px/1.4 var(--font-mono); color: var(--ink-2); margin-top: 6px; }
+.ms-reportrow__source { font: 400 10px/1.4 var(--font-mono); color: var(--faint); letter-spacing: .08em; }
+.ms-reportrow__when { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+.ms-reportrow__open { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-pill); color: var(--ink-2); }
+.ms-reportrow__open:hover { color: var(--ink); background: var(--surface-2); }
+
+@media (max-width: 900px) {
+  /* The three facts stack; the actions sit under them rather than squeezing to nothing. */
+  .ms-reportrow { grid-template-columns: 72px minmax(0, 1fr); grid-template-areas: "date what" "found found" "when when"; gap: 16px; }
+  .ms-reportrow__date { grid-area: date; }
+  .ms-reportrow__what { grid-area: what; }
+  .ms-reportrow__found { grid-area: found; }
+  .ms-reportrow__when { grid-area: when; justify-content: flex-start; }
+  .ms-reportrow__day { font-size: 28px; }
+}
+
+/* The guest banner, and the Trends teaser above the list. */
+.ms-guestbanner { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 32px; padding: 18px 22px; border-radius: var(--radius-lg); background: var(--accent-soft); }
+.ms-guestbanner__icon { color: var(--accent-ink); flex-shrink: 0; }
+
+.ms-teaser { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; margin-top: 32px; padding: 22px 24px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.ms-teaser__cards { display: flex; flex-wrap: wrap; gap: 12px; }
+.ms-teasercard { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); text-decoration: none; }
+.ms-teasercard:hover { border-color: var(--accent); }
+.ms-teasercard__spark { flex-shrink: 0; }
+.ms-spark { display: block; overflow: visible; }
+
+/* Numbered pagination. */
+.ms-pager { display: flex; align-items: center; gap: 8px; }
+.ms-pager__list { display: flex; align-items: center; gap: 4px; }
+.ms-pager__step, .ms-pager__page { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: transparent; color: var(--ink-2); font: 400 14px/1 var(--font-sans); }
+.ms-pager__step:hover:not(:disabled), .ms-pager__page:hover { color: var(--ink); border-color: var(--line-strong); }
+.ms-pager__step:disabled { opacity: .4; }
+.ms-pager__page[aria-current="page"] { background: var(--solid); color: var(--on-solid); border-color: var(--solid); }
+
+/* The empty state, with the helix as scenery. */
+.ms-emptyreports { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); align-items: center; gap: 24px; margin-top: 32px; padding: 48px; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.ms-emptyreports__art { position: relative; min-height: 220px; }
+@media (max-width: 900px) {
+  .ms-emptyreports { grid-template-columns: minmax(0, 1fr); padding: 32px 24px; }
+  .ms-emptyreports__art { display: none; }
+}
