@@ -148,7 +148,9 @@ export function ReportsView() {
               Nothing in this tab right now.
             </p>
           ) : (
-            <ul className="mt-space-5 flex flex-col gap-space-4">
+            // Named, so it is distinguishable from the pagination's list — to a screen
+            // reader as much as to a test.
+            <ul className="mt-space-5 flex flex-col gap-space-4" aria-label="Your reports">
               {items.map((item) => (
                 <ReportRow
                   key={item.id}

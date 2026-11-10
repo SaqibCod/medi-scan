@@ -284,8 +284,11 @@ test.describe("photos, with OCR on", () => {
     await expect(page.getByText("Read from a photo or scan.")).toBeVisible();
     await expect(page.getByText(/OCR can misread numbers/)).toBeVisible();
 
-    // The image itself never leaves for anywhere but our own API.
-    expect([...hosts].every((host) => host.startsWith("localhost"))).toBe(true);
+    // The image itself never leaves for anywhere but our own API. Google is reached for the
+    // sign-in library the header offers and for nothing else — no report, and no photograph,
+    // is ever sent there.
+    const external = [...hosts].filter((host) => !host.startsWith("localhost"));
+    expect(external.filter((host) => host !== "accounts.google.com")).toEqual([]);
   });
 
   test("a mixed report names the part that was scanned", async ({ page }) => {

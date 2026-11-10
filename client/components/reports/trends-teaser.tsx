@@ -106,7 +106,9 @@ export function TrendsTeaser({ markers }: { markers: TrendMarker[] }) {
         <p className="t-title mt-space-3 text-ink">
           {REPORTS_COPY.trendsTeaser.headline(markers.length)}
         </p>
-        <p className="t-title text-faint">{REPORTS_COPY.trendsTeaser.subhead}</p>
+        {/* `ink-2`, not `faint`: at 22px this is body-sized text and has to clear 4.5:1,
+            which `faint` only manages against the display sizes it was chosen for. */}
+        <p className="t-title text-ink-2">{REPORTS_COPY.trendsTeaser.subhead}</p>
       </div>
 
       <div className="ms-teaser__cards">

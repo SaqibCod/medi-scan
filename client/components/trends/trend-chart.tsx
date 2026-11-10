@@ -187,7 +187,15 @@ export function TrendChart({
   const tickPoints = spreadTicks(data);
 
   return (
-    <div className="ms-chart">
+    // The name and the description sit on the container, not on the plot. Recharts renders
+    // the line as a bare `<path>`, and ARIA attributes are prohibited on an element with no
+    // role — so labelling it there is both invalid and, in a screen reader, silent.
+    <div
+      className="ms-chart"
+      role="img"
+      aria-label={`${markerName} over time${unit ? `, in ${unit}` : ""}`}
+      aria-describedby={describedBy}
+    >
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={data} margin={{ top: 24, right: 16, bottom: 8, left: 4 }}>
           {/* Hairline, solid and recessive: the grid is scenery, not data. */}
@@ -262,9 +270,9 @@ export function TrendChart({
             strokeWidth={2}
             dot={(props) => renderDot({ ...props, lastIndex: data.length - 1 })}
             activeDot={false}
-            // Left at "auto" on purpose: it is off under prefers-reduced-motion and in SSR.
-            aria-label={`${markerName} over time${unit ? `, in ${unit}` : ""}`}
-            aria-describedby={describedBy}
+            // `isAnimationActive` is left at its "auto" default on purpose: it is already
+            // off under prefers-reduced-motion and during server rendering, and setting it
+            // explicitly would override the reader's own preference.
           />
         </LineChart>
       </ResponsiveContainer>

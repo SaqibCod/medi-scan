@@ -286,7 +286,7 @@ html, body { transition: background-color .3s ease, color .3s ease; }
 .ms-reportrow__date { display: flex; flex-direction: column; }
 .ms-reportrow__day { font: 300 34px/1 var(--font-sans); letter-spacing: -.03em; color: var(--ink); }
 .ms-reportrow__month { font: 400 11px/1.4 var(--font-mono); color: var(--ink-2); margin-top: 6px; }
-.ms-reportrow__source { font: 400 10px/1.4 var(--font-mono); color: var(--faint); letter-spacing: .08em; }
+.ms-reportrow__source { font: 400 10px/1.4 var(--font-mono); color: var(--ink-3); letter-spacing: .08em; }
 .ms-reportrow__when { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
 .ms-reportrow__open { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-pill); color: var(--ink-2); }
 .ms-reportrow__open:hover { color: var(--ink); background: var(--surface-2); }

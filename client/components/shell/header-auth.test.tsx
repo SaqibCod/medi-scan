@@ -119,7 +119,7 @@ describe("a guest", () => {
     expect(button).toBeInTheDocument();
 
     // No account pill: nobody is signed in.
-    expect(screen.queryByRole("link", { name: /Your account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /your account/ })).not.toBeInTheDocument();
   });
 
   it("is not offered Trends, which would turn them away", async () => {
@@ -140,7 +140,7 @@ describe("a signed-in visitor", () => {
   it("gets the account pill, with their initial, linking to the account page", async () => {
     renderHeader();
 
-    const pill = await screen.findByRole("link", { name: "Your account, signed in as Saq" });
+    const pill = await screen.findByRole("link", { name: /your account/ });
     expect(pill).toHaveAttribute("href", "/account");
     expect(pill).toHaveTextContent("S");
     expect(pill).toHaveTextContent("Saq");
@@ -151,7 +151,7 @@ describe("a signed-in visitor", () => {
 
   it("gets the Trends link", async () => {
     renderHeader();
-    await screen.findByRole("link", { name: "Your account, signed in as Saq" });
+    await screen.findByRole("link", { name: /your account/ });
 
     expect(within(nav()).getByRole("link", { name: "Trends" })).toHaveAttribute("href", "/trends");
   });
@@ -173,7 +173,7 @@ describe("while the answer is still unknown", () => {
 
     // Neither claim is made while it is still being decided.
     expect(screen.queryByRole("button", { name: "Sign in with Google" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Your account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /your account/ })).not.toBeInTheDocument();
 
     // And it is scenery, not something to announce or tab to.
     expect(container.querySelector(".ms-skel")).toHaveAttribute("aria-hidden", "true");

@@ -37,12 +37,18 @@ export function AuthSlot({ block, onNavigate }: AuthSlotProps) {
         href="/account"
         onClick={onNavigate}
         className={block ? "ms-accountrow" : "ms-accountpill"}
-        aria-label={`Your account, signed in as ${user.displayName}`}
       >
         <span className="ms-accountpill__initial" aria-hidden="true">
           {initialFor(user.displayName)}
         </span>
         <span className="ms-accountpill__name">{user.displayName}</span>
+        {/*
+          The name is built from the content rather than an `aria-label`. An `aria-label`
+          here would replace the visible name with wording that does not contain it, which
+          is the one thing WCAG 2.5.3 exists to stop: someone saying "click Saq" to a voice
+          assistant that has only ever heard "Your account".
+        */}
+        <span className="sr-only"> — your account</span>
       </Link>
     );
   }
