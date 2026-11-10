@@ -101,6 +101,7 @@ export function loadGoogleScript(nonce?: string): Promise<boolean> {
 }
 
 let initialized = false;
+let prompted = false;
 
 /**
  * Configures GIS for this tab. Safe to call again; only the first call does anything.
@@ -135,13 +136,22 @@ export function initializeGoogle(
 }
 
 /**
- * Asks Google for a credential without a click.
+ * Asks Google for a credential without a click, once per tab.
+ *
+ * Once, because this is a visible interruption — One Tap appears over the page — and because
+ * the effect that calls it can legitimately run more than once (React re-mounts it in
+ * development, and a cancelled run has to be redone). Google applies its own cool-down on top.
  *
  * The moment listener is passed but ignored, for the FedCM reasons above. It exists only so
  * that GIS has somewhere to deliver notifications instead of warning about their absence.
  */
 export function promptGoogle(): void {
-  idApi()?.prompt(() => {});
+  if (prompted) return;
+  const api = idApi();
+  if (!api) return;
+
+  prompted = true;
+  api.prompt(() => {});
 }
 
 export function renderGoogleButton(parent: HTMLElement, options: GoogleButtonOptions): boolean {
@@ -164,5 +174,6 @@ export function disableGoogleAutoSelect(): void {
 /** Tests only. */
 export function resetGoogleForTests(): void {
   initialized = false;
+  prompted = false;
   loading = null;
 }

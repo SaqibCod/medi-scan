@@ -83,8 +83,6 @@ export function AuthProvider({
   const toast = useToast();
   const router = useRouter();
 
-  const startedRef = useRef(false);
-
   /** Everything a tab drops when it stops being signed in, whatever the reason. */
   const becomeGuest = useCallback(() => {
     clearTokens();
@@ -176,10 +174,21 @@ export function AuthProvider({
 
   // --- Tab start (dataflow 3.3) -------------------------------------------------------
 
+  /**
+   * Deliberately no "run once per tab" ref here.
+   *
+   * The obvious guard — a ref set on the first run — deadlocks the moment this effect is
+   * cleaned up and re-run, because the first run's cleanup sets `cancelled` while the second
+   * run returns early on the ref. Nothing then finishes the sequence and the tab stays
+   * `RESOLVING` for ever, with no sign-in and no guest state. React's StrictMode does exactly
+   * that on every mount in development, which is how this was found.
+   *
+   * Re-running is safe instead: the refresh is single-flight, `initializeGoogle` and
+   * `promptGoogle` are once-per-tab in `google.ts`, and `claimTabIdentity` only reads. So the
+   * cancellation flag is the whole mechanism, and a second run simply redoes the work the
+   * first one abandoned.
+   */
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
     let cancelled = false;
     const budget = setTimeout(() => setBudgetSpent(true), RESOLVE_BUDGET_MS);
 

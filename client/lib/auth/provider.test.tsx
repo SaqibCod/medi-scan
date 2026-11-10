@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -222,6 +223,46 @@ describe("tab start", () => {
     await waitFor(() => expect(status()).toBe("GUEST"));
     expect(google.calls.initialize).toBe(0);
     expect(google.calls.prompt).toBe(0);
+  });
+});
+
+describe("an effect that is mounted twice", () => {
+  it("still resolves, because a cancelled run is redone rather than skipped", async () => {
+    // React's StrictMode mounts, cleans up, and mounts again. A "run once" ref would let the
+    // first run's cleanup cancel the sequence while the second returned early on the ref,
+    // leaving the tab RESOLVING for ever with no sign-in and no guest state.
+    const google = installFakeGoogle();
+
+    const client = createQueryClient();
+    render(
+      <StrictMode>
+        <QueryClientProvider client={client}>
+          <ToastProvider>
+            <AuthProvider clientId={CLIENT_ID}>
+              <Probe />
+            </AuthProvider>
+          </ToastProvider>
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(status()).toBe("GUEST"));
+    await waitFor(() => expect(google.calls.initialize).toBe(1));
+
+    // And the visitor is interrupted by One Tap exactly once, not once per mount.
+    expect(google.calls.prompt).toBe(1);
+  });
+
+  it("asks Google for a credential only once per tab", async () => {
+    const google = installFakeGoogle();
+
+    renderAuth();
+    await waitFor(() => expect(google.calls.prompt).toBe(1));
+
+    // A second provider in the same tab must not prompt again.
+    renderAuth();
+    await new Promise((done) => setTimeout(done, 50));
+    expect(google.calls.prompt).toBe(1);
   });
 });
 
