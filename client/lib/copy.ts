@@ -251,3 +251,49 @@ const UNKNOWN_FAILURE: FailureCopy = {
 export function failureCopy(code: string | null | undefined): FailureCopy {
   return (code && FAILURES[code]) || UNKNOWN_FAILURE;
 }
+
+/**
+ * Sign-in, sign-out and account copy (7c), from `system-screens--07` and the account mockups.
+ *
+ * The counts are written out rather than templated in the components because every one of them
+ * has a singular case, and "1 reports moved to your account" is the kind of thing that makes a
+ * person trust the rest of the page less.
+ */
+export const AUTH_COPY = {
+  /** First ever sign-in. The second line only appears when something was actually claimed. */
+  welcomeTitle: (name: string) => `Welcome to Medi-Scan, ${name}.`,
+  welcomeClaim: (n: number) =>
+    n === 1
+      ? "Your 1 guest report moved to your account. It is now kept for 30 days."
+      : `Your ${n} guest reports moved to your account. They are now kept for 30 days.`,
+
+  /** Every sign-in after the first. */
+  signedInTitle: (name: string) => `Signed in as ${name}.`,
+  signedInClaim: (n: number) =>
+    n === 1
+      ? "1 report from this tab moved to your account."
+      : `${n} reports from this tab moved to your account.`,
+
+  /** The refresh token was rejected: the tab was signed in a moment ago and now is not. */
+  sessionEndedTitle: "You were signed out.",
+  sessionEndedBody: "Your sign-in ended. Sign in again to see your saved reports.",
+  sessionEndedAction: "Sign in with Google",
+
+  /** Asked for, rather than imposed, so it says less. */
+  signedOutTitle: "Signed out.",
+
+  accountDeletedTitle: "Account deleted.",
+  accountDeletedBody: "Your reports, results and sign-ins are gone from our server.",
+
+  /** `401 GOOGLE_TOKEN_INVALID`, and anything else the exchange rejects. */
+  signInFailedTitle: "Sign-in didn't work. Please try again.",
+  /** `429 RATE_LIMITED`. */
+  signInRateLimited: (countdown: string) =>
+    `Too many sign-in attempts. Try again in ${countdown}.`,
+  /** The request never reached the server. */
+  signInOfflineTitle: "Sign-in didn't work.",
+  signInOfflineBody: "Check your connection and try again.",
+
+  /** The label on Google's own button, for the slot's accessible name while it loads. */
+  signInLabel: "Sign in with Google",
+} as const;
