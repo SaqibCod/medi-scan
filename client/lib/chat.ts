@@ -103,7 +103,7 @@ export async function streamChat(
   signal: AbortSignal,
   handlers: StreamHandlers,
 ): Promise<void> {
-  const headers = await credentialHeaders("guest");
+  const headers = await credentialHeaders("auto");
 
   let response: Response;
   try {

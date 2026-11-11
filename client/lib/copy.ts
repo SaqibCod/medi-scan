@@ -195,6 +195,14 @@ export interface FailureCopy {
   eyebrow: string;
   headline: string;
   body: string;
+  /**
+   * One line for a row in a list (7c LLD 4).
+   *
+   * Separate from `eyebrow`, which names the category ("Couldn't read this file") where a row
+   * has to say what happened to this report ("Couldn't read text from this file"). A row is
+   * read in passing, beside five others, so it gets a sentence rather than a label.
+   */
+  short: string;
 }
 
 /**
@@ -208,36 +216,43 @@ const FAILURES: Record<string, FailureCopy> = {
     eyebrow: "Couldn't read this file",
     headline: "We couldn't read text from this file.",
     body: copy.unreadableBody,
+    short: "Couldn't read text from this file",
   },
   DOCUMENT_TOO_LONG: {
     eyebrow: "Document too long",
     headline: "This document is too long to read.",
     body: "Try uploading only the pages with your results, or paste just that part of the text.",
+    short: "This document is too long to read",
   },
   NO_RESULTS_FOUND: {
     eyebrow: "No results found",
     headline: "We didn't find lab results in this document.",
     body: "Medi-Scan reads lab reports: test names, values and reference ranges. A letter or a discharge summary has nothing for it to work with.",
+    short: "No lab results found in this document",
   },
   EXTRACTION_FAILED: {
     eyebrow: "Something went wrong",
     headline: "Something went wrong reading the results.",
     body: "This one is on us, not on your report. Try again, or try a different export of the same report.",
+    short: "Something went wrong reading the results",
   },
   CAPACITY: {
     eyebrow: "Daily limit reached",
     headline: "The demo has hit today's limit.",
     body: "Medi-Scan runs on a free AI quota that resets at midnight UTC. Reports you already have still open.",
+    short: "Today's AI limit was reached",
   },
   LLM_UNAVAILABLE: {
     eyebrow: "AI service unavailable",
     headline: "The AI service is unavailable right now.",
     body: "This is the provider's side, not your report. Try again in a few minutes.",
+    short: "The AI service was unavailable",
   },
   INTERRUPTED: {
     eyebrow: "Processing interrupted",
     headline: "Processing was interrupted.",
     body: "The server restarted while your report was being read. Nothing was saved, so upload it again.",
+    short: "Processing was interrupted",
   },
 };
 
@@ -245,9 +260,245 @@ const UNKNOWN_FAILURE: FailureCopy = {
   eyebrow: "Something went wrong",
   headline: "We couldn't finish reading this report.",
   body: "Try uploading it again, or try a sample report to see how it should go.",
+  short: "We couldn't finish reading this report",
 };
 
 /** A failure code the contract adds later still gets a view (contract 9.2). */
 export function failureCopy(code: string | null | undefined): FailureCopy {
   return (code && FAILURES[code]) || UNKNOWN_FAILURE;
 }
+
+/**
+ * Sign-in, sign-out and account copy (7c), from `system-screens--07` and the account mockups.
+ *
+ * The counts are written out rather than templated in the components because every one of them
+ * has a singular case, and "1 reports moved to your account" is the kind of thing that makes a
+ * person trust the rest of the page less.
+ */
+export const AUTH_COPY = {
+  /** First ever sign-in. The second line only appears when something was actually claimed. */
+  welcomeTitle: (name: string) => `Welcome to Medi-Scan, ${name}.`,
+  welcomeClaim: (n: number) =>
+    n === 1
+      ? "Your 1 guest report moved to your account. It is now kept for 30 days."
+      : `Your ${n} guest reports moved to your account. They are now kept for 30 days.`,
+
+  /** Every sign-in after the first. */
+  signedInTitle: (name: string) => `Signed in as ${name}.`,
+  signedInClaim: (n: number) =>
+    n === 1
+      ? "1 report from this tab moved to your account."
+      : `${n} reports from this tab moved to your account.`,
+
+  /** The refresh token was rejected: the tab was signed in a moment ago and now is not. */
+  sessionEndedTitle: "You were signed out.",
+  sessionEndedBody: "Your sign-in ended. Sign in again to see your saved reports.",
+  sessionEndedAction: "Sign in with Google",
+
+  /** Asked for, rather than imposed, so it says less. */
+  signedOutTitle: "Signed out.",
+
+  accountDeletedTitle: "Account deleted.",
+  accountDeletedBody: "Your reports, results and sign-ins are gone from our server.",
+
+  /** `401 GOOGLE_TOKEN_INVALID`, and anything else the exchange rejects. */
+  signInFailedTitle: "Sign-in didn't work. Please try again.",
+  /** `429 RATE_LIMITED`. */
+  signInRateLimited: (countdown: string) =>
+    `Too many sign-in attempts. Try again in ${countdown}.`,
+  /** The request never reached the server. */
+  signInOfflineTitle: "Sign-in didn't work.",
+  signInOfflineBody: "Check your connection and try again.",
+
+  /** The label on Google's own button, for the slot's accessible name while it loads. */
+  signInLabel: "Sign in with Google",
+} as const;
+
+/**
+ * My reports, Account and Trends (7c), word for word from the mockups.
+ *
+ * Counted strings are functions rather than templates in the components, because every one of
+ * them has a singular case and "1 reports" undermines everything else on the page.
+ */
+export const REPORTS_COPY = {
+  eyebrow: "My reports",
+  headline: "Your reports.",
+
+  /** The second headline line. The count is the "All" total. */
+  userSubhead: (n: number) =>
+    n === 1 ? "1 saved, kept for 30 days." : `${n} saved, each kept for 30 days.`,
+  guestSubhead: (n: number) =>
+    n === 1 ? "1 in this session, gone in 24 hours." : `${n} in this session, gone in 24 hours.`,
+  emptySubhead: "Nothing here yet.",
+
+  newReport: "New report",
+
+  guestBanner:
+    "These reports live only in this browser tab's session and are deleted 24 hours after it started. Sign in with Google to keep them for 30 days and follow your values over time. They move to your account automatically.",
+
+  /** Row titles, by what the report turned out to be. */
+  titleDone: "Lab report",
+  titleSample: "Sample report",
+  titleProcessing: "New report",
+  titleFailed: "Report could not be read",
+  processingLabel: "Reading your report…",
+
+  showing: (from: number, to: number, total: number) => `Showing ${from}–${to} of ${total}`,
+
+  footerUser:
+    "Reports are deleted automatically 30 days after upload. Chats are never saved.",
+  footerGuest: "Guest reports are deleted automatically 24 hours after your session started.",
+
+  empty: {
+    title: "No reports yet.",
+    body: "Upload a lab report as a PDF or a photo, or paste its text. Not ready to share yours? Try one of our sample reports first.",
+    upload: "Upload a report",
+    sample: "Try a sample report",
+  },
+
+  trendsTeaser: {
+    eyebrow: "Trends",
+    /** Only shown when at least one marker appears in more than one report. */
+    headline: (k: number) =>
+      k === 1
+        ? "1 marker appears in more than one report."
+        : `${k} markers appear in more than one report.`,
+    subhead: "See how they've changed.",
+    reports: (n: number) => (n === 1 ? "1 report" : `${n} reports`),
+  },
+} as const;
+
+/**
+ * Account (`/account`), from `account-page--01` to `--06`.
+ *
+ * The "what we keep" rows are checked against SECURITY.md, "What an account actually is".
+ * Row one deliberately differs from the mockup: see the note on it.
+ */
+export const ACCOUNT_COPY = {
+  eyebrow: "Account",
+  headline: "Your account.",
+  signedInAs: (name: string) => `Signed in as ${name}.`,
+
+  googleTag: "Google account",
+  memberSince: "Member since",
+  reportsSaved: "Reports saved",
+
+  signOut: "Sign out",
+  signOutNote: "Signs you out in every open tab of this browser.",
+
+  statReports: "My reports, each kept for 30 days",
+  statMarkers: "Markers you can follow on Trends",
+
+  keepsTitle: "What Medi-Scan keeps about you",
+  keeps: [
+    {
+      icon: "user",
+      label: "Your Google name and account id",
+      /**
+       * Expanded from the mockup, which said only "Your Google name".
+       *
+       * `SECURITY.md` records that an account is Google's `sub`, a display name, a role and
+       * two timestamps. The id is the thing that makes an account an account — it is what
+       * links this visit to the last one — and a card headed "what we keep about you" that
+       * omits the identifier is wrong in the one row that most has to be right.
+       */
+      body: "The name is only to show it here and in the header. The id is how we recognise you next time. We never see your Google password, your email address or your photo.",
+    },
+    {
+      icon: "file",
+      label: "Your reports and results",
+      body: "Each one is deleted automatically 30 days after upload, or sooner if you delete it.",
+    },
+    {
+      icon: "clock",
+      label: "Sign-in sessions",
+      body: "One per browser tab, ending after at most 30 days. Signing out ends them all.",
+    },
+    {
+      icon: "sources",
+      label: "Chat messages: never",
+      body: "Questions you ask about a report stay in your browser tab and are not saved on our server.",
+    },
+  ],
+
+  deleteTitle: "Delete account",
+  deleteBody: (n: number) =>
+    `Permanently deletes your account and everything linked to it: ${
+      n === 1 ? "your 1 report" : `all ${n} of your reports`
+    }, their results and summaries, and every sign-in. This can't be undone.`,
+  deleteTrigger: "Delete account…",
+  confirmQuestion: (n: number) =>
+    n === 1
+      ? "Delete your account and your 1 report for good?"
+      : `Delete your account and all ${n} of your reports for good?`,
+  confirmCheckbox: "I understand my reports can't be recovered and I'll be signed out everywhere.",
+  confirmKeep: "Keep my account",
+  confirmDelete: "Delete my account",
+
+  /** `account-page--03` and `--06`. */
+  signedOut: {
+    headline: "Sign in to see",
+    headlineFaint: "your account.",
+    benefits: [
+      "Keep reports for 30 days instead of 24 hours.",
+      "Follow a value like LDL or TSH over time on Trends.",
+      "Come back to your history on later visits.",
+    ],
+    guest: "Continue as guest",
+    note: "Reports you made as a guest in this tab move to your account when you sign in.",
+  },
+} as const;
+
+/** Trends (`/trends`), from `trends-page--01` to `--05`. */
+export const TRENDS_COPY = {
+  eyebrow: "Trends",
+  headline: "Your values over time.",
+  subhead: "Across every saved report.",
+
+  listEyebrow: "In 2 or more reports",
+  listNote: "A test shows up here once it appears in at least two finished reports.",
+  reports: (n: number) => (n === 1 ? "1 report" : `${n} reports`),
+
+  chart: "Chart",
+  table: "Table",
+
+  inUnit: (unit: string | null) => (unit ? `In ${unit.toUpperCase()}` : "No unit given"),
+  since: (delta: string, unit: string | null, date: string) =>
+    `${delta}${unit ? ` ${unit}` : ""} since ${date}`,
+  latestFrom: (date: string) => `Latest from ${date}`,
+
+  /** More than one unit for the same marker. Medi-Scan never converts between them. */
+  multiUnit: (name: string, k: number) =>
+    `${name} was reported in ${k} different units. Medi-Scan never converts between units, so each one gets its own chart.`,
+
+  onePoint: (unit: string | null) =>
+    unit
+      ? `Only one value in ${unit} so far. A line appears once there are two.`
+      : "Only one value so far. A line appears once there are two.",
+
+  legendBand: "Reference range on your latest report",
+  legendHollow: "Hollow dot: dated by upload",
+
+  footer:
+    "The shaded band is the range printed on your most recent report. Labs set their own ranges, so the table shows each report's own. Trends show what your reports say over time and are not medical advice.",
+
+  /** `trends-page--03`: signed in, but not enough finished reports to compare. */
+  notEnough: {
+    title: "Nothing to compare yet.",
+    body: (n: number) =>
+      `A trend needs the same test in at least two finished reports. You have ${
+        n === 1 ? "1 finished report" : `${n} finished reports`
+      } so far. Add another one, like your next blood test, and its shared values will show up here.`,
+    add: "Add a report",
+    reports: "My reports",
+  },
+
+  /** `trends-page--04`. */
+  signedOut: {
+    headline: "Sign in to see trends.",
+    body: "Guest reports disappear after 24 hours, so there's nothing to compare over time. Signed in, your reports are kept for 30 days and values like LDL or TSH line up here.",
+  },
+
+  /** A marker reached by URL that has no numeric points at all. */
+  emptyMarker: "No numeric values for this test yet.",
+} as const;

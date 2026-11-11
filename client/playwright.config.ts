@@ -44,13 +44,25 @@ export default defineConfig({
       // The screenshot spec sets its own viewports and writes one file per name, so running
       // it here only duplicated the work — and because Pixel 7 is chromium with a device
       // scale factor of 2.625, it overwrote every desktop shot at 2.6x the size.
-      testIgnore: [NEVER_RUN_HERE, /screenshots\.spec\.ts/],
+      testIgnore: [NEVER_RUN_HERE, /screenshots.*\.spec\.ts/],
     },
   ],
 
   webServer: {
     command: `npm run build && npx next start --port ${PORT}`,
     url: BASE_URL,
+    /**
+     * Sign-in is a build-time constant, so it has to be set for the build, not the test.
+     *
+     * A fixed fake client id rather than whatever is in `.env.local`: the suite replaces
+     * Google's script with a stub and never contacts Google, and a run that quietly depended
+     * on a developer having configured a real client would pass on one machine and fail on
+     * the next. Process environment wins over `.env.local`, so this is what the build sees.
+     */
+    env: {
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: "e2e-client-id.apps.googleusercontent.com",
+      NEXT_PUBLIC_FEATURE_SIGNIN: "true",
+    },
     // Never reuse. The suite exists to test the build it just made, and silently attaching to
     // a server somebody left running — serving an older build — produces a page of failures
     // that have nothing to do with the code. It costs a rebuild and removes a whole class of

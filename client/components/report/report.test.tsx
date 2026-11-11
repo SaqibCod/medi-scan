@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { NoticeProvider } from "@/components/notices/notice-provider";
 import { ToastProvider } from "@/components/notices/toaster";
 import { ReportView } from "@/components/report/report-view";
+import { AuthProvider } from "@/lib/auth/provider";
 import { createQueryClient } from "@/lib/query-client";
 import { GUEST_STORAGE_KEY, resetGuestSessionForTests } from "@/lib/guest-session";
 import { resetBackendStatusForTests } from "@/lib/backend-status";
@@ -109,7 +110,10 @@ function Wrapper({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={createQueryClient()}>
       <NoticeProvider>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          {/* No client id: the report view only needs to know nobody is signed in. */}
+          <AuthProvider>{children}</AuthProvider>
+        </ToastProvider>
       </NoticeProvider>
     </QueryClientProvider>
   );

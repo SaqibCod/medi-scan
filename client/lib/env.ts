@@ -63,6 +63,22 @@ export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL
 export const FEATURE_SIGNIN = process.env.NEXT_PUBLIC_FEATURE_SIGNIN === "true";
 
 /**
+ * The Google OAuth web client id.
+ *
+ * Public by design — it identifies the app to Google and is visible in every page that offers
+ * sign-in — which is why it is a `NEXT_PUBLIC_` variable and not a secret. The backend holds
+ * the same value under `GOOGLE_CLIENT_ID` and checks every ID token's `aud` against it.
+ *
+ * Null when unset, and then the whole sign-in UI is simply absent: the button, the One Tap
+ * prompt, the avatar pill. Everything a guest can do still works, because a guest never needs
+ * to sign in (root CLAUDE.md).
+ */
+export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || null;
+
+/** Sign-in is offered only when it can actually work. */
+export const CAN_SIGN_IN = FEATURE_SIGNIN && GOOGLE_CLIENT_ID !== null;
+
+/**
  * OCR for photos and scanned PDFs ships in Phase 4.
  *
  * Until then the backend answers `415 UNSUPPORTED_FILE_TYPE` for PNG and JPEG, so no copy

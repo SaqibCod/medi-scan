@@ -240,9 +240,10 @@ test.describe("what the browser keeps and who it talks to", () => {
     // The title names nothing about the report.
     expect(await page.title()).toBe("Your report · Medi-Scan");
 
-    // Only the site and the API.
+    // Only the site, the API, and — from 7c — Google, for the sign-in offer in the header.
+    // Nothing about the report ever goes there; it is the library request and nothing else.
     for (const host of hosts) {
-      expect(["localhost:3210", "localhost:8080"]).toContain(host);
+      expect(["localhost:3210", "localhost:8080", "accounts.google.com"]).toContain(host);
     }
 
     await context.close();

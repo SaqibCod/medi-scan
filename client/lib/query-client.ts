@@ -47,6 +47,15 @@ export function createQueryClient(): QueryClient {
 export const queryKeys = {
   reports: ["reports"] as const,
   report: (id: string) => ["reports", id] as const,
+  /** The history list, by status filter and page. Under `reports`, so a dead session drops it too. */
+  reportList: (status: string, page: number) => ["reports", "list", status, page] as const,
+  /** The counts behind the tab labels. */
+  reportCounts: ["reports", "counts"] as const,
   samples: ["samples"] as const,
   health: ["health"] as const,
+  /** Signed-in only, and invalidated on sign-in so a claim shows up without a reload. */
+  me: ["me"] as const,
+  trends: ["trends"] as const,
+  trendMarkers: ["trends", "markers"] as const,
+  trend: (marker: string) => ["trends", "marker", marker] as const,
 };

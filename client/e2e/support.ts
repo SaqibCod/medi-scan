@@ -37,8 +37,35 @@ export async function seedTheme(context: BrowserContext, theme: "dark" | "light"
   );
 }
 
-/** `GET /actuator/health` answers UP. */
+/**
+ * Stops any test reaching the real Google Identity Services.
+ *
+ * From 7c the header offers sign-in on every page, so every page loads the GIS library. A
+ * suite that let that request out would be contacting a third party on every test — slow,
+ * flaky, offline-hostile, and not something a test run should do. The replacement is inert:
+ * it defines the four functions the app calls and hands out no credential, which is exactly
+ * what a visitor who never signs in experiences.
+ *
+ * The 7c specs install their own richer stub over the top (`e2e/support-auth.ts`); the later
+ * `page.route` wins, so they are unaffected.
+ */
+export async function blockGoogleIdentity(page: Page) {
+  await page.route("https://accounts.google.com/**", (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/javascript",
+      body: `window.google = { accounts: { id: {
+        initialize() {}, prompt() {}, renderButton() {}, disableAutoSelect() {},
+      } } };`,
+    }),
+  );
+}
+
+/** `GET /actuator/health` answers UP, and Google is stubbed out. */
 export async function backendUp(page: Page) {
+  // Every spec calls this, which is what makes it the place to keep the suite hermetic.
+  await blockGoogleIdentity(page);
+
   await page.route(`${API}/actuator/health`, (route: Route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: '{"status":"UP"}' }),
   );
@@ -46,6 +73,10 @@ export async function backendUp(page: Page) {
 
 /** Health never answers — what a sleeping free-tier server looks like. */
 export async function backendAsleep(page: Page) {
+  // Asleep is about our backend, not about Google. Without this a sleeping-server test
+  // would be the one place a real request still escaped.
+  await blockGoogleIdentity(page);
+
   await page.route(`${API}/actuator/health`, async (route: Route) => {
     // Hang past the client's 4s health timeout rather than refusing, which is the real
     // behaviour of a container that is still starting.
@@ -57,6 +88,8 @@ export async function backendAsleep(page: Page) {
 /** Counts health checks so a test can watch it recover. */
 export function trackHealth(page: Page) {
   const state = { calls: 0, up: false };
+
+  void blockGoogleIdentity(page);
 
   void page.route(`${API}/actuator/health`, (route: Route) => {
     state.calls += 1;

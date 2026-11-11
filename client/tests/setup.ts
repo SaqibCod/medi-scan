@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup } from "@testing-library/react";
-import { afterEach, beforeEach } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 /**
  * A few specs run under the `node` environment rather than jsdom — proxy.ts, for one, which
@@ -41,3 +41,31 @@ if (hasDom && !window.matchMedia) {
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
 }
+
+/**
+ * A router for every test that renders the app shell.
+ *
+ * `<Providers>` now contains `AuthProvider`, which navigates on sign-out and from the
+ * signed-out toast, so every component test that renders the shell needs an app router — and
+ * in the running app there always is one. Individual specs that care what was navigated to
+ * still declare their own `vi.mock("next/navigation", …)`, which takes precedence over this.
+ */
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    prefetch: () => {},
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
+  useParams: () => ({}),
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+  redirect: (url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  },
+}));

@@ -55,7 +55,7 @@ async function send(request: ReportRequest): Promise<CreateReportResponse> {
     // The contract wants the string "true" in the multipart part, not a boolean.
     form.append("consent", "true");
     // No Content-Type: the browser has to set the multipart boundary itself (api.ts).
-    return api.post<CreateReportResponse>("/api/reports", form, { auth: "guest" });
+    return api.post<CreateReportResponse>("/api/reports", form, { auth: "auto" });
   }
 
   const body =
@@ -63,7 +63,7 @@ async function send(request: ReportRequest): Promise<CreateReportResponse> {
       ? { text: request.text, consent: true }
       : { sampleId: request.sampleId, consent: true };
 
-  return api.post<CreateReportResponse>("/api/reports", body, { auth: "guest" });
+  return api.post<CreateReportResponse>("/api/reports", body, { auth: "auto" });
 }
 
 /**
@@ -87,7 +87,7 @@ export async function createReport(request: ReportRequest): Promise<CreateReport
 }
 
 export function getReport(id: string, signal?: AbortSignal): Promise<ReportResponse> {
-  return api.get<ReportResponse>(`/api/reports/${id}`, { auth: "guest", signal });
+  return api.get<ReportResponse>(`/api/reports/${id}`, { auth: "auto", signal });
 }
 
 /**
@@ -99,7 +99,7 @@ export function getReport(id: string, signal?: AbortSignal): Promise<ReportRespo
  */
 export async function deleteReport(id: string): Promise<void> {
   try {
-    await api.delete<void>(`/api/reports/${id}`, { auth: "guest" });
+    await api.delete<void>(`/api/reports/${id}`, { auth: "auto" });
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return;
     throw error;

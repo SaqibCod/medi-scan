@@ -52,10 +52,12 @@ describe("every system screen", () => {
     expect(ways.length).toBeGreaterThan(0);
   });
 
-  it.each(screens)("%s shows no sign-in control, because sign-in does not work yet", (_name, ui) => {
+  it.each(screens)("%s offers no sign-in when sign-in is not configured", (_name, ui) => {
     renderScreen(ui);
 
-    // F8: the mockups show one on three of these; it arrives in 7c.
+    // No `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in the test environment, so `CAN_SIGN_IN` is false
+    // and every sign-in control is absent rather than present and broken (7a F8). The
+    // configured case is covered in `screens-signin.test.tsx`.
     expect(screen.queryByText(/sign in with google/i)).not.toBeInTheDocument();
   });
 });

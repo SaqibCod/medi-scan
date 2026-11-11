@@ -242,6 +242,7 @@ If a request carries both, the bearer token wins and the session token is ignore
 
 **Google sign-in flow**
 1. The client loads Google Identity Services and shows the "Sign in with Google" button. Google returns an ID token (a signed JWT) to the page.
+   - **The button is Google's own rendered button** (`google.accounts.id.renderButton`), styled through the options Google provides and placed in the slot the design reserves for it. The ID-token flow cannot be started from a custom element, and Google's branding terms require its button, so the app never draws a look-alike.
 2. The client sends it to `POST /api/auth/google`, along with the current guest session token if there is one.
 3. The backend verifies the ID token:
    - **Signature:** checked against Google's published keys (JWKS, cached).
@@ -270,6 +271,7 @@ If a request carries both, the bearer token wins and the session token is ignore
 - **Refresh token:** kept in `sessionStorage`, one per tab. On reload, the client calls `/api/auth/refresh` to get a new access token.
 - **New tabs and returning visits:** Google auto sign-in (`auto_select: true`) signs the user in without a click if they signed in before and are still logged into Google.
   - Each tab gets its own refresh-token family, so tabs never race on refresh.
+  - **Duplicated tabs** are the exception the browser hands us: "Duplicate tab" copies `sessionStorage`, so the copy starts life holding the original's refresh token. Two tabs rotating one token is exactly what reuse detection is built to catch, and it would sign the user out of both. On start, each tab checks over `BroadcastChannel` whether another live tab already owns its tab id; a copy drops the inherited refresh token and signs in again through auto sign-in. The guest token is safe to share and is kept.
   - Report pages wait for sign-in to resolve, about 2 seconds at most, before fetching. That way a report opened in a new tab doesn't 404 as a guest.
   - If Google skips auto sign-in, the tab continues as a guest with the normal button.
 - **Logout in every tab:** logout is sent to every tab over `BroadcastChannel`. Each tab revokes its own family and calls `disableAutoSelect()`, so the user isn't signed straight back in.
@@ -579,7 +581,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same web client id>
 
 Phase 7 is split into 7a to 7d (see item 8), and **7a and 7b are built before phases 4 and 5**. The frontend foundation — tokens, components, the shell, the API client — is what every later screen is drawn on, and OCR and chat both need a UI to be worth anything. Building it now also means the design system is ported once, against the design docs, rather than retrofitted onto screens that already exist. 7b follows immediately because it is what turns that foundation into something a visitor can actually use, and because OCR and chat both hang off screens it builds: the upload panel and the report page.
 
-The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is Phase 5 (chat).**
+The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Phase 8**. Deployment is Phase 8 and nothing before it. **The current phase is 7c (accounts in the browser).**
 
 1. **Foundation (Phase 1) — done:**
    - Monorepo setup.
@@ -606,7 +608,7 @@ The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Pha
    Built here, before the pipeline work that follows, because every later phase reads or writes reports through the owner model. Chat in particular would otherwise be built against guest-only ownership and rewritten. No frontend work: the sign-in UI ships with phase 7.
 4. **Evaluation (Phase 3) — done:** the synthetic test set and the scoring runner, built before OCR so every later change is measured. Method and baseline: `docs/evaluation.md`.
 5. **OCR (Phase 4) — done:** the `tesseract` command-line program, run as a child process, for images and the scanned-PDF fallback, feeding the same pipeline. Values OCR read with low confidence are never flagged (4.2, 4.4). Low-level design: `docs/phase-4-lld.md`; results in `docs/evaluation.md`.
-6. **Chat (Phase 5) — current:**
+6. **Chat (Phase 5) — done:**
    - Curated biomarker content and embeddings.
    - Report-context chat with RAG and SSE.
    - Prompt-injection defenses, the decision tag, and the number guard (4.5).
@@ -620,9 +622,9 @@ The remaining order is **7a → 7b → Phase 4 → Phase 5 → 7c → 7d → Pha
    - `GET /api/trends` and `GET /api/trends/markers`.
    - `GET /api/admin/stats`.
 8. **Frontend (Phase 7),** split into four parts. The design system (`docs/design-system/`) and the approved mockups (`docs/ui/`) are the reference for all four.
-   - **7a — Foundation:** design tokens and the two themes, the 19 design-system components, the app shell, the API client, the lazy guest session, the backend wake check, banners, inline notices and toasts, the six system screens, and the privacy page. Low-level design: `docs/phase-7a-lld.md`.
+   - **7a — Foundation — done:** design tokens and the two themes, the 19 design-system components, the app shell, the API client, the lazy guest session, the backend wake check, banners, inline notices and toasts, the six system screens, and the privacy page. Low-level design: `docs/phase-7a-lld.md`.
    - **7b — The product — done:** landing page, the upload panel, samples, report processing, the results and failed states, and the biomarker explainer page. Low-level design: `docs/phase-7b-lld.md`.
-   - **7c — Accounts:** Sign in with Google, auto sign-in, token refresh, cross-tab logout, the CSP entries Google needs, My reports, Account, and Trends.
+   - **7c — Accounts — current:** Sign in with Google, auto sign-in, token refresh, cross-tab logout, the duplicated-tab guard, the CSP entries Google needs, My reports, Account, and Trends. The sign-in control is Google's own rendered button (4.9). Low-level design: `docs/phase-7c-lld.md`.
    - **7d — Admin and polish:** the admin dashboard, the accessibility pass, performance, SEO and metadata.
 
    The chat UI is built with Phase 5, on the report page from 7b.

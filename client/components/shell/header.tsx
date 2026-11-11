@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 
+import { AuthSlot } from "@/components/auth/auth-slot";
 import { StatusPill, ThemeToggle } from "@/components/ds";
 import { useNotices } from "@/components/notices/notice-provider";
+import { useAuth } from "@/lib/auth/provider";
 import { pillStatus } from "@/lib/backend-status";
 import { useThemeChoice } from "@/lib/use-theme-choice";
 import { MobileMenu } from "./mobile-menu";
-import { NAV_LINKS } from "./nav";
+import { headerLinks } from "./nav";
 import { PageContainer } from "./page-container";
 import { Wordmark } from "./wordmark";
 
@@ -21,8 +23,10 @@ import { Wordmark } from "./wordmark";
 export function Header() {
   const { backend } = useNotices();
   const { theme, toggle } = useThemeChoice();
+  const { user } = useAuth();
 
   const status = pillStatus(backend.state);
+  const links = headerLinks(user !== null);
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bar backdrop-blur-(--blur-bar)">
@@ -35,7 +39,7 @@ export function Header() {
 
           <nav aria-label="Main" className="hidden lg:block">
             <ul className="flex items-center gap-space-5">
-              {NAV_LINKS.map((link) => (
+              {links.map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className="t-body-s text-ink-2 hover:text-ink">
                     {link.label}
@@ -66,7 +70,12 @@ export function Header() {
               </>
             )}
 
-            {/* Sign-in ships in 7c; the slot is kept so the bar does not shift when it lands. */}
+            {/* Guest: Google's own button. Signed in: the account pill. Still resolving: a
+                neutral shape of the same size, so the bar never jumps. Phones get it in the
+                menu instead — there is no room for a 220px button beside the wordmark. */}
+            <span className="hidden lg:inline">
+              <AuthSlot />
+            </span>
 
             {/* Renders the same markup whatever the theme; CSS picks the icon. No
                 suppressHydrationWarning needed, because nothing here can mismatch. */}

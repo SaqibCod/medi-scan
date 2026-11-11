@@ -85,7 +85,6 @@ describe("the Content Security Policy", () => {
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("base-uri 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
-    expect(policy).toContain("frame-src 'none'");
     expect(policy).toContain("form-action 'self'");
     expect(policy).toContain("font-src 'self'");
   });
@@ -95,9 +94,36 @@ describe("the Content Security Policy", () => {
     expect(policyFor("development")).not.toContain("upgrade-insecure-requests");
   });
 
-  it("does not allow any third-party origin yet", () => {
-    // Google Identity Services arrives in 7c, and is the only one that ever will.
-    expect(policyFor("production")).not.toContain("accounts.google.com");
-    expect(policyFor("production")).not.toContain("fonts.googleapis.com");
+  it("allows Google Identity Services, and no other third party", () => {
+    const policy = policyFor("production");
+
+    // Exactly the three directives Google documents, each a path under one origin rather than
+    // a wildcard, and the parent path rather than individual endpoints so that a change on
+    // Google's side does not break sign-in here.
+    expect(policy).toContain("frame-src https://accounts.google.com/gsi/");
+    expect(policy).toContain("style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style");
+    expect(policy).toContain(
+      "connect-src 'self' http://localhost:8080 https://accounts.google.com/gsi/",
+    );
+  });
+
+  it("does not name Google in script-src, where 'strict-dynamic' would ignore it anyway", () => {
+    const scriptSrc = policyFor("production")
+      .split("; ")
+      .find((d) => d.startsWith("script-src"));
+
+    expect(scriptSrc).toContain("'strict-dynamic'");
+    expect(scriptSrc).not.toContain("accounts.google.com");
+  });
+
+  it("allows exactly one third-party origin, and it is Google's", () => {
+    const policy = policyFor("production");
+
+    const origins = [...new Set((policy.match(/https?:\/\/[^\s;]+/g) ?? []).map((u) => new URL(u).origin))];
+
+    expect(origins.filter((o) => !o.includes("localhost"))).toEqual([
+      "https://accounts.google.com",
+    ]);
+    expect(policy).not.toContain("fonts.googleapis.com");
   });
 });

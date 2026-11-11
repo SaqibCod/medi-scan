@@ -86,7 +86,15 @@ test.describe("Content Security Policy", () => {
 
 test.describe("third parties", () => {
   for (const path of PAGES) {
-    test(`${path} talks to nobody but us`, async ({ page }) => {
+    /**
+     * From 7c, "nobody but us" means "nobody but us and Google".
+     *
+     * Sign-in is offered in the header on every page, so every page asks for the GIS library.
+     * `backendUp` intercepts that request rather than letting it out, so what this asserts is
+     * the rule that matters: Google is the only host the app ever reaches for, and nothing
+     * has quietly joined it.
+     */
+    test(`${path} talks to nobody but us and Google`, async ({ page }) => {
       const hosts = watchRequests(page);
       await backendUp(page);
 
@@ -94,7 +102,7 @@ test.describe("third parties", () => {
       await page.waitForTimeout(800);
 
       const external = [...hosts].filter((host) => !host.startsWith("localhost"));
-      expect(external).toEqual([]);
+      expect(external.filter((host) => host !== "accounts.google.com")).toEqual([]);
     });
   }
 
